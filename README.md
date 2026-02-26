@@ -1,28 +1,39 @@
-# Agent Storage Manager（一期）
+<!--
+SSoT/DRY note:
+- This English README is the source of truth.
+- Other languages are translations and may lag behind.
+-->
 
-本项目提供一个本地 Web UI，用于查看 Antigravity 与 Windsurf 在本地生成/持久化的对话历史（通过它们的本地 Language Server RPC 获取可读内容，而不是直接离线解析 `.pb`）。
+# Agent Storage Manager (v1)
+
+**Language:** English | [简体中文](README.zh-CN.md)
+
+A local Web UI for browsing conversation history generated/persisted by Antigravity and Windsurf.
+It fetches readable content via their local Language Server RPC (instead of offline parsing `.pb`).
 
 ## 数据来源与配置
 
-- 配置文件：`~/.agent-storage-manager/config.json`
-- 默认 roots：
-  - Antigravity：`~/.gemini/antigravity/conversations`
-  - Windsurf：`~/.codeium/windsurf/cascade`
+> Note: section headings keep the original project wording; content is canonical in English.
 
-可在 Web UI 的 Settings 页面新增/禁用/删除 roots（支持外置备份盘目录）。
+- Config file: `~/.agent-storage-manager/config.json`
+- Default roots:
+  - Antigravity: `~/.gemini/antigravity/conversations`
+  - Windsurf: `~/.codeium/windsurf/cascade`
+
+You can add/disable/delete roots in the Web UI Settings page (supports external/backup drives).
 
 ## 运行
 
-需要 Node.js + pnpm：
+Requires Node.js + pnpm:
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-打开：`http://localhost:3000`
+Open: `http://localhost:3000`
 
-可选：用环境变量覆盖配置文件位置（便于调试或放到工作区内）：
+Optional: override the config file path via env var (useful for local workspace debugging):
 
 ```bash
 export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
@@ -30,16 +41,16 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 
 ## 一期功能
 
-- 扫描并列出 `.pb` 会话文件（默认目录 + Settings 里自定义 roots）
-- Antigravity：通过 `GetCascadeTrajectory` + `ConvertTrajectoryToMarkdown` 展示 Markdown
-- Windsurf：Attach 模式（要求 Windsurf 正在运行并启动过 Cascade），通过 `GetCascadeTrajectorySteps` 展示聊天视图
+- Scan and list `.pb` session files (default directories + custom roots from Settings)
+- Antigravity: render Markdown via `GetCascadeTrajectory` + `ConvertTrajectoryToMarkdown`
+- Windsurf: Attach mode (requires Windsurf running with Cascade started); render chat view via `GetCascadeTrajectorySteps`
 
 ## 使用前提（重要）
 
-- Antigravity：需要本地 daemon 已启动（通常打开 Antigravity 后会写出 discovery 文件到 `~/.gemini/antigravity/daemon/ls_*.json`）。
-- Windsurf：需要 Windsurf 正在运行；工具会从 Windsurf 日志解析语言服务器端口，并尝试从进程参数读取 `--csrf_token`。
-  - 如果你的系统上无法读取进程参数，可在 Settings 里填写 `csrfTokenOverride` 作为兜底。
+- Antigravity: the local daemon must be running (usually it writes discovery files to `~/.gemini/antigravity/daemon/ls_*.json` after you open Antigravity).
+- Windsurf: Windsurf must be running. This app parses the language-server port from Windsurf logs and tries to read `--csrf_token` from process args.
+  - If your system cannot read process args, set `csrfTokenOverride` in Settings as a fallback.
 
 ## 协议
 
-MIT，见 `LICENSE`。
+MIT. See `LICENSE`.
