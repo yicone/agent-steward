@@ -6,7 +6,8 @@ import path from "node:path";
 import type { SourcesStatus } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
 import { connectUnaryJson } from "@/lib/server/connect";
-import { extractMetaFromTrajectorySummary, extractTrajectoryIdFromTrajectorySummary } from "@/lib/server/trajectoryMeta";
+import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
+import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
 
 const SERVICE = "exa.language_server_pb.LanguageServerService";
 
@@ -125,29 +126,30 @@ export async function getAntigravityMarkdown(cascadeId: string): Promise<string>
 }
 
 export async function getAntigravityTrajectoryMetaMap(): Promise<Record<string, { title?: string; cwd?: string }>> {
+  const vscdbMap = await getAntigravityTrajectoryMetaMapFromVscdb().catch(() => ({}));
+
+  // The LS often returns only a subset (e.g. scoped to the running workspace). Merge both.
   const found = await findLatestAntigravityDiscovery();
-  if (!found) return {};
+  if (!found) return vscdbMap;
 
-  const { discovery } = found;
-  const baseUrl = `http://127.0.0.1:${discovery.httpPort}`;
+  try {
+    const { discovery } = found;
+    const baseUrl = `http://127.0.0.1:${discovery.httpPort}`;
 
-  const res = await connectUnaryJson<any>({
-    baseUrl,
-    serviceTypeName: SERVICE,
-    methodName: "GetAllCascadeTrajectories",
-    csrfToken: discovery.csrfToken,
-    body: {}
-  });
+    const res = await connectUnaryJson<any>({
+      baseUrl,
+      serviceTypeName: SERVICE,
+      methodName: "GetAllCascadeTrajectories",
+      csrfToken: discovery.csrfToken,
+      body: {}
+    });
 
-  const mapObj = res?.trajectorySummaries ?? res?.trajectory_summaries;
-  if (!mapObj || typeof mapObj !== "object") return {};
+    const mapObj = res?.trajectorySummaries ?? res?.trajectory_summaries;
+    if (!mapObj || typeof mapObj !== "object") return vscdbMap;
 
-  const out: Record<string, { title?: string; cwd?: string }> = {};
-  for (const [cascadeId, summary] of Object.entries(mapObj as Record<string, any>)) {
-    const meta = extractMetaFromTrajectorySummary(summary);
-    out[cascadeId] = meta;
-    const trajectoryId = extractTrajectoryIdFromTrajectorySummary(summary);
-    if (trajectoryId && !(trajectoryId in out)) out[trajectoryId] = meta;
+    const lsMap = buildMetaMapFromTrajectorySummaries(mapObj as Record<string, any>);
+    return { ...vscdbMap, ...lsMap };
+  } catch {
+    return vscdbMap;
   }
-  return out;
 }
