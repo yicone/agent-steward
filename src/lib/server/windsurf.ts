@@ -44,7 +44,10 @@ async function listLogsDirsByMtime(): Promise<string[]> {
 
 async function findLatestWindsurfLogFile(): Promise<string | null> {
   const logDirs = await listLogsDirsByMtime();
-  const scanDirs = logDirs.slice(0, 5);
+  // Some Windsurf log session folders may exist without containing the extension host logs
+  // (e.g. created during startup). Scan all available session folders; in practice the
+  // count is small (timestamped folders).
+  const scanDirs = logDirs;
   const candidates: Array<{ p: string; mtimeMs: number }> = [];
 
   for (const logsDir of scanDirs) {
