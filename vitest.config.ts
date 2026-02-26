@@ -1,8 +1,14 @@
 import { defineConfig } from "vitest/config";
+import path from "node:path";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": path.join(__dirname, "src"),
+      "server-only": path.join(__dirname, "tests", "shims", "server-only.ts")
+    }
+  },
   test: {
     environment: "node"
   }
 });
-
