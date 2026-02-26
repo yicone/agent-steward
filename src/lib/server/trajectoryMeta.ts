@@ -47,3 +47,19 @@ export function extractTrajectoryIdFromTrajectorySummary(summary: any): string |
     (typeof summary?.trajectory_id === "string" ? summary.trajectory_id : undefined);
   return id && id.trim().length ? id.trim() : undefined;
 }
+
+export function buildMetaMapFromTrajectorySummaries(
+  trajectorySummaries: Record<string, any>
+): Record<string, ConversationMeta> {
+  const out: Record<string, ConversationMeta> = {};
+
+  for (const [cascadeId, summary] of Object.entries(trajectorySummaries ?? {})) {
+    const meta = extractMetaFromTrajectorySummary(summary);
+    out[cascadeId] = meta;
+
+    const trajectoryId = extractTrajectoryIdFromTrajectorySummary(summary);
+    if (trajectoryId && !(trajectoryId in out)) out[trajectoryId] = meta;
+  }
+
+  return out;
+}

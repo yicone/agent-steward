@@ -11,7 +11,7 @@ import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages } from "@/lib/parse/steps";
 import { connectUnaryJson } from "@/lib/server/connect";
-import { extractMetaFromTrajectorySummary, extractTrajectoryIdFromTrajectorySummary } from "@/lib/server/trajectoryMeta";
+import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 
 const execFileAsync = promisify(execFile);
 const SERVICE = "exa.language_server_pb.LanguageServerService";
@@ -195,12 +195,5 @@ export async function getWindsurfTrajectoryMetaMap(config: AppConfig): Promise<R
   const mapObj = res?.trajectorySummaries ?? res?.trajectory_summaries;
   if (!mapObj || typeof mapObj !== "object") return {};
 
-  const out: Record<string, { title?: string; cwd?: string }> = {};
-  for (const [cascadeId, summary] of Object.entries(mapObj as Record<string, any>)) {
-    const meta = extractMetaFromTrajectorySummary(summary);
-    out[cascadeId] = meta;
-    const trajectoryId = extractTrajectoryIdFromTrajectorySummary(summary);
-    if (trajectoryId && !(trajectoryId in out)) out[trajectoryId] = meta;
-  }
-  return out;
+  return buildMetaMapFromTrajectorySummaries(mapObj as Record<string, any>);
 }
