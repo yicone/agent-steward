@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildMetaMapFromTrajectorySummaries,
-  extractMetaFromTrajectorySummary,
-  extractTrajectoryIdFromTrajectorySummary
+  extractMetaFromTrajectorySummary
 } from "../src/lib/server/trajectoryMeta";
 
 describe("extractMetaFromTrajectorySummary", () => {
@@ -17,13 +16,7 @@ describe("extractMetaFromTrajectorySummary", () => {
     expect(meta.cwd).toMatch(/^(~\/|\/Users\/tr\/)/);
   });
 
-  it("extracts trajectoryId alias", () => {
-    expect(
-      extractTrajectoryIdFromTrajectorySummary({ trajectoryId: "11111111-2222-3333-4444-555555555555" })
-    ).toBe("11111111-2222-3333-4444-555555555555");
-  });
-
-  it("builds a meta map for both cascadeId and trajectoryId", () => {
+  it("builds a meta map keyed by cascadeId", () => {
     const map = buildMetaMapFromTrajectorySummaries({
       "cascade-id-1": {
         summary: "Hello",
@@ -32,6 +25,5 @@ describe("extractMetaFromTrajectorySummary", () => {
       }
     });
     expect(map["cascade-id-1"]?.title).toBe("Hello");
-    expect(map["traj-id-1"]?.title).toBe("Hello");
   });
 });

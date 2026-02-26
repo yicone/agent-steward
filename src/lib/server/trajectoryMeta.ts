@@ -41,13 +41,6 @@ export function extractMetaFromTrajectorySummary(summary: any): ConversationMeta
   return { ...(title ? { title } : {}), ...(cwd ? { cwd } : {}) };
 }
 
-export function extractTrajectoryIdFromTrajectorySummary(summary: any): string | undefined {
-  const id =
-    (typeof summary?.trajectoryId === "string" ? summary.trajectoryId : undefined) ??
-    (typeof summary?.trajectory_id === "string" ? summary.trajectory_id : undefined);
-  return id && id.trim().length ? id.trim() : undefined;
-}
-
 export function buildMetaMapFromTrajectorySummaries(
   trajectorySummaries: Record<string, any>
 ): Record<string, ConversationMeta> {
@@ -56,9 +49,6 @@ export function buildMetaMapFromTrajectorySummaries(
   for (const [cascadeId, summary] of Object.entries(trajectorySummaries ?? {})) {
     const meta = extractMetaFromTrajectorySummary(summary);
     out[cascadeId] = meta;
-
-    const trajectoryId = extractTrajectoryIdFromTrajectorySummary(summary);
-    if (trajectoryId && !(trajectoryId in out)) out[trajectoryId] = meta;
   }
 
   return out;
