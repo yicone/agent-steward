@@ -3,6 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yicone/agent-storage-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yicone/agent-storage-manager/issues"
+  },
+  "homepage": "https://github.com/yicone/agent-storage-manager#readme",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "next dev",
