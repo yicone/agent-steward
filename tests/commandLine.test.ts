@@ -14,4 +14,22 @@ describe("extractCsrfTokenFromCommand", () => {
       "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     );
   });
+
+  it("extracts token from dash arg", () => {
+    expect(extractCsrfTokenFromCommand("... --csrf-token aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee ...")).toBe(
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    );
+  });
+
+  it("extracts token from camelCase arg", () => {
+    expect(extractCsrfTokenFromCommand("... --csrfToken=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee ...")).toBe(
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    );
+  });
+
+  it("extracts token from env var", () => {
+    expect(extractCsrfTokenFromCommand("... CODEIUM_CSRF_TOKEN=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee ...")).toBe(
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    );
+  });
 });
