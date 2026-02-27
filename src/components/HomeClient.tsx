@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 
+import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import type {
-  AntigravityTrajectoryEvent,
   AppConfig,
   ChatMessage,
   ConversationContent,
   ConversationListItem,
   Source,
-  SourcesStatus
+  SourcesStatus,
+  TrajectoryContent,
+  TrajectoryEvent
 } from "@/lib/types";
 
 type ApiConfigResponse = { path: string; config: AppConfig };
@@ -47,6 +49,123 @@ function formatIsoTime(value?: string) {
   }
 }
 
+type ExecutionGroup = {
+  id: string;
+  label: string;
+  events: TrajectoryEvent[];
+};
+
+type TranscriptHiddenCounts = {
+  thoughts: number;
+  tools: number;
+  commandsHidden: number;
+  statusesHidden: number;
+  other: number;
+};
+
+type TrajectoryRow =
+  | {
+      id: string;
+      type: "group";
+      group: ExecutionGroup;
+      collapsed: boolean;
+    }
+  | {
+      id: string;
+      type: "event";
+      groupId: string;
+      event: TrajectoryEvent;
+    }
+  | {
+      id: string;
+      type: "message";
+      groupId: string;
+      message: ChatMessage;
+    }
+  | {
+      id: string;
+      type: "actions";
+      groupId: string;
+      counts: TranscriptHiddenCounts;
+      toolEvents: TrajectoryEvent[];
+    }
+  | {
+      id: string;
+      type: "hidden_summary";
+      groupId: string;
+      counts: TranscriptHiddenCounts;
+    };
+
+function buildExecutionGroups(events: TrajectoryEvent[]): ExecutionGroup[] {
+  const groups: ExecutionGroup[] = [];
+  const byId = new Map<string, ExecutionGroup>();
+  for (const event of events) {
+    const id = event.executionId ?? "ungrouped";
+    let group = byId.get(id);
+    if (!group) {
+      const label = id === "ungrouped" ? "Ungrouped" : `Execution ${id.slice(0, 8)}`;
+      group = { id, label, events: [] };
+      byId.set(id, group);
+      groups.push(group);
+    }
+    group.events.push(event);
+  }
+  return groups;
+}
+
+function clamp(num: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, num));
+}
+
+function computeRowOffsets(rows: TrajectoryRow[], rowHeights: Record<string, number>, estimateHeight: number): number[] {
+  const offsets: number[] = new Array(rows.length);
+  let running = 0;
+  for (let i = 0; i < rows.length; i += 1) {
+    offsets[i] = running;
+    const row = rows[i]!;
+    running += rowHeights[row.id] ?? estimateHeight;
+  }
+  return offsets;
+}
+
+function isErrorLikeEvent(event: TrajectoryEvent): boolean {
+  if (event.title === "Error") return true;
+  if (event.status?.includes("ERROR")) return true;
+  if (typeof event.exitCode === "number" && event.exitCode !== 0) return true;
+  return false;
+}
+
+function isKeyStatusLikeEvent(event: TrajectoryEvent): boolean {
+  if (event.kind !== "status") return false;
+  if (isErrorLikeEvent(event)) return false;
+  const haystack = `${event.status ?? ""} ${event.text ?? ""}`.toUpperCase();
+  if (haystack.includes("RUNNING")) return true;
+  if (haystack.includes("CANCEL")) return true;
+  if (haystack.includes("ABORT")) return true;
+  if (haystack.includes("TIMEOUT")) return true;
+  return false;
+}
+
+function buildEmptyTranscriptHiddenCounts(): TranscriptHiddenCounts {
+  return {
+    thoughts: 0,
+    tools: 0,
+    commandsHidden: 0,
+    statusesHidden: 0,
+    other: 0
+  };
+}
+
+function hasAnyHiddenTranscriptCounts(counts: TranscriptHiddenCounts): boolean {
+  return (
+    counts.thoughts > 0 ||
+    counts.tools > 0 ||
+    counts.commandsHidden > 0 ||
+    counts.statusesHidden > 0 ||
+    counts.other > 0
+  );
+}
+
 function StatusPill(props: { label: string; tone: "ok" | "warn" | "bad"; title?: string }) {
   return (
     <span className="pill" data-tone={props.tone} title={props.title}>
@@ -77,7 +196,86 @@ function ChatMessageView({ message }: { message: ChatMessage }) {
   return <div className={`bubble ${message.role}`}>{message.text}</div>;
 }
 
-function TrajectoryEventView({ event }: { event: AntigravityTrajectoryEvent }) {
+function TranscriptActionsRow(props: { counts: TranscriptHiddenCounts; toolEvents: TrajectoryEvent[] }) {
+  const totalHidden =
+    props.counts.thoughts +
+    props.counts.tools +
+    props.counts.commandsHidden +
+    props.counts.statusesHidden +
+    props.counts.other;
+
+  if (totalHidden <= 0) return null;
+
+  const parts: string[] = [];
+  if (props.counts.tools) parts.push(`tools ${props.counts.tools}`);
+  if (props.counts.commandsHidden) parts.push(`commands ${props.counts.commandsHidden}`);
+  if (props.counts.statusesHidden) parts.push(`status ${props.counts.statusesHidden}`);
+  if (props.counts.thoughts) parts.push(`thoughts ${props.counts.thoughts}`);
+  if (props.counts.other) parts.push(`other ${props.counts.other}`);
+
+  return (
+    <div className="bubble system">
+      <details>
+        <summary className="muted" style={{ cursor: "pointer" }}>
+          Actions ({parts.join(" • ")})
+        </summary>
+        {props.toolEvents.length ? (
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+            {props.toolEvents.map((event) => (
+              <div key={event.id} className="muted" style={{ fontSize: 12 }}>
+                <span className="pill">tool</span> <span className="mono">{event.title}</span>{" "}
+                <span className="mono" style={{ opacity: 0.8 }}>
+                  {event.stepType}
+                </span>
+                {event.text ? (
+                  <div style={{ marginTop: 4, whiteSpace: "pre-wrap", opacity: 0.9 }}>{event.text}</div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+            Switch to Trajectory for tool/command details.
+          </div>
+        )}
+      </details>
+    </div>
+  );
+}
+
+function HiddenSummaryRow(props: { counts: TranscriptHiddenCounts }) {
+  const totalHidden =
+    props.counts.thoughts +
+    props.counts.tools +
+    props.counts.commandsHidden +
+    props.counts.statusesHidden +
+    props.counts.other;
+
+  if (totalHidden <= 0) return null;
+
+  const parts: string[] = [];
+  if (props.counts.thoughts) parts.push(`thoughts ${props.counts.thoughts}`);
+  if (props.counts.tools) parts.push(`tools ${props.counts.tools}`);
+  if (props.counts.commandsHidden) parts.push(`commands ${props.counts.commandsHidden}`);
+  if (props.counts.statusesHidden) parts.push(`status ${props.counts.statusesHidden}`);
+  if (props.counts.other) parts.push(`other ${props.counts.other}`);
+
+  return (
+    <div className="bubble system">
+      <div className="split">
+        <div className="row" style={{ gap: 8 }}>
+          <span className="pill">Hidden</span>
+          <span className="muted">{parts.join(" • ")}</span>
+        </div>
+        <div className="muted" style={{ fontSize: 12 }}>
+          Switch to Trajectory for details
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TrajectoryEventView({ event }: { event: TrajectoryEvent }) {
   const timeLabel = formatIsoTime(event.completedAt ?? event.createdAt);
   const hasDetails = Boolean(event.output || event.toolCalls?.length);
 
@@ -125,6 +323,162 @@ function TrajectoryEventView({ event }: { event: AntigravityTrajectoryEvent }) {
   );
 }
 
+function TrajectoryGroupRow(props: {
+  row: Extract<TrajectoryRow, { type: "group" }>;
+  onToggle(groupId: string): void;
+}) {
+  return (
+    <div className="trajectory-group-row">
+      <button className="btn trajectory-group-btn" onClick={() => props.onToggle(props.row.group.id)}>
+        <span className="mono">{props.row.collapsed ? "▸" : "▾"}</span>
+        <span>{props.row.group.label}</span>
+        <span className="pill">{props.row.group.events.length}</span>
+      </button>
+    </div>
+  );
+}
+
+function VirtualMeasuredRow(props: {
+  rowId: string;
+  top: number;
+  onHeight(rowId: string, height: number): void;
+  children: React.ReactNode;
+}) {
+  const { rowId, top, onHeight, children } = props;
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const measure = () => onHeight(rowId, node.getBoundingClientRect().height);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [rowId, onHeight]);
+
+  return (
+    <div ref={ref} className="trajectory-virtual-row" style={{ transform: `translateY(${top}px)` }}>
+      {children}
+    </div>
+  );
+}
+
+function VirtualizedTrajectoryRows(props: {
+  rows: TrajectoryRow[];
+  onToggleGroup(groupId: string): void;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(600);
+  const [rowHeights, setRowHeights] = useState<Record<string, number>>({});
+
+  const estimateHeight = 148;
+  const overscanPx = 700;
+
+  const offsets = useMemo(() => computeRowOffsets(props.rows, rowHeights, estimateHeight), [props.rows, rowHeights]);
+  const totalHeight = useMemo(() => {
+    if (props.rows.length === 0) return 0;
+    const last = props.rows[props.rows.length - 1]!;
+    return offsets[props.rows.length - 1]! + (rowHeights[last.id] ?? estimateHeight);
+  }, [props.rows, offsets, rowHeights]);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const update = () => {
+      setViewportHeight(el.clientHeight);
+      setScrollTop(el.scrollTop);
+    };
+    update();
+
+    const onScroll = () => setScrollTop(el.scrollTop);
+    el.addEventListener("scroll", onScroll, { passive: true });
+
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro.disconnect();
+    };
+  }, []);
+
+  const updateHeight = useCallback((rowId: string, height: number) => {
+    setRowHeights((prev) => {
+      const current = prev[rowId];
+      if (typeof current === "number" && Math.abs(current - height) < 1) return prev;
+      return { ...prev, [rowId]: height };
+    });
+  }, []);
+
+  const start = useMemo(() => {
+    const target = Math.max(scrollTop - overscanPx, 0);
+    let low = 0;
+    let high = props.rows.length - 1;
+    let best = 0;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const value = offsets[mid] ?? 0;
+      if (value <= target) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    return best;
+  }, [scrollTop, overscanPx, props.rows.length, offsets]);
+
+  const end = useMemo(() => {
+    const limit = scrollTop + viewportHeight + overscanPx;
+    let idx = start;
+    while (idx < props.rows.length) {
+      const row = props.rows[idx]!;
+      const top = offsets[idx] ?? 0;
+      const height = rowHeights[row.id] ?? estimateHeight;
+      if (top > limit) break;
+      idx += 1;
+      if (top + height > limit) break;
+    }
+    return clamp(idx + 1, 0, props.rows.length);
+  }, [start, scrollTop, viewportHeight, overscanPx, props.rows, offsets, rowHeights]);
+
+  const visible = useMemo(
+    () =>
+      props.rows.slice(start, end).map((row, localIndex) => {
+        const index = start + localIndex;
+        return {
+          row,
+          top: offsets[index] ?? 0
+        };
+      }),
+    [props.rows, start, end, offsets]
+  );
+
+  return (
+    <div ref={containerRef} className="trajectory-virtual">
+      <div className="trajectory-virtual-inner" style={{ height: totalHeight }}>
+        {visible.map(({ row, top }) => (
+          <VirtualMeasuredRow key={row.id} rowId={row.id} top={top} onHeight={updateHeight}>
+            {row.type === "group" ? (
+              <TrajectoryGroupRow row={row} onToggle={props.onToggleGroup} />
+            ) : row.type === "event" ? (
+              <TrajectoryEventView event={row.event} />
+            ) : row.type === "message" ? (
+              <ChatMessageView message={row.message} />
+            ) : row.type === "actions" ? (
+              <TranscriptActionsRow counts={row.counts} toolEvents={row.toolEvents} />
+            ) : (
+              <HiddenSummaryRow counts={row.counts} />
+            )}
+          </VirtualMeasuredRow>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function HomeClient() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -137,13 +491,15 @@ export default function HomeClient() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [content, setContent] = useState<ConversationContent | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [antigravityView, setAntigravityView] = useState<"trajectory" | "markdown">("trajectory");
-  const [antigravityFilters, setAntigravityFilters] = useState({
+  const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("transcript");
+  const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("transcript");
+  const [trajectoryFilters, setTrajectoryFilters] = useState({
     thought: true,
     tool: true,
     command: true,
     status: false
   });
+  const [collapsedExecutionGroups, setCollapsedExecutionGroups] = useState<Record<string, boolean>>({});
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -156,16 +512,153 @@ export default function HomeClient() {
     return items.filter((it) => it.id.toLowerCase().includes(q));
   }, [items, filter]);
 
-  const visibleAntigravityEvents = useMemo(() => {
-    if (content?.kind !== "antigravity") return [];
-    return content.events.filter((event) => {
-      if (event.kind === "thought" && !antigravityFilters.thought) return false;
-      if (event.kind === "tool" && !antigravityFilters.tool) return false;
-      if (event.kind === "command" && !antigravityFilters.command) return false;
-      if (event.kind === "status" && !antigravityFilters.status) return false;
-      return true;
-    });
-  }, [content, antigravityFilters]);
+  const rawTrajectoryEvents = useMemo(() => {
+    if (content?.kind !== "trajectory") return [];
+    return content.events;
+  }, [content]);
+
+  const executionGroups = useMemo(() => buildExecutionGroups(rawTrajectoryEvents), [rawTrajectoryEvents]);
+
+  const trajectoryRows = useMemo(() => {
+    if (content?.kind !== "trajectory") return [];
+    const rows: TrajectoryRow[] = [];
+    for (const group of executionGroups) {
+      const collapsed = collapsedExecutionGroups[group.id] ?? false;
+      rows.push({
+        id: `group:${group.id}`,
+        type: "group",
+        group,
+        collapsed
+      });
+      if (!collapsed) {
+        for (const event of group.events) {
+          if (event.kind === "thought" && !trajectoryFilters.thought) continue;
+          if (event.kind === "tool" && !trajectoryFilters.tool) continue;
+          if (event.kind === "command" && !trajectoryFilters.command) continue;
+          if (event.kind === "status" && !trajectoryFilters.status) continue;
+          rows.push({
+            id: `event:${event.id}`,
+            type: "event",
+            groupId: group.id,
+            event
+          });
+        }
+      }
+    }
+    return rows;
+  }, [content, executionGroups, collapsedExecutionGroups, trajectoryFilters]);
+
+  const transcriptRows = useMemo(() => {
+    if (content?.kind !== "trajectory") return [];
+    const rows: TrajectoryRow[] = [];
+
+    for (const group of executionGroups) {
+      const collapsed = collapsedExecutionGroups[group.id] ?? false;
+      rows.push({
+        id: `group:${group.id}`,
+        type: "group",
+        group,
+        collapsed
+      });
+
+      if (collapsed) continue;
+
+      let hidden = buildEmptyTranscriptHiddenCounts();
+      let pendingToolEvents: TrajectoryEvent[] = [];
+
+      const pushMessage = (groupId: string, message: ChatMessage, stableKey: string) => {
+        const last = rows[rows.length - 1];
+        if (last && last.type === "message" && last.groupId === groupId && last.message.role === message.role && last.message.role !== "tool") {
+          if ("text" in last.message && "text" in message) {
+            last.message = { ...last.message, text: `${last.message.text}\n\n${message.text}` };
+            return;
+          }
+        }
+        rows.push({
+          id: `msg:${groupId}:${stableKey}`,
+          type: "message",
+          groupId,
+          message
+        });
+      };
+
+      const flushActionsUnderAssistant = (groupId: string, stableKey: string) => {
+        if (!hasAnyHiddenTranscriptCounts(hidden)) return;
+        rows.push({
+          id: `actions:${groupId}:${stableKey}`,
+          type: "actions",
+          groupId,
+          counts: hidden,
+          toolEvents: pendingToolEvents
+        });
+        hidden = buildEmptyTranscriptHiddenCounts();
+        pendingToolEvents = [];
+      };
+
+      for (const event of group.events) {
+        if (event.kind === "user" && event.text) {
+          pushMessage(group.id, { role: "user", text: event.text }, event.id);
+          continue;
+        }
+        if (event.kind === "assistant" && event.text) {
+          pushMessage(group.id, { role: "assistant", text: event.text }, event.id);
+          flushActionsUnderAssistant(group.id, event.id);
+          continue;
+        }
+
+        if (event.kind === "thought") {
+          hidden.thoughts += 1;
+          continue;
+        }
+
+        if (isKeyStatusLikeEvent(event)) {
+          const text = event.text ?? event.status ?? event.title;
+          pushMessage(group.id, { role: "system", text }, event.id);
+          continue;
+        }
+
+        // Always surface errors (including tool errors) in Transcript mode.
+        if (isErrorLikeEvent(event)) {
+          rows.push({
+            id: `event:${event.id}`,
+            type: "event",
+            groupId: group.id,
+            event
+          });
+          continue;
+        }
+
+        if (event.kind === "command") {
+          hidden.commandsHidden += 1;
+          continue;
+        }
+
+        if (event.kind === "tool") {
+          hidden.tools += 1;
+          pendingToolEvents.push(event);
+          continue;
+        }
+
+        if (event.kind === "status") {
+          hidden.statusesHidden += 1;
+          continue;
+        }
+
+        hidden.other += 1;
+      }
+
+      if (hasAnyHiddenTranscriptCounts(hidden)) {
+        rows.push({
+          id: `hidden:${group.id}`,
+          type: "hidden_summary",
+          groupId: group.id,
+          counts: hidden
+        });
+      }
+    }
+
+    return rows;
+  }, [content, executionGroups, collapsedExecutionGroups]);
 
   async function refreshConfigAndStatus() {
     const cfgRes = await fetch("/api/config");
@@ -193,11 +686,17 @@ export default function HomeClient() {
     }
   }
 
-  async function loadConversation(nextSource: Source, id: string, stepOffset?: number) {
+  async function loadConversation(nextSource: Source, id: string, stepOffset?: number, view?: "chat" | "trajectory") {
     setLoadingContent(true);
     setError(null);
     try {
-      const qp = nextSource === "windsurf" ? `?stepOffset=${stepOffset ?? 0}` : "";
+      let qp = "";
+      if (nextSource === "windsurf") {
+        const sp = new URLSearchParams();
+        sp.set("stepOffset", String(stepOffset ?? 0));
+        if (view === "trajectory") sp.set("view", "trajectory");
+        qp = `?${sp.toString()}`;
+      }
       const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
       const json = (await res.json()) as any;
       if (!res.ok) throw new Error(json?.error ?? "Failed to load conversation");
@@ -210,7 +709,7 @@ export default function HomeClient() {
     }
   }
 
-  async function loadMoreWindsurf() {
+  async function loadMoreWindsurfChat() {
     if (!selectedId || source !== "windsurf" || content?.kind !== "chat") return;
     const currentOffset = content.stepOffset ?? 0;
     const res = await fetch(`/api/conversations/windsurf/${selectedId}?stepOffset=${currentOffset}`);
@@ -229,6 +728,33 @@ export default function HomeClient() {
     });
   }
 
+  async function loadMoreWindsurfTrajectory() {
+    if (!selectedId || source !== "windsurf" || content?.kind !== "trajectory" || content.source !== "windsurf") return;
+    const currentOffset = content.stepOffset ?? 0;
+    const res = await fetch(`/api/conversations/windsurf/${selectedId}?stepOffset=${currentOffset}&view=trajectory`);
+    const json = (await res.json()) as any;
+    if (!res.ok) {
+      setError(json?.error ?? "Failed to load more");
+      return;
+    }
+    const next = json as ConversationContent;
+    if (next.kind !== "trajectory" || next.source !== "windsurf") return;
+
+    const mergedEvents = [...content.events, ...next.events];
+    const mergedStepOffset = typeof next.stepOffset === "number" ? next.stepOffset : currentOffset + next.events.length;
+    const mergedNumTotalSteps = typeof next.numTotalSteps === "number" ? next.numTotalSteps : content.numTotalSteps;
+    const totalSteps = typeof mergedNumTotalSteps === "number" ? mergedNumTotalSteps : mergedStepOffset;
+
+    const merged: TrajectoryContent = {
+      ...content,
+      events: mergedEvents,
+      stepOffset: mergedStepOffset,
+      ...(typeof mergedNumTotalSteps === "number" ? { numTotalSteps: mergedNumTotalSteps } : {}),
+      summary: summarizeTrajectoryEvents(mergedEvents, totalSteps)
+    };
+    setContent(merged);
+  }
+
   useEffect(() => {
     refreshConfigAndStatus().catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
@@ -238,8 +764,27 @@ export default function HomeClient() {
     setSelectedKey(null);
     setSelectedId(null);
     setContent(null);
-    setAntigravityView("trajectory");
+    setAntigravityView("transcript");
+    setWindsurfView("transcript");
+    setCollapsedExecutionGroups({});
   }, [source]);
+
+  useEffect(() => {
+    if (content?.kind !== "trajectory") return;
+    const groupIds = buildExecutionGroups(content.events).map((group) => group.id);
+    if (groupIds.length === 0) {
+      setCollapsedExecutionGroups({});
+      return;
+    }
+    setCollapsedExecutionGroups((prev) => {
+      const next: Record<string, boolean> = {};
+      for (let i = 0; i < groupIds.length; i += 1) {
+        const id = groupIds[i]!;
+        next[id] = prev[id] ?? i !== groupIds.length - 1;
+      }
+      return next;
+    });
+  }, [content]);
 
   const antigravityPill = (() => {
     if (!status) return <StatusPill label="Antigravity: ..." tone="warn" />;
@@ -254,6 +799,10 @@ export default function HomeClient() {
     if (status.windsurf.logPath) return <StatusPill label="Windsurf: not attached" tone="warn" title={status.windsurf.error ?? status.windsurf.logPath} />;
     return <StatusPill label="Windsurf: not found" tone="bad" title={status.windsurf.error} />;
   })();
+
+  const toggleExecutionGroup = useCallback((groupId: string) => {
+    setCollapsedExecutionGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
+  }, []);
 
   return (
     <div className="container">
@@ -307,8 +856,10 @@ export default function HomeClient() {
                   setSelectedKey(`${it.rootId}:${it.id}`);
                   setSelectedId(it.id);
                   setContent(null);
-                  setAntigravityView("trajectory");
-                  loadConversation(source, it.id).catch(() => {});
+                  setAntigravityView("transcript");
+                  setWindsurfView("transcript");
+                  setCollapsedExecutionGroups({});
+                  loadConversation(source, it.id, 0, source === "windsurf" ? "trajectory" : undefined).catch(() => {});
                 }}
                 title={it.path}
               >
@@ -378,10 +929,64 @@ export default function HomeClient() {
 
           {!selectedId ? <div className="muted">Select a conversation on the left.</div> : null}
 
-          {selectedId && content?.kind === "antigravity" ? (
+          {selectedId && source === "windsurf" ? (
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                <button
+                  className={`btn ${windsurfView === "chat" ? "primary" : ""}`}
+                  onClick={() => {
+                    setWindsurfView("chat");
+                    setContent(null);
+                    setCollapsedExecutionGroups({});
+                    loadConversation("windsurf", selectedId, 0, "chat").catch(() => {});
+                  }}
+                >
+                  Chat
+                </button>
+                <button
+                  className={`btn ${windsurfView === "transcript" ? "primary" : ""}`}
+                  onClick={() => {
+                    setWindsurfView("transcript");
+                    if (content?.kind !== "trajectory" || content.source !== "windsurf") {
+                      setContent(null);
+                      setCollapsedExecutionGroups({});
+                      loadConversation("windsurf", selectedId, 0, "trajectory").catch(() => {});
+                    }
+                  }}
+                >
+                  Transcript
+                </button>
+                <button
+                  className={`btn ${windsurfView === "trajectory" ? "primary" : ""}`}
+                  onClick={() => {
+                    setWindsurfView("trajectory");
+                    if (content?.kind !== "trajectory" || content.source !== "windsurf") {
+                      setContent(null);
+                      setCollapsedExecutionGroups({});
+                      loadConversation("windsurf", selectedId, 0, "trajectory").catch(() => {});
+                    }
+                  }}
+                >
+                  Trajectory
+                </button>
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>
+                {windsurfView === "chat"
+                  ? "Legacy chat view"
+                  : windsurfView === "trajectory"
+                    ? "Process-first view"
+                    : "Transcript view (default)"}
+              </div>
+            </div>
+          ) : null}
+
+          {selectedId && content?.kind === "trajectory" && content.source === "antigravity" ? (
             <div>
               <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
                 <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <button className={`btn ${antigravityView === "transcript" ? "primary" : ""}`} onClick={() => setAntigravityView("transcript")}>
+                    Transcript
+                  </button>
                   <button className={`btn ${antigravityView === "trajectory" ? "primary" : ""}`} onClick={() => setAntigravityView("trajectory")}>
                     Trajectory
                   </button>
@@ -402,46 +1007,123 @@ export default function HomeClient() {
                 <div>
                   <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
                     <button
-                      className={`btn ${antigravityFilters.thought ? "primary" : ""}`}
-                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, thought: !prev.thought }))}
+                      className={`btn ${trajectoryFilters.thought ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought }))}
                     >
                       Thoughts
                     </button>
                     <button
-                      className={`btn ${antigravityFilters.tool ? "primary" : ""}`}
-                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, tool: !prev.tool }))}
+                      className={`btn ${trajectoryFilters.tool ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool }))}
                     >
                       Tools
                     </button>
                     <button
-                      className={`btn ${antigravityFilters.command ? "primary" : ""}`}
-                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, command: !prev.command }))}
+                      className={`btn ${trajectoryFilters.command ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command }))}
                     >
                       Commands
                     </button>
                     <button
-                      className={`btn ${antigravityFilters.status ? "primary" : ""}`}
-                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, status: !prev.status }))}
+                      className={`btn ${trajectoryFilters.status ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status }))}
                     >
                       Status
                     </button>
                     <span className="muted" style={{ fontSize: 12 }}>
-                      Visible: {visibleAntigravityEvents.length}
+                      Groups: {executionGroups.length}
                     </span>
                   </div>
-                  <div className="chat" style={{ maxHeight: "calc(100vh - 330px)", overflow: "auto", paddingRight: 4 }}>
-                    {visibleAntigravityEvents.map((event) => (
-                      <TrajectoryEventView key={event.id} event={event} />
-                    ))}
+                  <VirtualizedTrajectoryRows rows={trajectoryRows} onToggleGroup={toggleExecutionGroup} />
+                </div>
+              ) : antigravityView === "transcript" ? (
+                <div>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                    Transcript shows user/assistant plus errors. Tools and successful commands are hidden behind a summary row.
                   </div>
+                  <VirtualizedTrajectoryRows rows={transcriptRows} onToggleGroup={toggleExecutionGroup} />
                 </div>
               ) : (
                 <div style={{ maxHeight: "calc(100vh - 290px)", overflow: "auto" }}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                    {content.markdown}
+                    {content.markdown ?? ""}
                   </ReactMarkdown>
                 </div>
               )}
+            </div>
+          ) : null}
+
+          {selectedId && content?.kind === "trajectory" && content.source === "windsurf" ? (
+            <div>
+              <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <span className="pill">
+                    steps{" "}
+                    {typeof content.stepOffset === "number"
+                      ? `${content.stepOffset}${typeof content.numTotalSteps === "number" ? ` / ${content.numTotalSteps}` : ""}`
+                      : content.summary.totalSteps}
+                  </span>
+                  <span className="pill">events {content.summary.renderedEvents}</span>
+                  <span className="pill">thoughts {content.summary.thoughtCount}</span>
+                  <span className="pill">tools {content.summary.toolCount + content.summary.commandCount}</span>
+                  {content.summary.errorCount > 0 ? <span className="pill" data-tone="bad">errors {content.summary.errorCount}</span> : null}
+                </div>
+              </div>
+
+              {windsurfView === "trajectory" ? (
+                <div>
+                  <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                    <button
+                      className={`btn ${trajectoryFilters.thought ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought }))}
+                    >
+                      Thoughts
+                    </button>
+                    <button
+                      className={`btn ${trajectoryFilters.tool ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool }))}
+                    >
+                      Tools
+                    </button>
+                    <button
+                      className={`btn ${trajectoryFilters.command ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command }))}
+                    >
+                      Commands
+                    </button>
+                    <button
+                      className={`btn ${trajectoryFilters.status ? "primary" : ""}`}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status }))}
+                    >
+                      Status
+                    </button>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      Groups: {executionGroups.length}
+                    </span>
+                  </div>
+                  <VirtualizedTrajectoryRows rows={trajectoryRows} onToggleGroup={toggleExecutionGroup} />
+                </div>
+              ) : (
+                <div>
+                  <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                    Transcript shows user/assistant plus errors. Tools and successful commands are hidden behind a summary row.
+                  </div>
+                  <VirtualizedTrajectoryRows rows={transcriptRows} onToggleGroup={toggleExecutionGroup} />
+                </div>
+              )}
+
+              <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
+                <button className="btn" onClick={() => loadConversation("windsurf", selectedId, 0, "trajectory")} disabled={loadingContent}>
+                  Reload
+                </button>
+                <button
+                  className="btn primary"
+                  onClick={() => loadMoreWindsurfTrajectory()}
+                  disabled={loadingContent || (typeof content.numTotalSteps === "number" && typeof content.stepOffset === "number" && content.stepOffset >= content.numTotalSteps)}
+                >
+                  Load more
+                </button>
+              </div>
             </div>
           ) : null}
 
@@ -470,7 +1152,7 @@ export default function HomeClient() {
                 </button>
                 <button
                   className="btn primary"
-                  onClick={() => loadMoreWindsurf()}
+                  onClick={() => loadMoreWindsurfChat()}
                   disabled={loadingContent || (typeof content.numTotalSteps === "number" && content.stepOffset >= content.numTotalSteps)}
                 >
                   Load more

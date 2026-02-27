@@ -255,3 +255,34 @@ pre {
 .bubble.tool {
   background: rgba(2, 6, 23, 0.55);
 }
+
+.trajectory-virtual {
+  max-height: calc(100vh - 330px);
+  overflow: auto;
+  padding-right: 4px;
+  position: relative;
+}
+
+.trajectory-virtual-inner {
+  position: relative;
+  width: 100%;
+}
+
+.trajectory-virtual-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+}
+
+.trajectory-group-row {
+  margin-bottom: 8px;
+}
+
+.trajectory-group-btn {
+  width: 100%;
+  justify-content: space-between;
+  display: inline-flex;
+  align-items: center;
+}
