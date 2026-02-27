@@ -9,13 +9,13 @@ describe("normalizeAntigravityTrajectoryToEvents", () => {
         {
           type: "CORTEX_STEP_TYPE_USER_INPUT",
           status: "CORTEX_STEP_STATUS_DONE",
-          metadata: { createdAt: "2026-02-01T00:00:00Z" },
+          metadata: { createdAt: "2026-02-01T00:00:00Z", executionId: "exec-1" },
           userInput: { userResponse: "Please review this code." }
         },
         {
           type: "CORTEX_STEP_TYPE_PLANNER_RESPONSE",
           status: "CORTEX_STEP_STATUS_DONE",
-          metadata: { createdAt: "2026-02-01T00:00:01Z" },
+          metadata: { createdAt: "2026-02-01T00:00:01Z", executionId: "exec-1" },
           plannerResponse: {
             thinking: "I will inspect the route and then run tests.",
             modifiedResponse: "Found two issues and prepared fixes.",
@@ -56,6 +56,8 @@ describe("normalizeAntigravityTrajectoryToEvents", () => {
     expect(kinds).toContain("command");
     expect(kinds).toContain("status");
     expect(out.events.find((x) => x.kind === "command")?.output).toContain("failed tests");
+    expect(out.events[0]?.source).toBe("antigravity");
+    expect(out.events[0]?.executionId).toBe("exec-1");
   });
 
   it("deduplicates repeated command status events", () => {
@@ -79,4 +81,3 @@ describe("normalizeAntigravityTrajectoryToEvents", () => {
     expect(out.events[0]?.kind).toBe("status");
   });
 });
-

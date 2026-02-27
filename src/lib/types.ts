@@ -64,7 +64,7 @@ export type ChatMessage =
       payload: unknown;
     };
 
-export type AntigravityTrajectoryEventKind =
+export type TrajectoryEventKind =
   | "user"
   | "assistant"
   | "thought"
@@ -73,17 +73,19 @@ export type AntigravityTrajectoryEventKind =
   | "status"
   | "other";
 
-export type AntigravityToolCall = {
+export type TrajectoryToolCall = {
   id?: string;
   name?: string;
   argumentsJson?: string;
 };
 
-export type AntigravityTrajectoryEvent = {
+export type TrajectoryEvent = {
   id: string;
   index: number;
-  kind: AntigravityTrajectoryEventKind;
+  source: Source;
+  kind: TrajectoryEventKind;
   stepType: string;
+  executionId?: string;
   status?: string;
   title: string;
   text?: string;
@@ -94,10 +96,10 @@ export type AntigravityTrajectoryEvent = {
   exitCode?: number;
   output?: string;
   outputTruncated?: boolean;
-  toolCalls?: AntigravityToolCall[];
+  toolCalls?: TrajectoryToolCall[];
 };
 
-export type AntigravityTrajectorySummary = {
+export type TrajectorySummary = {
   totalSteps: number;
   renderedEvents: number;
   userCount: number;
@@ -108,17 +110,31 @@ export type AntigravityTrajectorySummary = {
   errorCount: number;
 };
 
+export type TrajectoryContent = {
+  kind: "trajectory";
+  source: Source;
+  markdown?: string;
+  events: TrajectoryEvent[];
+  summary: TrajectorySummary;
+  /**
+   * For paged sources (e.g. Windsurf): the next step offset to request.
+   * Semantics match `ChatContent.stepOffset`.
+   */
+  stepOffset?: number;
+  numTotalSteps?: number;
+};
+
+export type AntigravityTrajectoryEventKind = TrajectoryEventKind;
+export type AntigravityToolCall = TrajectoryToolCall;
+export type AntigravityTrajectoryEvent = TrajectoryEvent;
+export type AntigravityTrajectorySummary = TrajectorySummary;
+
 export type ConversationContent =
   | {
       kind: "markdown";
       markdown: string;
     }
-  | {
-      kind: "antigravity";
-      markdown: string;
-      events: AntigravityTrajectoryEvent[];
-      summary: AntigravityTrajectorySummary;
-    }
+  | TrajectoryContent
   | {
       kind: "chat";
       messages: ChatMessage[];

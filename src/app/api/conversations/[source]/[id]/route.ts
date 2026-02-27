@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type { ConversationContent, Source } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
-import { getWindsurfChat } from "@/lib/server/windsurf";
+import { getWindsurfChat, getWindsurfTrajectory } from "@/lib/server/windsurf";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +27,8 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
     if (source === "antigravity") {
       const antigravity = await getAntigravityConversation(id);
       const out: ConversationContent = {
-        kind: "antigravity",
+        kind: "trajectory",
+        source: "antigravity",
         markdown: antigravity.markdown,
         events: antigravity.events,
         summary: antigravity.summary
@@ -36,7 +37,22 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
     }
 
     const stepOffset = Math.max(Number(url.searchParams.get("stepOffset") ?? "0"), 0);
+    const view = url.searchParams.get("view");
     const { config } = await readConfig();
+
+    if (view === "trajectory") {
+      const trajectory = await getWindsurfTrajectory({ config, cascadeId: id, stepOffset });
+      const out: ConversationContent = {
+        kind: "trajectory",
+        source: "windsurf",
+        events: trajectory.events,
+        summary: trajectory.summary,
+        stepOffset: trajectory.nextStepOffset,
+        ...(typeof trajectory.numTotalSteps === "number" ? { numTotalSteps: trajectory.numTotalSteps } : {})
+      };
+      return NextResponse.json(out);
+    }
+
     const chat = await getWindsurfChat({ config, cascadeId: id, stepOffset });
     const out: ConversationContent = {
       kind: "chat",

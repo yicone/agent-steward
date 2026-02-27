@@ -6,10 +6,11 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import type { AppConfig, ChatMessage, SourcesStatus } from "@/lib/types";
+import type { AppConfig, ChatMessage, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
+import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
-import { normalizeWindsurfStepsToMessages } from "@/lib/parse/steps";
+import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
 import { connectUnaryJson } from "@/lib/server/connect";
 import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 
@@ -207,6 +208,38 @@ export async function getWindsurfChat(params: {
   cascadeId: string;
   stepOffset: number;
 }): Promise<{ messages: ChatMessage[]; nextStepOffset: number; numTotalSteps?: number }> {
+  const { steps, nextStepOffset, numTotalSteps } = await getWindsurfStepChunk(params);
+  const messages = normalizeWindsurfStepsToMessages(steps);
+
+  return {
+    messages,
+    nextStepOffset,
+    numTotalSteps
+  };
+}
+
+export async function getWindsurfTrajectory(params: {
+  config: AppConfig;
+  cascadeId: string;
+  stepOffset: number;
+}): Promise<{ events: TrajectoryEvent[]; summary: TrajectorySummary; nextStepOffset: number; numTotalSteps?: number }> {
+  const { steps, nextStepOffset, numTotalSteps } = await getWindsurfStepChunk(params);
+  const { events } = normalizeWindsurfStepsToTrajectoryEvents(steps);
+  const totalSteps = typeof numTotalSteps === "number" ? numTotalSteps : nextStepOffset;
+  const summary = summarizeTrajectoryEvents(events, totalSteps);
+  return {
+    events,
+    summary,
+    nextStepOffset,
+    numTotalSteps
+  };
+}
+
+async function getWindsurfStepChunk(params: {
+  config: AppConfig;
+  cascadeId: string;
+  stepOffset: number;
+}): Promise<{ steps: unknown[]; nextStepOffset: number; numTotalSteps?: number }> {
   const { config, cascadeId, stepOffset } = params;
   const conn = await resolveWindsurfConnection(config);
   const baseUrl = `http://127.0.0.1:${conn.port}`;
@@ -235,10 +268,8 @@ export async function getWindsurfChat(params: {
   });
 
   const steps: unknown[] = Array.isArray(stepsRes?.steps) ? stepsRes.steps : [];
-  const messages = normalizeWindsurfStepsToMessages(steps);
-
   return {
-    messages,
+    steps,
     nextStepOffset: stepOffset + steps.length,
     numTotalSteps
   };

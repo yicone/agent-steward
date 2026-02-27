@@ -1,9 +1,10 @@
 import type {
   AntigravityToolCall,
-  AntigravityTrajectoryEvent,
-  AntigravityTrajectoryEventKind,
-  AntigravityTrajectorySummary
+  TrajectoryEvent,
+  TrajectoryEventKind,
+  TrajectorySummary
 } from "@/lib/types";
+import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 
 const ESCAPE_SEQUENCE = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 const STEP_TYPE_PREFIX = "CORTEX_STEP_TYPE_";
@@ -88,48 +89,32 @@ function hasAnyOwnKeys(value: unknown): boolean {
 export function normalizeAntigravityTrajectoryToEvents(params: {
   trajectory: unknown;
 }): {
-  events: AntigravityTrajectoryEvent[];
-  summary: AntigravityTrajectorySummary;
+  events: TrajectoryEvent[];
+  summary: TrajectorySummary;
 } {
   const trajectoryObj = params.trajectory && typeof params.trajectory === "object" ? (params.trajectory as Record<string, unknown>) : {};
   const steps: unknown[] = Array.isArray(trajectoryObj.steps) ? trajectoryObj.steps : [];
 
-  const events: AntigravityTrajectoryEvent[] = [];
+  const events: TrajectoryEvent[] = [];
   const lastCommandStatus = new Map<string, string>();
-
-  const summary: AntigravityTrajectorySummary = {
-    totalSteps: steps.length,
-    renderedEvents: 0,
-    userCount: 0,
-    assistantCount: 0,
-    thoughtCount: 0,
-    toolCount: 0,
-    commandCount: 0,
-    errorCount: 0
-  };
 
   const pushEvent = (
     index: number,
     stepType: string,
-    kind: AntigravityTrajectoryEventKind,
-    data: Omit<AntigravityTrajectoryEvent, "id" | "index" | "kind" | "stepType">
+    kind: TrajectoryEventKind,
+    executionId: string | undefined,
+    data: Omit<TrajectoryEvent, "id" | "index" | "source" | "kind" | "stepType" | "executionId">
   ) => {
-    const event: AntigravityTrajectoryEvent = {
+    const event: TrajectoryEvent = {
       id: `${index}-${events.length}-${kind}`,
       index,
+      source: "antigravity",
       kind,
       stepType,
+      ...(executionId ? { executionId } : {}),
       ...data
     };
     events.push(event);
-    summary.renderedEvents += 1;
-    if (kind === "user") summary.userCount += 1;
-    if (kind === "assistant") summary.assistantCount += 1;
-    if (kind === "thought") summary.thoughtCount += 1;
-    if (kind === "tool") summary.toolCount += 1;
-    if (kind === "command") summary.commandCount += 1;
-    if (data.status?.includes("ERROR")) summary.errorCount += 1;
-    if (typeof data.exitCode === "number" && data.exitCode !== 0) summary.errorCount += 1;
   };
 
   for (let index = 0; index < steps.length; index += 1) {
@@ -139,13 +124,14 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
 
     const stepType = safeStepType(s.type);
     const status = asNonEmptyString(s.status) ?? undefined;
+    const executionId = asNonEmptyString(s?.metadata?.executionId) ?? undefined;
     const createdAt = asNonEmptyString(s?.metadata?.createdAt) ?? undefined;
     const completedAt = asNonEmptyString(s?.metadata?.completedAt) ?? undefined;
 
     if (stepType === "CORTEX_STEP_TYPE_USER_INPUT") {
       const text = asNonEmptyString(s?.userInput?.userResponse) ?? asNonEmptyString(s?.userInput?.query);
       if (text) {
-        pushEvent(index, stepType, "user", {
+        pushEvent(index, stepType, "user", executionId, {
           title: "User",
           text,
           status,
@@ -160,7 +146,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const thinking = asNonEmptyString(s?.plannerResponse?.thinking);
       if (thinking) {
         const clipped = truncateText(thinking, 12000);
-        pushEvent(index, stepType, "thought", {
+        pushEvent(index, stepType, "thought", executionId, {
           title: "Thinking",
           text: clipped.text,
           status,
@@ -171,7 +157,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
 
       const toolCalls = parseToolCalls(s?.plannerResponse?.toolCalls);
       if (toolCalls.length) {
-        pushEvent(index, stepType, "tool", {
+        pushEvent(index, stepType, "tool", executionId, {
           title: `Planned Tool Calls (${toolCalls.length})`,
           text: toolCalls.map((x) => x.name ?? "tool").join(", "),
           toolCalls,
@@ -186,7 +172,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
         asNonEmptyString(s?.plannerResponse?.response);
       if (responseText) {
         const clipped = truncateText(responseText, 16000);
-        pushEvent(index, stepType, "assistant", {
+        pushEvent(index, stepType, "assistant", executionId, {
           title: "Assistant",
           text: clipped.text,
           status,
@@ -203,7 +189,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const exitCode = typeof s?.runCommand?.exitCode === "number" ? s.runCommand.exitCode : undefined;
       const outputText = extractOutputText(s?.runCommand?.combinedOutput ?? s?.runCommand?.combinedOutputSnapshot);
       const clipped = outputText ? truncateText(outputText, 20000) : null;
-      pushEvent(index, stepType, "command", {
+      pushEvent(index, stepType, "command", executionId, {
         title: commandLine ? "Run Command" : stepTypeLabel(stepType),
         text: commandLine,
         commandLine,
@@ -223,7 +209,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const last = lastCommandStatus.get(commandId);
       if (last === commandStatus) continue;
       lastCommandStatus.set(commandId, commandStatus);
-      pushEvent(index, stepType, "status", {
+      pushEvent(index, stepType, "status", executionId, {
         title: "Command Status",
         text: `${commandId}: ${commandStatus}`,
         status,
@@ -236,7 +222,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
     if (stepType === "CORTEX_STEP_TYPE_VIEW_FILE") {
       const uri = asNonEmptyString(s?.viewFile?.absolutePathUri) ?? asNonEmptyString(s?.viewFile?.absoluteUri);
       const numLines = typeof s?.viewFile?.numLines === "number" ? s.viewFile.numLines : undefined;
-      pushEvent(index, stepType, "tool", {
+      pushEvent(index, stepType, "tool", executionId, {
         title: "View File",
         text: uri ?? "file",
         ...(numLines ? { output: `Lines: ${numLines}` } : {}),
@@ -250,7 +236,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
     if (stepType === "CORTEX_STEP_TYPE_LIST_DIRECTORY") {
       const dir = asNonEmptyString(s?.listDirectory?.directoryPathUri);
       const resultsCount = Array.isArray(s?.listDirectory?.results) ? s.listDirectory.results.length : undefined;
-      pushEvent(index, stepType, "tool", {
+      pushEvent(index, stepType, "tool", executionId, {
         title: "List Directory",
         text: dir ?? "directory",
         ...(typeof resultsCount === "number" ? { output: `Entries: ${resultsCount}` } : {}),
@@ -265,7 +251,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const query = asNonEmptyString(s?.grepSearch?.query);
       const path = asNonEmptyString(s?.grepSearch?.searchPathUri);
       const results = typeof s?.grepSearch?.totalResults === "number" ? s.grepSearch.totalResults : undefined;
-      pushEvent(index, stepType, "tool", {
+      pushEvent(index, stepType, "tool", executionId, {
         title: "Grep Search",
         text: query ?? "search",
         ...(path ? { output: `${path}${typeof results === "number" ? ` • ${results} results` : ""}` } : {}),
@@ -280,7 +266,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const pattern = asNonEmptyString(s?.find?.pattern);
       const directory = asNonEmptyString(s?.find?.searchDirectory);
       const totalResults = typeof s?.find?.totalResults === "number" ? s.find.totalResults : undefined;
-      pushEvent(index, stepType, "tool", {
+      pushEvent(index, stepType, "tool", executionId, {
         title: "Find",
         text: pattern ?? "find",
         ...(directory ? { output: `${directory}${typeof totalResults === "number" ? ` • ${totalResults} results` : ""}` } : {}),
@@ -293,7 +279,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
 
     if (stepType === "CORTEX_STEP_TYPE_SEARCH_WEB") {
       const query = asNonEmptyString(s?.searchWeb?.query);
-      pushEvent(index, stepType, "tool", {
+      pushEvent(index, stepType, "tool", executionId, {
         title: "Search Web",
         text: query ?? "web search",
         status,
@@ -307,7 +293,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const taskName = asNonEmptyString(s?.browserSubagent?.taskName);
       const task = asNonEmptyString(s?.browserSubagent?.task);
       const clippedTask = task ? truncateText(task, 5000) : null;
-      pushEvent(index, stepType, "tool", {
+      pushEvent(index, stepType, "tool", executionId, {
         title: "Browser Subagent",
         text: taskName ?? "Browser task",
         ...(clippedTask ? { output: clippedTask.text, outputTruncated: clippedTask.truncated } : {}),
@@ -322,7 +308,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const commandId = asNonEmptyString(s?.sendCommandInput?.commandId);
       const outputText = extractOutputText(s?.sendCommandInput?.output);
       const clipped = outputText ? truncateText(outputText, 10000) : null;
-      pushEvent(index, stepType, "status", {
+      pushEvent(index, stepType, "status", executionId, {
         title: "Send Command Input",
         text: commandId ?? "command input",
         ...(clipped ? { output: clipped.text, outputTruncated: clipped.truncated } : {}),
@@ -340,7 +326,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const text = fullError ?? shortError ?? userError;
       if (text) {
         const clipped = truncateText(text, 8000);
-        pushEvent(index, stepType, "status", {
+        pushEvent(index, stepType, "status", executionId, {
           title: "Error",
           text: clipped.text,
           status,
@@ -356,7 +342,7 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
     if (!hasAnyOwnKeys(payload)) continue;
 
     const payloadJson = truncateText(JSON.stringify(payload, null, 2), 5000);
-    pushEvent(index, stepType, "other", {
+    pushEvent(index, stepType, "other", executionId, {
       title: stepTypeLabel(stepType),
       output: payloadJson.text,
       outputTruncated: payloadJson.truncated,
@@ -366,6 +352,5 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
     });
   }
 
-  return { events, summary };
+  return { events, summary: summarizeTrajectoryEvents(events, steps.length) };
 }
-

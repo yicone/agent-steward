@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { AppConfig, Source } from "@/lib/types";
+import type { AppConfig, ConversationMeta, Source } from "@/lib/types";
 import { connectUnaryJson } from "@/lib/server/connect";
 import { findLatestAntigravityDiscovery } from "@/lib/server/antigravity";
 import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
@@ -82,7 +82,9 @@ export async function buildDiagnosticExport(params: {
     const markdown = convertTrajectoryToMarkdownResponse?.markdown;
     if (typeof markdown !== "string") throw new Error("ConvertTrajectoryToMarkdown returned no markdown.");
 
-    const vscdbMap = await getAntigravityTrajectoryMetaMapFromVscdb().catch(() => ({}));
+    const vscdbMap = await getAntigravityTrajectoryMetaMapFromVscdb().catch(
+      (): Record<string, ConversationMeta> => ({})
+    );
     const metaFromVscdb = vscdbMap[cascadeId];
 
     return {
@@ -118,4 +120,3 @@ export async function buildDiagnosticExport(params: {
     windsurf
   };
 }
-
