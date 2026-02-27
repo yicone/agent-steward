@@ -23,6 +23,22 @@ type WindsurfConnection = {
   csrfToken: string;
 };
 
+async function probeWindsurfHeartbeat(params: { baseUrl: string; csrfToken?: string }): Promise<boolean> {
+  try {
+    await connectUnaryJson({
+      baseUrl: params.baseUrl,
+      serviceTypeName: SERVICE,
+      methodName: "Heartbeat",
+      csrfToken: params.csrfToken,
+      body: { metadata: {} },
+      timeoutMs: 1200
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -128,7 +144,14 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
   const cmd = await readProcessCommandLine(startInfo.pid);
   const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
   const csrfToken = tokenFromPs ?? (config.windsurf.csrfTokenOverride?.trim() || "");
-  if (!csrfToken) throw new Error("Missing Windsurf CSRF token. Use Settings -> Windsurf token override as fallback.");
+
+  // If we cannot extract a token, try to proceed without it. Some builds/configurations may
+  // allow local-only calls without the header; probing avoids breaking the UX unnecessarily.
+  if (!csrfToken) {
+    const baseUrl = `http://127.0.0.1:${startInfo.port}`;
+    const ok = await probeWindsurfHeartbeat({ baseUrl });
+    if (!ok) throw new Error("Missing Windsurf CSRF token. Use Settings -> Windsurf token override as fallback.");
+  }
 
   return { logPath, pid: startInfo.pid, port: startInfo.port, csrfToken };
 }
@@ -157,12 +180,20 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
   const cmd = await readProcessCommandLine(startInfo.pid);
   const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
   const csrfToken = tokenFromPs ?? (config.windsurf.csrfTokenOverride?.trim() || null);
-  const error = csrfToken
-    ? undefined
-    : "Missing Windsurf CSRF token. Keep Windsurf running and ensure we can read the LS process args, or set a token override in Settings.";
+  let attached = Boolean(startInfo.port) && Boolean(csrfToken);
+  let error: string | undefined;
+
+  if (!csrfToken) {
+    const baseUrl = `http://127.0.0.1:${startInfo.port}`;
+    const ok = await probeWindsurfHeartbeat({ baseUrl });
+    attached = ok;
+    error = ok
+      ? "Attached without CSRF token (probe succeeded). Some environments may require a token; set override if RPC fails."
+      : "Missing Windsurf CSRF token. Keep Windsurf running and ensure we can read the LS process args, or set a token override in Settings.";
+  }
 
   return {
-    attached: Boolean(startInfo.port) && Boolean(csrfToken),
+    attached,
     logPath,
     pid: startInfo.pid,
     port: startInfo.port,
