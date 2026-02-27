@@ -39,7 +39,8 @@ export async function connectUnaryJson<TRes>(params: {
       method: "POST",
       headers,
       body: JSON.stringify(body ?? {}),
-      signal: controller.signal
+      signal: controller.signal,
+      cache: "no-store"
     });
 
     if (!res.ok) {
@@ -56,4 +57,3 @@ export async function connectUnaryJson<TRes>(params: {
     clearTimeout(timer);
   }
 }
-
