@@ -45,6 +45,17 @@ pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+pre code {
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: pre;
+}
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -129,8 +140,12 @@ pre {
 
 .grid {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 360px minmax(0, 1fr);
   gap: 16px;
+}
+
+.grid > * {
+  min-width: 0;
 }
 
 .list {
@@ -156,12 +171,30 @@ pre {
 
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .split {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+}
+
+.split > * {
+  min-width: 0;
+}
+
+.viewer-header {
+  align-items: center;
+}
+
+.viewer-header-meta {
+  flex: 1;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat {
@@ -175,7 +208,13 @@ pre {
   border-radius: 12px;
   padding: 10px 12px;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   line-height: 1.45;
+}
+
+pre {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .bubble.user {
@@ -187,6 +226,26 @@ pre {
   background: rgba(148, 163, 184, 0.06);
 }
 
+.bubble.thought {
+  background: rgba(14, 116, 144, 0.12);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+.bubble.command {
+  background: rgba(96, 165, 250, 0.08);
+  border-color: rgba(96, 165, 250, 0.35);
+}
+
+.bubble.status {
+  background: rgba(234, 179, 8, 0.06);
+  border-color: rgba(234, 179, 8, 0.28);
+}
+
+.bubble.other {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(129, 140, 248, 0.32);
+}
+
 .bubble.system {
   background: rgba(234, 179, 8, 0.06);
   border-color: rgba(234, 179, 8, 0.28);
@@ -196,4 +255,3 @@ pre {
 .bubble.tool {
   background: rgba(2, 6, 23, 0.55);
 }
-

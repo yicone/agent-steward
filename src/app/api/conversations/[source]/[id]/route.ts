@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ConversationContent, Source } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
-import { getAntigravityMarkdown } from "@/lib/server/antigravity";
+import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getWindsurfChat } from "@/lib/server/windsurf";
 
 export const runtime = "nodejs";
@@ -25,8 +25,13 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
 
   try {
     if (source === "antigravity") {
-      const markdown = await getAntigravityMarkdown(id);
-      const out: ConversationContent = { kind: "markdown", markdown };
+      const antigravity = await getAntigravityConversation(id);
+      const out: ConversationContent = {
+        kind: "antigravity",
+        markdown: antigravity.markdown,
+        events: antigravity.events,
+        summary: antigravity.summary
+      };
       return NextResponse.json(out);
     }
 

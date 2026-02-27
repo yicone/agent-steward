@@ -47,7 +47,8 @@ Implementation outline:
 - **Connect (JSON) client** from the Next.js server runtime to call unary RPC methods.
 - **Antigravity**
   - Discover LS connection info from a local discovery file written by the daemon.
-  - Fetch a trajectory and convert to Markdown via the LS.
+  - Fetch a trajectory via the LS and normalize steps into a structured event stream for process-oriented rendering.
+  - Also convert trajectory to Markdown via the LS as an alternate reading mode.
 - **Windsurf**
   - Attach to a running LS by parsing log output for a port and process ID.
   - Extract CSRF token from process arguments (with an explicit manual override only as a fallback).
@@ -59,8 +60,8 @@ Implementation outline:
 - **Security posture:** the app must treat CSRF tokens and local ports as sensitive; keep all requests local-only.
 - **Better resilience:** trajectory/steps are expected to remain compatible longer than internal `.pb` schemas, because they are part of the product’s runtime interface.
 - **Testing focus:** parsing logic (logs, argv) and “steps → messages” normalization should be covered by unit tests.
+- **Viewer tradeoff:** trajectory-first rendering exposes richer process data (thought/tool/command/status), while Markdown mode remains useful for concise reading.
 
 ## Links
 
 - Roadmap: `ROADMAP.md`
-

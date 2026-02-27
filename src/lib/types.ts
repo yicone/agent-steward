@@ -64,10 +64,60 @@ export type ChatMessage =
       payload: unknown;
     };
 
+export type AntigravityTrajectoryEventKind =
+  | "user"
+  | "assistant"
+  | "thought"
+  | "tool"
+  | "command"
+  | "status"
+  | "other";
+
+export type AntigravityToolCall = {
+  id?: string;
+  name?: string;
+  argumentsJson?: string;
+};
+
+export type AntigravityTrajectoryEvent = {
+  id: string;
+  index: number;
+  kind: AntigravityTrajectoryEventKind;
+  stepType: string;
+  status?: string;
+  title: string;
+  text?: string;
+  createdAt?: string;
+  completedAt?: string;
+  commandLine?: string;
+  cwd?: string;
+  exitCode?: number;
+  output?: string;
+  outputTruncated?: boolean;
+  toolCalls?: AntigravityToolCall[];
+};
+
+export type AntigravityTrajectorySummary = {
+  totalSteps: number;
+  renderedEvents: number;
+  userCount: number;
+  assistantCount: number;
+  thoughtCount: number;
+  toolCount: number;
+  commandCount: number;
+  errorCount: number;
+};
+
 export type ConversationContent =
   | {
       kind: "markdown";
       markdown: string;
+    }
+  | {
+      kind: "antigravity";
+      markdown: string;
+      events: AntigravityTrajectoryEvent[];
+      summary: AntigravityTrajectorySummary;
     }
   | {
       kind: "chat";

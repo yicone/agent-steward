@@ -37,8 +37,14 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 ## Features (v1)
 
 - Scan and list `.pb` session files (default directories + custom roots from Settings)
-- Antigravity: render Markdown via `GetCascadeTrajectory` + `ConvertTrajectoryToMarkdown`
+- Antigravity:
+  - fetch `GetCascadeTrajectory` and normalize steps into a trajectory/event view (default Viewer mode)
+  - allow switching to Markdown view rendered via `ConvertTrajectoryToMarkdown`
 - Windsurf: connect to the running language server (discover port from logs + CSRF token from process args); render chat view via `GetCascadeTrajectorySteps`
+- Diagnostic export:
+  - download per-conversation diagnostic JSON from Viewer
+  - includes raw LS payloads to compare UI-visible process data vs rendered output
+  - note: may include sensitive content (paths, commands, outputs, conversation text)
 
 ## Prerequisites
 

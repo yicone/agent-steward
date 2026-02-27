@@ -6,7 +6,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 
-import type { AppConfig, ChatMessage, ConversationContent, ConversationListItem, Source, SourcesStatus } from "@/lib/types";
+import type {
+  AntigravityTrajectoryEvent,
+  AppConfig,
+  ChatMessage,
+  ConversationContent,
+  ConversationListItem,
+  Source,
+  SourcesStatus
+} from "@/lib/types";
 
 type ApiConfigResponse = { path: string; config: AppConfig };
 type ApiConversationListResponse = { items: ConversationListItem[]; limit: number; offset: number };
@@ -27,6 +35,15 @@ function formatTime(ms: number) {
     return new Date(ms).toLocaleString();
   } catch {
     return String(ms);
+  }
+}
+
+function formatIsoTime(value?: string) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return value;
   }
 }
 
@@ -60,6 +77,54 @@ function ChatMessageView({ message }: { message: ChatMessage }) {
   return <div className={`bubble ${message.role}`}>{message.text}</div>;
 }
 
+function TrajectoryEventView({ event }: { event: AntigravityTrajectoryEvent }) {
+  const timeLabel = formatIsoTime(event.completedAt ?? event.createdAt);
+  const hasDetails = Boolean(event.output || event.toolCalls?.length);
+
+  return (
+    <div className={`bubble ${event.kind}`}>
+      <div className="split">
+        <div className="row" style={{ gap: 8 }}>
+          <span className="pill">{event.title}</span>
+          <span className="muted mono" style={{ fontSize: 12 }}>
+            {event.stepType}
+          </span>
+        </div>
+        <div className="muted" style={{ fontSize: 12 }}>
+          {timeLabel}
+        </div>
+      </div>
+
+      {event.commandLine ? (
+        <div className="mono" style={{ marginTop: 8, fontSize: 12 }}>
+          $ {event.commandLine}
+        </div>
+      ) : null}
+
+      {event.cwd ? (
+        <div className="muted mono" style={{ marginTop: 6, fontSize: 12 }}>
+          cwd: {event.cwd}
+          {typeof event.exitCode === "number" ? ` • exit=${event.exitCode}` : ""}
+        </div>
+      ) : null}
+
+      {event.text ? <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{event.text}</div> : null}
+
+      {hasDetails ? (
+        <details style={{ marginTop: 8 }}>
+          <summary className="muted" style={{ cursor: "pointer" }}>
+            details
+          </summary>
+          {event.toolCalls?.length ? (
+            <pre style={{ margin: 0, marginTop: 8, overflowX: "auto" }}>{JSON.stringify(event.toolCalls, null, 2)}</pre>
+          ) : null}
+          {event.output ? <pre style={{ margin: 0, marginTop: 8, overflowX: "auto" }}>{event.output}</pre> : null}
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 export default function HomeClient() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -72,6 +137,13 @@ export default function HomeClient() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [content, setContent] = useState<ConversationContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [antigravityView, setAntigravityView] = useState<"trajectory" | "markdown">("trajectory");
+  const [antigravityFilters, setAntigravityFilters] = useState({
+    thought: true,
+    tool: true,
+    command: true,
+    status: false
+  });
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -83,6 +155,17 @@ export default function HomeClient() {
     if (!q) return items;
     return items.filter((it) => it.id.toLowerCase().includes(q));
   }, [items, filter]);
+
+  const visibleAntigravityEvents = useMemo(() => {
+    if (content?.kind !== "antigravity") return [];
+    return content.events.filter((event) => {
+      if (event.kind === "thought" && !antigravityFilters.thought) return false;
+      if (event.kind === "tool" && !antigravityFilters.tool) return false;
+      if (event.kind === "command" && !antigravityFilters.command) return false;
+      if (event.kind === "status" && !antigravityFilters.status) return false;
+      return true;
+    });
+  }, [content, antigravityFilters]);
 
   async function refreshConfigAndStatus() {
     const cfgRes = await fetch("/api/config");
@@ -155,6 +238,7 @@ export default function HomeClient() {
     setSelectedKey(null);
     setSelectedId(null);
     setContent(null);
+    setAntigravityView("trajectory");
   }, [source]);
 
   const antigravityPill = (() => {
@@ -223,6 +307,7 @@ export default function HomeClient() {
                   setSelectedKey(`${it.rootId}:${it.id}`);
                   setSelectedId(it.id);
                   setContent(null);
+                  setAntigravityView("trajectory");
                   loadConversation(source, it.id).catch(() => {});
                 }}
                 title={it.path}
@@ -256,9 +341,9 @@ export default function HomeClient() {
         </div>
 
         <div className="card" style={{ padding: 12 }}>
-          <div className="split" style={{ marginBottom: 10 }}>
+          <div className="split viewer-header" style={{ marginBottom: 10 }}>
             <div style={{ fontWeight: 600 }}>Viewer</div>
-            <div className="muted">
+            <div className="muted viewer-header-meta">
               {loadingContent
                 ? "Loading…"
                 : selectedId
@@ -283,7 +368,82 @@ export default function HomeClient() {
             </div>
           ) : null}
 
+          {selectedId ? (
+            <div className="row" style={{ justifyContent: "flex-end", marginBottom: 10 }}>
+              <a className="btn" href={`/api/conversations/${source}/${selectedId}/diagnostic`} title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)">
+                Diagnostic JSON
+              </a>
+            </div>
+          ) : null}
+
           {!selectedId ? <div className="muted">Select a conversation on the left.</div> : null}
+
+          {selectedId && content?.kind === "antigravity" ? (
+            <div>
+              <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <button className={`btn ${antigravityView === "trajectory" ? "primary" : ""}`} onClick={() => setAntigravityView("trajectory")}>
+                    Trajectory
+                  </button>
+                  <button className={`btn ${antigravityView === "markdown" ? "primary" : ""}`} onClick={() => setAntigravityView("markdown")}>
+                    Markdown
+                  </button>
+                </div>
+                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                  <span className="pill">steps {content.summary.totalSteps}</span>
+                  <span className="pill">events {content.summary.renderedEvents}</span>
+                  <span className="pill">thoughts {content.summary.thoughtCount}</span>
+                  <span className="pill">tools {content.summary.toolCount + content.summary.commandCount}</span>
+                  {content.summary.errorCount > 0 ? <span className="pill" data-tone="bad">errors {content.summary.errorCount}</span> : null}
+                </div>
+              </div>
+
+              {antigravityView === "trajectory" ? (
+                <div>
+                  <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                    <button
+                      className={`btn ${antigravityFilters.thought ? "primary" : ""}`}
+                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, thought: !prev.thought }))}
+                    >
+                      Thoughts
+                    </button>
+                    <button
+                      className={`btn ${antigravityFilters.tool ? "primary" : ""}`}
+                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, tool: !prev.tool }))}
+                    >
+                      Tools
+                    </button>
+                    <button
+                      className={`btn ${antigravityFilters.command ? "primary" : ""}`}
+                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, command: !prev.command }))}
+                    >
+                      Commands
+                    </button>
+                    <button
+                      className={`btn ${antigravityFilters.status ? "primary" : ""}`}
+                      onClick={() => setAntigravityFilters((prev) => ({ ...prev, status: !prev.status }))}
+                    >
+                      Status
+                    </button>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      Visible: {visibleAntigravityEvents.length}
+                    </span>
+                  </div>
+                  <div className="chat" style={{ maxHeight: "calc(100vh - 330px)", overflow: "auto", paddingRight: 4 }}>
+                    {visibleAntigravityEvents.map((event) => (
+                      <TrajectoryEventView key={event.id} event={event} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ maxHeight: "calc(100vh - 290px)", overflow: "auto" }}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                    {content.markdown}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {selectedId && content?.kind === "markdown" ? (
             <div style={{ maxHeight: "calc(100vh - 240px)", overflow: "auto" }}>

@@ -3,6 +3,7 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { normalizeAntigravityTrajectoryToEvents } from "@/lib/parse/antigravitySteps";
 import type { SourcesStatus } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
 import { connectUnaryJson } from "@/lib/server/connect";
@@ -93,12 +94,20 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
 }
 
 export async function getAntigravityMarkdown(cascadeId: string): Promise<string> {
+  const { markdown } = await getAntigravityConversation(cascadeId);
+  return markdown;
+}
+
+export async function getAntigravityConversation(cascadeId: string): Promise<{
+  markdown: string;
+  events: ReturnType<typeof normalizeAntigravityTrajectoryToEvents>["events"];
+  summary: ReturnType<typeof normalizeAntigravityTrajectoryToEvents>["summary"];
+}> {
   const found = await findLatestAntigravityDiscovery();
   if (!found) throw new Error("Antigravity discovery file not found. Open Antigravity to start the daemon.");
 
   const { discovery } = found;
   const baseUrl = `http://127.0.0.1:${discovery.httpPort}`;
-
   const trajRes = await connectUnaryJson<any>({
     baseUrl,
     serviceTypeName: SERVICE,
@@ -109,7 +118,6 @@ export async function getAntigravityMarkdown(cascadeId: string): Promise<string>
       verbosity: "CLIENT_TRAJECTORY_VERBOSITY_PROD_UI"
     }
   });
-
   const trajectory = trajRes?.trajectory;
   if (!trajectory) throw new Error("Trajectory not found for this cascadeId (may be deleted from the LS database).");
 
@@ -121,8 +129,11 @@ export async function getAntigravityMarkdown(cascadeId: string): Promise<string>
     body: { trajectory }
   });
 
-  if (typeof mdRes?.markdown !== "string") throw new Error("ConvertTrajectoryToMarkdown returned no markdown.");
-  return mdRes.markdown;
+  const markdown = mdRes?.markdown;
+  if (typeof markdown !== "string") throw new Error("ConvertTrajectoryToMarkdown returned no markdown.");
+
+  const normalized = normalizeAntigravityTrajectoryToEvents({ trajectory });
+  return { markdown, events: normalized.events, summary: normalized.summary };
 }
 
 export async function getAntigravityTrajectoryMetaMap(): Promise<Record<string, { title?: string; cwd?: string }>> {
