@@ -10,6 +10,7 @@
 相关现状与统一模型请先阅读：
 
 - `docs/viewer/trajectory-view.md`
+- `docs/adr/ADR-002-unified-trajectory-and-transcript-viewer.md`
 
 ## 当前实现概览（与优化相关）
 
@@ -20,6 +21,38 @@
 - Windsurf Chat：保留为 legacy 视图（直接消息列表 + `Load more`）。
   - 见 `src/components/HomeClient.tsx`（`content?.kind === "chat"` 分支）
 - Markdown：使用 `react-markdown` + `rehype-highlight`，代码块在 `pre` 内横向滚动。
+
+## Status（Shipped / Next / Open Questions）
+
+### Shipped（已落地，可作为后续优化基础）
+
+- 统一事件模型：Antigravity/Windsurf 都归一为 `TrajectoryEvent[]`（便于同一套 UI/UX 投影）。
+- Transcript 作为默认视图：
+  - 以 `user/assistant` 气泡为主（相邻同角色可合并）。
+  - 错误与关键状态可见（running/canceled/timeout 等）。
+  - 工具/命令细节默认隐藏在 assistant 下方的 `Actions` 折叠块中（摘要计数；可展开查看精简工具列表）。
+- Trajectory 过程视图：
+  - kind 过滤（thought/tool/command/status）
+  - `executionId` 分组折叠
+  - 动态高度虚拟滚动（长会话更稳）
+- Windsurf：默认使用 trajectory-backed（`view=trajectory`）分页加载；legacy chat 仍保留。
+
+### Next（建议按收益/成本排序）
+
+1) Inspector 侧栏（结构化详情的统一出口）
+   - 选中事件后显示：timestamps、executionId、stepType、status、exitCode、cwd、commandLine、toolCalls、output、raw step JSON
+2) 错误中心 + 跳转定位
+   - errors 计数可点开列表，点击 `scrollToId` 并高亮
+3) 深链接（URL query）
+   - 保留 `source/selectedId/view/mode/filters/selectedEventId`，刷新可复现状态
+4) 搜索
+   - 全文搜索（user/assistant/output）+ 结构化过滤（stepType/toolName/onlyErrors/hasOutput）
+
+### Open Questions（需要产品决策或更真实数据验证）
+
+- “关键 status”判定规则：当前基于字符串启发式；是否需要更结构化的枚举映射（取决于上游字段稳定性）。
+- Actions 与 turn 的绑定：当工具/状态事件不紧跟 assistant 产出时，如何归属（按时间窗口、executionId 内最近 assistant、或显式 parentId）。
+- Transcript 中 tool 列表的展示深度：仅标题？显示参数摘要？是否引入 Inspector 作为默认下钻入口。
 
 ## Transcript 视图规范（建议作为主体验）
 
@@ -52,6 +85,18 @@
 
 - error-like 事件：始终可见（例如 `exitCode != 0`、错误状态、`title === "Error"`）。
 - key status：在 Transcript 内可见（例如 running / canceled / timeout），用于让用户理解“执行仍在进行/被取消”等关键过程。
+
+### 字段到 UI 的映射（作为“展示语义契约”）
+
+| 事件/字段 | Transcript（默认） | Trajectory（过程视角） | 备注 |
+| --- | --- | --- | --- |
+| `kind: user/assistant` | ✅ 气泡（可合并） | ✅ 事件卡 | Transcript 以阅读为主 |
+| `kind: thought` | ❌（仅计数） | ✅（可过滤） | 默认隐藏减少噪音 |
+| `kind: tool` | ✅（Actions 折叠块内精简列表） | ✅ | Transcript 不展开 raw payload/output |
+| `kind: command` | ✅（失败命令可见；成功命令仅计数） | ✅ | “失败优先”提升可读性 |
+| `kind: status` | ✅（error + key status 可见；其余仅计数） | ✅ | key status 用于表达 running/canceled 等 |
+| `executionId` | ✅（用于分组折叠） | ✅（用于分组折叠） | 不可靠时落入 Ungrouped |
+| `output/toolCalls/raw` | ❌（默认隐藏） | ✅（details） | 建议通过 Inspector 统一下钻 |
 
 ### 为什么这样设计
 
