@@ -20,7 +20,7 @@
   - Electron：`39.2.7`（Chromium `142.0.7444.235`）
   - 构建时间：`2026-02-26T04:44:02.979Z`
 - Antigravity：
-  - App Version：`1.19.5`
+  - App Version：`1.19.5`（fixed ports + discovery file 写入）、`1.19.6`（实测出现 random ports + discovery 可能不更新）
   - Commit：`6adfc1a7e4a1a9af62bc45e8f2d7e6a97b7a9756`
   - VS Code OSS：`1.107.0`
   - Electron：`39.2.3`（Chromium `142.0.7444.175`）
@@ -46,10 +46,40 @@
 - 根：`~/.gemini/antigravity/`
 - 典型结构（非穷举）：
   - `conversations/*.pb`：会话（文件名通常是 UUID）
-  - `daemon/ls_*.json`：Language Server discovery 信息（端口、pid、csrf token 等）
+  - `daemon/ls_*.json`：Language Server discovery 信息（端口、pid、csrf token 等；**可能陈旧**，见下文）
   - `playground/`：内置示例/实验空间（会在 `cwd` 里出现）
 
-### 2) discovery 文件（用于发现/连接 Antigravity LS）
+### 2) Attach 模式（推荐）：通过 Antigravity.log 发现 LS 的 pid/port，再从进程参数提取 CSRF token
+
+**结论（已验证）：** 在部分 Antigravity 版本中，LS 会使用 **random port**，且不一定会更新 `~/.gemini/antigravity/daemon/ls_*.json`。这会导致 discovery 文件长期“看似存在但不可用”（stale pid/port），而 Antigravity UI 仍然正常工作。
+
+因此 `agent-storage-manager` 对 Antigravity 采用 Windsurf 类似的 attach：
+
+- 日志根：`~/Library/Application Support/Antigravity/logs/<timestamp>/`
+- 典型 log 文件：
+  - `window*/exthost/google.antigravity/Antigravity.log`
+
+从日志中提取：
+- `pid`：`Starting language server process with pid (\d+)`
+- `httpPort`：`listening on (random|fixed) port at (\d+) for HTTP`
+- `httpsPort`：`listening on (random|fixed) port at (\d+) for HTTPS`
+
+从进程命令行提取（如果可读）：
+- `--csrf_token <uuid>` / `--csrf-token <uuid>` / `--csrfToken <uuid>`（具体 flag 可能随版本变更）
+- 或环境变量形式：`CODEIUM_CSRF_TOKEN=<uuid>`（若存在）
+
+排查命令：
+
+```bash
+# 找到最新的 Antigravity.log
+find "$HOME/Library/Application Support/Antigravity/logs" -path '*Antigravity.log' -print | tail -n 5
+
+# 在最新 Antigravity.log 中查看 pid/ports
+rg -n 'Starting language server process with pid|listening on (random|fixed) port at' \
+  "$HOME/Library/Application Support/Antigravity/logs/<ts>/window*/exthost/google.antigravity/Antigravity.log"
+```
+
+### 3) discovery 文件（legacy）：用于发现/连接 Antigravity LS（可能陈旧）
 
 - 路径：`~/.gemini/antigravity/daemon/ls_*.json`（取最新 `mtime`）
 - 我们使用的字段（版本可能变化）：
@@ -58,9 +88,13 @@
   - `pid`
 
 `agent-storage-manager` 中的实现入口：
-- `src/lib/server/antigravity.ts`（`findLatestAntigravityDiscovery()` / `getAntigravityStatus()`）
+- `src/lib/server/antigravity.ts`（log attach + discovery fallback）
 
-### 3) VS Code global state（会话列表 title/cwd 的关键来源）
+典型故障模式：
+- discovery 文件存在但 `pid` 不存活（stale discovery）
+- discovery 指向 fixed port，但实际 LS 已改为 random port（导致连不上）
+
+### 4) VS Code global state（会话列表 title/cwd 的关键来源）
 
 **结论（已验证）：** Antigravity 的“会话标题（summary/title）+ 工作目录（cwd）”在很多情况下并不完全依赖 LS 返回，而是存在于 Antigravity 的 VS Code global state 数据库里；并且该映射的 key 与 `conversations/*.pb` 的文件名（UUID）能直接对应。
 

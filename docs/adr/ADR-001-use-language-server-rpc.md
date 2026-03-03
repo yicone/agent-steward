@@ -46,7 +46,8 @@ Implementation outline:
 
 - **Connect (JSON) client** from the Next.js server runtime to call unary RPC methods.
 - **Antigravity**
-  - Discover LS connection info from a local discovery file written by the daemon.
+  - Attach to a running LS by parsing Antigravity logs for pid/ports (newer builds may use random ports and not rewrite legacy discovery files).
+  - Fallback to legacy discovery files written under `~/.gemini/antigravity/daemon/ls_*.json` when available.
   - Fetch a trajectory via the LS and normalize steps into a structured event stream for process-oriented rendering.
   - Also convert trajectory to Markdown via the LS as an alternate reading mode.
 - **Windsurf**

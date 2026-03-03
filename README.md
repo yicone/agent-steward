@@ -56,13 +56,20 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 
 ## Prerequisites
 
-- Antigravity: the local daemon must be running (usually it writes discovery files to `~/.gemini/antigravity/daemon/ls_*.json` after you open Antigravity).
+- Antigravity: Antigravity must be running (and have started a session at least once). This app attaches to the running language server by parsing Antigravity logs for the LS pid/port, and extracting the CSRF token from process args when possible.
+  - Legacy fallback: `~/.gemini/antigravity/daemon/ls_*.json` (may be stale on newer builds).
 - Windsurf: Windsurf must be running (and have started a Cascade session at least once). This app parses the language-server port from Windsurf logs and tries to read `--csrf_token` from process args.
   - If your system cannot read process args, set `csrfTokenOverride` in Settings as a fallback.
 
 ## Technical Docs
 
 - Unified trajectory viewer semantics: `docs/viewer/trajectory-view.md`
+- UI/UX optimization proposal (includes component/library choices): `docs/viewer/agent-ui-ux-optimization.md`
+- Tailwind + shadcn migration notes: `docs/dev/tailwind-shadcn-migration.md`
+
+## UI Stack
+
+- Tailwind CSS v4 + shadcn/ui (migration in progress; some legacy CSS classes still exist in `src/app/globals.css`)
 
 ## License
 
