@@ -20,9 +20,10 @@ export async function connectUnaryJson<TRes>(params: {
   methodName: string;
   body: unknown;
   csrfToken?: string;
+  dispatcher?: unknown;
   timeoutMs?: number;
 }): Promise<TRes> {
-  const { baseUrl, serviceTypeName, methodName, body, csrfToken, timeoutMs = 10_000 } = params;
+  const { baseUrl, serviceTypeName, methodName, body, csrfToken, dispatcher, timeoutMs = 10_000 } = params;
   const url = new URL(`/${serviceTypeName}/${methodName}`, baseUrl).toString();
 
   const controller = new AbortController();
@@ -35,13 +36,16 @@ export async function connectUnaryJson<TRes>(params: {
     };
     if (csrfToken) headers["x-codeium-csrf-token"] = csrfToken;
 
-    const res = await fetch(url, {
+    const reqInit: any = {
       method: "POST",
       headers,
       body: JSON.stringify(body ?? {}),
       signal: controller.signal,
       cache: "no-store"
-    });
+    };
+    if (dispatcher) reqInit.dispatcher = dispatcher;
+
+    const res = await fetch(url, reqInit);
 
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");

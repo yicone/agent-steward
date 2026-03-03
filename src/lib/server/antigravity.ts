@@ -1,8 +1,13 @@
 import "server-only";
 
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 
+import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
+import { extractLatestAntigravityStartInfoFromLog } from "@/lib/parse/antigravityLog";
 import { normalizeAntigravityTrajectoryToEvents } from "@/lib/parse/antigravitySteps";
 import type { SourcesStatus } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
@@ -10,7 +15,34 @@ import { connectUnaryJson } from "@/lib/server/connect";
 import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
 
+const execFileAsync = promisify(execFile);
 const SERVICE = "exa.language_server_pb.LanguageServerService";
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let insecureDispatcherPromise: Promise<unknown | null> | null = null;
+async function getInsecureLocalhostDispatcher(): Promise<unknown | null> {
+  if (!insecureDispatcherPromise) {
+    insecureDispatcherPromise = (async () => {
+      try {
+        const mod: any = await import("undici");
+        const Agent = mod?.Agent;
+        if (!Agent) return null;
+        return new Agent({ connect: { rejectUnauthorized: false } });
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return insecureDispatcherPromise;
+}
 
 export type AntigravityDiscovery = {
   pid: number;
@@ -20,6 +52,146 @@ export type AntigravityDiscovery = {
   lsVersion?: string;
   csrfToken: string;
 };
+
+async function probeAntigravityHeartbeat(params: { baseUrl: string; csrfToken?: string; dispatcher?: unknown }): Promise<boolean> {
+  try {
+    await connectUnaryJson({
+      baseUrl: params.baseUrl,
+      serviceTypeName: SERVICE,
+      methodName: "Heartbeat",
+      csrfToken: params.csrfToken,
+      dispatcher: params.dispatcher,
+      body: { metadata: {} },
+      timeoutMs: 1200
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function listAntigravityLogsDirsByMtime(): Promise<string[]> {
+  const logsRoot = path.join(os.homedir(), "Library", "Application Support", "Antigravity", "logs");
+  let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
+  try {
+    dirents = await fs.readdir(logsRoot, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const dirs = dirents
+    .filter((d) => d.isDirectory())
+    .map((d) => path.join(logsRoot, d.name));
+
+  const withMtime: Array<{ p: string; mtimeMs: number }> = [];
+  for (const p of dirs) {
+    try {
+      const st = await fs.stat(p);
+      withMtime.push({ p, mtimeMs: st.mtimeMs });
+    } catch {
+      // ignore
+    }
+  }
+  withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return withMtime.map((x) => x.p);
+}
+
+async function listCandidateAntigravityLogFiles(): Promise<Array<{ p: string; mtimeMs: number }>> {
+  const logDirs = await listAntigravityLogsDirsByMtime();
+  const candidates: Array<{ p: string; mtimeMs: number }> = [];
+
+  for (const logsDir of logDirs) {
+    let windowDirents: Array<{ name: string; isDirectory(): boolean }> = [];
+    try {
+      windowDirents = await fs.readdir(logsDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const d of windowDirents) {
+      if (!d.isDirectory()) continue;
+      if (!d.name.startsWith("window")) continue;
+      const p = path.join(logsDir, d.name, "exthost", "google.antigravity", "Antigravity.log");
+      try {
+        const st = await fs.stat(p);
+        if (st.isFile()) candidates.push({ p, mtimeMs: st.mtimeMs });
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates;
+}
+
+async function readProcessCommandLine(pid: number): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("ps", ["-o", "args=", "-ww", "-p", String(pid)], { timeout: 2500 });
+    const cmd = stdout?.trim();
+    return cmd && cmd.length ? cmd : null;
+  } catch {
+    return null;
+  }
+}
+
+async function tryResolveAntigravityFromLogFile(logPath: string): Promise<{
+  logPath: string;
+  pid: number;
+  httpPort?: number;
+  httpsPort?: number;
+  csrfToken: string;
+  baseUrl: string;
+  dispatcher?: unknown;
+  heartbeatOk: boolean;
+}> {
+  const logText = await fs.readFile(logPath, "utf-8").catch(() => "");
+  const startInfo = extractLatestAntigravityStartInfoFromLog(logText);
+  if (!startInfo) throw new Error("Failed to parse pid/ports from Antigravity.log.");
+  if (!isProcessAlive(startInfo.pid)) throw new Error("Antigravity language server pid from log is not running.");
+
+  const cmd = await readProcessCommandLine(startInfo.pid);
+  const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
+  const csrfToken = tokenFromPs ?? "";
+
+  const httpBaseUrl = startInfo.httpPort ? `http://127.0.0.1:${startInfo.httpPort}` : null;
+  const httpsBaseUrl = startInfo.httpsPort ? `https://127.0.0.1:${startInfo.httpsPort}` : null;
+
+  // Prefer HTTP to avoid TLS complexity.
+  if (httpBaseUrl) {
+    const ok =
+      (csrfToken ? await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl, csrfToken }) : false) ||
+      (await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl }));
+    return {
+      logPath,
+      pid: startInfo.pid,
+      httpPort: startInfo.httpPort,
+      httpsPort: startInfo.httpsPort,
+      csrfToken,
+      baseUrl: httpBaseUrl,
+      heartbeatOk: ok
+    };
+  }
+
+  if (httpsBaseUrl) {
+    const dispatcher = await getInsecureLocalhostDispatcher();
+    const ok =
+      (csrfToken ? await probeAntigravityHeartbeat({ baseUrl: httpsBaseUrl, csrfToken, dispatcher: dispatcher ?? undefined }) : false) ||
+      (await probeAntigravityHeartbeat({ baseUrl: httpsBaseUrl, dispatcher: dispatcher ?? undefined }));
+    return {
+      logPath,
+      pid: startInfo.pid,
+      httpPort: startInfo.httpPort,
+      httpsPort: startInfo.httpsPort,
+      csrfToken,
+      baseUrl: httpsBaseUrl,
+      dispatcher: dispatcher ?? undefined,
+      heartbeatOk: ok
+    };
+  }
+
+  throw new Error("Antigravity.log contains no HTTP/HTTPS port.");
+}
 
 export async function findLatestAntigravityDiscovery(): Promise<{
   discoveryPath: string;
@@ -39,48 +211,106 @@ export async function findLatestAntigravityDiscovery(): Promise<{
 
   if (candidates.length === 0) return null;
 
-  let best: { p: string; mtimeMs: number } | null = null;
+  const withMtime: Array<{ p: string; mtimeMs: number }> = [];
   for (const p of candidates) {
     try {
       const st = await fs.stat(p);
-      if (!best || st.mtimeMs > best.mtimeMs) best = { p, mtimeMs: st.mtimeMs };
+      if (st.isFile()) withMtime.push({ p, mtimeMs: st.mtimeMs });
     } catch {
       // ignore
     }
   }
-  if (!best) return null;
+  withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-  try {
-    const raw = await fs.readFile(best.p, "utf-8");
-    const parsed = JSON.parse(raw) as AntigravityDiscovery;
-    if (!parsed?.httpPort || !parsed?.csrfToken) return null;
-    return { discoveryPath: best.p, discovery: parsed };
-  } catch {
-    return null;
+  let bestParseable: { discoveryPath: string; discovery: AntigravityDiscovery } | null = null;
+
+  for (const c of withMtime) {
+    const raw = await fs.readFile(c.p, "utf-8").catch(() => "");
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as Partial<AntigravityDiscovery>;
+      if (!parsed?.csrfToken) continue;
+      if (!parsed.httpPort && !parsed.httpsPort) continue;
+      if (typeof parsed.pid !== "number") continue;
+      const discovery = parsed as AntigravityDiscovery;
+
+      if (!bestParseable) bestParseable = { discoveryPath: c.p, discovery };
+      if (isProcessAlive(discovery.pid)) return { discoveryPath: c.p, discovery };
+    } catch {
+      // ignore
+    }
   }
+
+  return bestParseable;
 }
 
 export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity"]> {
-  const found = await findLatestAntigravityDiscovery();
-  if (!found) {
-    return { discovered: false, error: "No Antigravity discovery file found." };
+  // Prefer log-based attach for newer Antigravity builds (random port + no discovery rewrite).
+  const logCandidates = await listCandidateAntigravityLogFiles();
+  let bestLogResult:
+    | Awaited<ReturnType<typeof tryResolveAntigravityFromLogFile>>
+    | null = null;
+  let bestLogError: string | undefined;
+
+  for (const c of logCandidates) {
+    try {
+      const res = await tryResolveAntigravityFromLogFile(c.p);
+      if (!bestLogResult) bestLogResult = res;
+      if (res.heartbeatOk) {
+        return {
+          discovered: true,
+          discoveryPath: res.logPath,
+          httpPort: res.httpPort,
+          httpsPort: res.httpsPort,
+          csrfTokenPresent: Boolean(res.csrfToken),
+          reachable: true
+        };
+      }
+    } catch (e) {
+      if (!bestLogError) bestLogError = e instanceof Error ? e.message : String(e);
+    }
   }
 
+  if (bestLogResult) {
+    const tokenHint = bestLogResult.csrfToken
+      ? "Token present but Heartbeat failed."
+      : "Missing CSRF token or Heartbeat failed. Ensure we can read LS process args; if not, we may need a token override.";
+    return {
+      discovered: true,
+      discoveryPath: bestLogResult.logPath,
+      httpPort: bestLogResult.httpPort,
+      httpsPort: bestLogResult.httpsPort,
+      csrfTokenPresent: Boolean(bestLogResult.csrfToken),
+      reachable: false,
+      error: `${tokenHint}${bestLogError ? ` (${bestLogError})` : ""}`
+    };
+  }
+
+  // Fallback to legacy discovery file mechanism.
+  const found = await findLatestAntigravityDiscovery();
+  if (!found) return { discovered: false, error: "No Antigravity log or discovery file found." };
+
   const { discoveryPath, discovery } = found;
-  const httpBaseUrl = `http://127.0.0.1:${discovery.httpPort}`;
+  const httpBaseUrl = discovery.httpPort ? `http://127.0.0.1:${discovery.httpPort}` : null;
+  const httpsBaseUrl = discovery.httpsPort ? `https://127.0.0.1:${discovery.httpsPort}` : null;
+
   let reachable = false;
-  try {
-    await connectUnaryJson({
-      baseUrl: httpBaseUrl,
-      serviceTypeName: SERVICE,
-      methodName: "Heartbeat",
+  let lastError: string | undefined;
+
+  if (httpBaseUrl) reachable = await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl, csrfToken: discovery.csrfToken });
+  if (!reachable && httpsBaseUrl) {
+    const dispatcher = await getInsecureLocalhostDispatcher();
+    reachable = await probeAntigravityHeartbeat({
+      baseUrl: httpsBaseUrl,
       csrfToken: discovery.csrfToken,
-      body: { metadata: {} },
-      timeoutMs: 2500
+      dispatcher: dispatcher ?? undefined
     });
-    reachable = true;
-  } catch {
-    reachable = false;
+  }
+
+  if (!reachable) {
+    lastError = !isProcessAlive(discovery.pid)
+      ? "Antigravity discovery is stale (language server pid not running). Keep Antigravity open and start a session to relaunch the daemon."
+      : "Antigravity discovery found but language server not reachable.";
   }
 
   return {
@@ -89,8 +319,77 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
     httpPort: discovery.httpPort,
     httpsPort: discovery.httpsPort,
     csrfTokenPresent: Boolean(discovery.csrfToken),
-    reachable
+    reachable,
+    ...(lastError ? { error: lastError } : {})
   };
+}
+
+export async function resolveAntigravityRpcTarget(discovery?: AntigravityDiscovery | null): Promise<{
+  baseUrl: string;
+  csrfToken: string;
+  dispatcher?: unknown;
+}> {
+  // Prefer log-based attach if available.
+  const logCandidates = await listCandidateAntigravityLogFiles();
+  for (const c of logCandidates) {
+    try {
+      const res = await tryResolveAntigravityFromLogFile(c.p);
+      if (!res.heartbeatOk) continue;
+      return { baseUrl: res.baseUrl, csrfToken: res.csrfToken, ...(res.dispatcher ? { dispatcher: res.dispatcher } : {}) };
+    } catch {
+      // try next
+    }
+  }
+
+  if (!discovery) {
+    throw new Error("Antigravity is not discoverable. Open Antigravity and start a session to launch the language server.");
+  }
+
+  const body = { metadata: {} };
+
+  // Legacy discovery fallback.
+  if (discovery.httpPort) {
+    const httpBaseUrl = `http://127.0.0.1:${discovery.httpPort}`;
+    try {
+      await connectUnaryJson({
+        baseUrl: httpBaseUrl,
+        serviceTypeName: SERVICE,
+        methodName: "Heartbeat",
+        csrfToken: discovery.csrfToken,
+        body,
+        timeoutMs: 1500
+      });
+      return { baseUrl: httpBaseUrl, csrfToken: discovery.csrfToken };
+    } catch {
+      // fall through
+    }
+  }
+
+  if (discovery.httpsPort) {
+    const httpsBaseUrl = `https://127.0.0.1:${discovery.httpsPort}`;
+    const dispatcher = await getInsecureLocalhostDispatcher();
+    try {
+      await connectUnaryJson({
+        baseUrl: httpsBaseUrl,
+        serviceTypeName: SERVICE,
+        methodName: "Heartbeat",
+        csrfToken: discovery.csrfToken,
+        dispatcher: dispatcher ?? undefined,
+        body,
+        timeoutMs: 1500
+      });
+      return { baseUrl: httpsBaseUrl, csrfToken: discovery.csrfToken, dispatcher: dispatcher ?? undefined };
+    } catch {
+      // fall through
+    }
+  }
+
+  // Best-effort fallback: prefer http if present.
+  const baseUrl = discovery.httpPort
+    ? `http://127.0.0.1:${discovery.httpPort}`
+    : `https://127.0.0.1:${discovery.httpsPort}`;
+  const dispatcher = baseUrl.startsWith("https://") ? (await getInsecureLocalhostDispatcher()) ?? undefined : undefined;
+  return { baseUrl, csrfToken: discovery.csrfToken, dispatcher };
 }
 
 export async function getAntigravityMarkdown(cascadeId: string): Promise<string> {
@@ -104,15 +403,14 @@ export async function getAntigravityConversation(cascadeId: string): Promise<{
   summary: ReturnType<typeof normalizeAntigravityTrajectoryToEvents>["summary"];
 }> {
   const found = await findLatestAntigravityDiscovery();
-  if (!found) throw new Error("Antigravity discovery file not found. Open Antigravity to start the daemon.");
-
-  const { discovery } = found;
-  const baseUrl = `http://127.0.0.1:${discovery.httpPort}`;
+  const target = await resolveAntigravityRpcTarget(found?.discovery ?? null);
+  const baseUrl = target.baseUrl;
   const trajRes = await connectUnaryJson<any>({
     baseUrl,
     serviceTypeName: SERVICE,
     methodName: "GetCascadeTrajectory",
-    csrfToken: discovery.csrfToken,
+    csrfToken: target.csrfToken,
+    dispatcher: target.dispatcher,
     body: {
       cascadeId,
       verbosity: "CLIENT_TRAJECTORY_VERBOSITY_PROD_UI"
@@ -125,7 +423,8 @@ export async function getAntigravityConversation(cascadeId: string): Promise<{
     baseUrl,
     serviceTypeName: SERVICE,
     methodName: "ConvertTrajectoryToMarkdown",
-    csrfToken: discovery.csrfToken,
+    csrfToken: target.csrfToken,
+    dispatcher: target.dispatcher,
     body: { trajectory }
   });
 
@@ -144,14 +443,15 @@ export async function getAntigravityTrajectoryMetaMap(): Promise<Record<string, 
   if (!found) return vscdbMap;
 
   try {
-    const { discovery } = found;
-    const baseUrl = `http://127.0.0.1:${discovery.httpPort}`;
+    const target = await resolveAntigravityRpcTarget(found.discovery);
+    const baseUrl = target.baseUrl;
 
     const res = await connectUnaryJson<any>({
       baseUrl,
       serviceTypeName: SERVICE,
       methodName: "GetAllCascadeTrajectories",
-      csrfToken: discovery.csrfToken,
+      csrfToken: target.csrfToken,
+      dispatcher: target.dispatcher,
       body: {}
     });
 

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { AppConfig, ConversationMeta, Source } from "@/lib/types";
 import { connectUnaryJson } from "@/lib/server/connect";
-import { findLatestAntigravityDiscovery } from "@/lib/server/antigravity";
+import { findLatestAntigravityDiscovery, resolveAntigravityRpcTarget } from "@/lib/server/antigravity";
 import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
 import { getWindsurfDiagnosticBundle } from "@/lib/server/windsurf";
 
@@ -43,7 +43,8 @@ export async function buildDiagnosticExport(params: {
     if (!found) throw new Error("Antigravity discovery file not found. Open Antigravity to start the daemon.");
 
     const { discoveryPath, discovery } = found;
-    const baseUrl = `http://127.0.0.1:${discovery.httpPort}`;
+    const target = await resolveAntigravityRpcTarget(discovery);
+    const baseUrl = target.baseUrl;
 
     let reachable = false;
     try {
@@ -52,6 +53,7 @@ export async function buildDiagnosticExport(params: {
         serviceTypeName: SERVICE,
         methodName: "Heartbeat",
         csrfToken: discovery.csrfToken,
+        dispatcher: target.dispatcher,
         body: { metadata: {} },
         timeoutMs: 2500
       });
@@ -65,6 +67,7 @@ export async function buildDiagnosticExport(params: {
       serviceTypeName: SERVICE,
       methodName: "GetCascadeTrajectory",
       csrfToken: discovery.csrfToken,
+      dispatcher: target.dispatcher,
       body: { cascadeId, verbosity: "CLIENT_TRAJECTORY_VERBOSITY_PROD_UI" }
     });
 
@@ -76,6 +79,7 @@ export async function buildDiagnosticExport(params: {
       serviceTypeName: SERVICE,
       methodName: "ConvertTrajectoryToMarkdown",
       csrfToken: discovery.csrfToken,
+      dispatcher: target.dispatcher,
       body: { trajectory }
     });
 
