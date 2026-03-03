@@ -49,15 +49,15 @@ Introduce a unified trajectory event model and make the Viewer transcript-first:
 - `Transcript` (default): conversation-centric.
   - Show `user` and `assistant` bubbles.
   - Surface error-like events (e.g. non-zero exit code, error status) and key status events (running/canceled/timeout).
-  - Hide tool/command/thought details behind an `Actions` block attached to the relevant assistant bubble.
+  - Hide tool/command/thought details behind an `Actions` block attached to the relevant assistant bubble (or a fallback “Hidden summary” row when no attachment point is available).
 - `Trajectory`: process-centric.
   - Full event stream with filters, execution grouping, and virtualized rendering.
 - `Markdown` (where available): vendor-provided narrative rendering (Antigravity only).
 
 3) Source retrieval strategy:
 
-- Windsurf defaults to trajectory-backed rendering (`view=trajectory`), with paging via `stepOffset` and optional `numTotalSteps`.
-- Legacy Windsurf chat remains available, but is not the default.
+- Windsurf API supports both chat and trajectory modes; the Viewer requests trajectory-backed content by default (`view=trajectory`), with paging via `stepOffset` and optional `numTotalSteps`.
+- Legacy Windsurf chat remains available (API default when `view` is omitted), but is not the Viewer default.
 
 ## Consequences
 
@@ -65,6 +65,20 @@ Introduce a unified trajectory event model and make the Viewer transcript-first:
 - Transcript becomes the primary experience while preserving drill-down to full process data.
 - Adds adapter and mapping work for new agents, but makes onboarding repeatable.
 - Requires clear definitions of “error-like” and “key status” to avoid hiding important user-facing state.
+- Diagnostic exports and raw payload views may include sensitive data (paths, tokens, prompts); the UI should warn users and the system should default to least exposure.
+
+## Semantics (Minimum Contract)
+
+These rules are best-effort and may evolve as upstream sources change. When in doubt, prefer surfacing information rather than hiding it.
+
+- **Error-like**: prioritize surfacing when any of the following indicate failure:
+  - `exitCode != 0`
+  - `status` / `title` indicates an error (e.g. contains `ERROR`, `FAILED`, or equals `Error`)
+  - adapter-detected tool failure (source-specific)
+- **Key status**: surface status-like events that change user understanding of session lifecycle, such as:
+  - running / in-progress
+  - canceled / aborted
+  - timeout
 
 ## Links
 

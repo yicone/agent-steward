@@ -22,15 +22,29 @@
   - 见 `src/components/HomeClient.tsx`（`content?.kind === "chat"` 分支）
 - Markdown：使用 `react-markdown` + `rehype-highlight`，代码块在 `pre` 内横向滚动。
 
+## Terminology
+
+为减少歧义，本文使用如下术语：
+
+- **Transcript**：以“对话回合（turn）”为中心的阅读视图（默认）。从统一事件模型投影得到，并非独立数据源。
+- **Trajectory**：以“完整事件流（event stream）”为中心的过程/诊断视图（可过滤、可分组、可虚拟滚动）。
+- **Markdown**：来源侧提供的 narrative 渲染（当前仅 Antigravity 可用）。
+- **Chat (legacy)**：Windsurf 的旧式 chat 投影视图（lossy projection，保留用于对照/兼容）。
+- **Actions**：Transcript 下用于承载“被隐藏事件摘要 + 精简列表”的折叠块，通常挂在最近的 assistant bubble 之后。
+- **Hidden summary**：当没有合适的 assistant attachment point 时，用于兜底呈现“隐藏事件计数”的行。
+- **Inspector**：计划引入的结构化详情侧栏（统一展示 raw step / tool payload / output / 诊断信息）。
+
 ## Status（Shipped / Next / Open Questions）
 
 ### Shipped（已落地，可作为后续优化基础）
 
 - 统一事件模型：Antigravity/Windsurf 都归一为 `TrajectoryEvent[]`（便于同一套 UI/UX 投影）。
+- UI 样式体系迁移开始：引入 Tailwind CSS v4 + shadcn/ui 目录结构（用于后续逐步替换 legacy CSS）。
+- Inspector（基础版）：可选中事件/消息查看结构化字段与 raw 文本/JSON，并提供错误列表与跳转定位（scroll to event）。
 - Transcript 作为默认视图：
   - 以 `user/assistant` 气泡为主（相邻同角色可合并）。
   - 错误与关键状态可见（running/canceled/timeout 等）。
-  - 工具/命令细节默认隐藏在 assistant 下方的 `Actions` 折叠块中（摘要计数；可展开查看精简工具列表）。
+  - 工具/命令/状态/思考等默认隐藏在 assistant 下方的 `Actions` 折叠块中（以计数摘要为主；可展开查看精简 tool 列表）。若没有可挂载的 assistant，则用 `Hidden summary` 行兜底呈现计数。
 - Trajectory 过程视图：
   - kind 过滤（thought/tool/command/status）
   - `executionId` 分组折叠
@@ -39,8 +53,8 @@
 
 ### Next（建议按收益/成本排序）
 
-1) Inspector 侧栏（结构化详情的统一出口）
-   - 选中事件后显示：timestamps、executionId、stepType、status、exitCode、cwd、commandLine、toolCalls、output、raw step JSON
+1) Inspector（完善版）
+   - 支持更丰富的结构化渲染：JSON viewer、diff、ANSI、复制/下载、以及与搜索/跳转联动
 2) 错误中心 + 跳转定位
    - errors 计数可点开列表，点击 `scrollToId` 并高亮
 3) 深链接（URL query）
@@ -53,6 +67,15 @@
 - “关键 status”判定规则：当前基于字符串启发式；是否需要更结构化的枚举映射（取决于上游字段稳定性）。
 - Actions 与 turn 的绑定：当工具/状态事件不紧跟 assistant 产出时，如何归属（按时间窗口、executionId 内最近 assistant、或显式 parentId）。
 - Transcript 中 tool 列表的展示深度：仅标题？显示参数摘要？是否引入 Inspector 作为默认下钻入口。
+
+## 安全与隐私（原则）
+
+Viewer 的定位是“本地记录查看器”，但 raw step、tool payload、stdout/stderr、diagnostic export 都可能包含敏感信息（路径、token、API key、用户内容）。建议明确并贯彻以下默认策略：
+
+- **最小暴露**：Transcript 默认不展示 raw payload/output；需要时通过 Trajectory/Inspector 下钻查看。
+- **强提醒**：Diagnostic 导出/下载按钮必须带清晰提示（可能包含敏感数据）。
+- **可脱敏**（可选能力）：对常见敏感模式提供遮罩（例如 `sk-***`、`AKIA***`、Bearer token、绝对路径等），并允许用户一键切换“显示原文”。
+- **深链接安全**：URL query 只保存 id 与视图/过滤状态，不写入 raw 内容或 payload 片段。
 
 ## Transcript 视图规范（建议作为主体验）
 
@@ -127,7 +150,7 @@
   - 代价：滚动锚点保持（prepend 历史不跳）、动态高度测量策略、分组折叠等仍需要自己拼装。
 - `react-virtuoso`
   - 适用：需要更“开箱即用”的长列表/对话体验（如更稳定的动态高度、滚动到项、跟随底部等）。
-  - 注意：其部分更“聊天专用”的高级组件/能力可能有额外授权版本，选型前需确认使用范围与许可证。
+  - 注意：若使用其商业增值组件/能力（若有），需要在引入前确认许可证与授权范围；仅使用开源部分则按其开源许可证执行。
 
 建议：短期先复用现有 Antigravity 的虚拟化抽象，把 Windsurf chat 也虚拟化；中期若开始做 `scrollToId`/错误跳转/前插历史锚点保持，再评估是否迁移到成熟库。
 
@@ -330,5 +353,6 @@
 
 - 布局：任意长标题/UUID/无空格长串/代码块长行，不出现水平撑宽导致的错位。
 - 性能：长会话滚动流畅（主观 60fps 体验），展开/折叠不明显跳动；搜索/跳转可在可接受时间内完成。
+  - 目标：10k+ events 的 Trajectory/Transcript 视图仍可稳定滚动，且“跳转到错误/搜索命中项”不会产生明显卡顿或滚动错位。
 - 可用性：错误可聚合并一键定位；任一事件都能在 Inspector 中查看“结构化细节 + 原始数据”。
 - 可维护性：虚拟列表与渲染增强不显著增加页面耦合；新增事件类型时有清晰的渲染扩展点。
