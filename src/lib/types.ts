@@ -36,19 +36,34 @@ export type ConversationListItem = ConversationFile & {
 export type SourcesStatus = {
   antigravity: {
     discovered: boolean;
+    attachMethod?: "log" | "legacy_discovery";
     discoveryPath?: string;
+    pid?: number;
+    pidAlive?: boolean;
     httpPort?: number;
     httpsPort?: number;
     csrfTokenPresent?: boolean;
+    csrfTokenSource?: "ps_args" | "override" | "discovery_file" | "none";
+    tokenRequired?: boolean;
+    heartbeatOk?: boolean;
+    lastError?: string;
+    recommendedAction?: string;
     reachable?: boolean;
     error?: string;
   };
   windsurf: {
     attached: boolean;
+    attachMethod?: "log";
     logPath?: string;
     pid?: number;
+    pidAlive?: boolean;
     port?: number;
     csrfTokenPresent?: boolean;
+    csrfTokenSource?: "ps_args" | "override" | "none";
+    tokenRequired?: boolean;
+    heartbeatOk?: boolean;
+    lastError?: string;
+    recommendedAction?: string;
     error?: string;
   };
 };

@@ -178,6 +178,60 @@ function StatusPill(props: { label: string; tone: "ok" | "warn" | "bad"; title?:
   );
 }
 
+function formatSourceDiagnostics(status: SourcesStatus): string {
+  const ag = status.antigravity;
+  const ws = status.windsurf;
+  return [
+    "Antigravity",
+    `- discovered: ${ag.discovered}`,
+    `- attachMethod: ${ag.attachMethod ?? "unknown"}`,
+    `- path: ${ag.discoveryPath ?? "n/a"}`,
+    `- pid: ${ag.pid ?? "n/a"} (alive=${ag.pidAlive ?? false})`,
+    `- ports: http=${ag.httpPort ?? "n/a"}, https=${ag.httpsPort ?? "n/a"}`,
+    `- csrf: present=${ag.csrfTokenPresent ?? false}, source=${ag.csrfTokenSource ?? "none"}, required=${ag.tokenRequired ?? "unknown"}`,
+    `- heartbeatOk: ${ag.heartbeatOk ?? "unknown"}`,
+    `- lastError: ${ag.lastError ?? "none"}`,
+    `- recommendedAction: ${ag.recommendedAction ?? "none"}`,
+    "",
+    "Windsurf",
+    `- attached: ${ws.attached}`,
+    `- attachMethod: ${ws.attachMethod ?? "unknown"}`,
+    `- path: ${ws.logPath ?? "n/a"}`,
+    `- pid: ${ws.pid ?? "n/a"} (alive=${ws.pidAlive ?? false})`,
+    `- port: ${ws.port ?? "n/a"}`,
+    `- csrf: present=${ws.csrfTokenPresent ?? false}, source=${ws.csrfTokenSource ?? "none"}, required=${ws.tokenRequired ?? "unknown"}`,
+    `- heartbeatOk: ${ws.heartbeatOk ?? "unknown"}`,
+    `- lastError: ${ws.lastError ?? "none"}`,
+    `- recommendedAction: ${ws.recommendedAction ?? "none"}`
+  ].join("\n");
+}
+
+function SourceDiagnosticsPanel({ status }: { status: SourcesStatus | null }) {
+  const [copied, setCopied] = useState(false);
+  if (!status) return null;
+  const text = formatSourceDiagnostics(status);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <details className="mb-3 rounded-xl border border-border/70 p-3 text-xs">
+      <summary className="cursor-pointer text-sm font-medium">Connection diagnostics details</summary>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="text-muted">Copyable evidence chain for attach diagnostics</div>
+        <Button type="button" variant="outline" size="sm" onClick={copy}>{copied ? "Copied" : "Copy diagnostics"}</Button>
+      </div>
+      <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap rounded-lg border border-border/60 bg-background/10 p-2">{text}</pre>
+    </details>
+  );
+}
+
 const bubbleBase =
   "group relative rounded-2xl border px-3 py-2 text-sm leading-relaxed backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset,0_12px_36px_rgba(0,0,0,0.28)]";
 
@@ -1556,6 +1610,8 @@ export default function HomeClient() {
           </Button>
         </div>
       </div>
+
+      <SourceDiagnosticsPanel status={status} />
 
       <Card className="mb-3 p-3">
         <div className="flex flex-wrap items-center gap-2">

@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 
 import type { AppConfig, ChatMessage, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
+import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
@@ -160,46 +161,98 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
 export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatus["windsurf"]> {
   const logPath = await findLatestWindsurfLogFile();
   if (!logPath) {
-    return { attached: false, error: "Windsurf log not found. Open Windsurf and start a Cascade session." };
+    const recommendedAction = "Open Windsurf and start a Cascade session.";
+    return {
+      attached: false,
+      attachMethod: "log",
+      csrfTokenSource: "none",
+      recommendedAction,
+      lastError: "Windsurf log not found.",
+      error: `Windsurf log not found. ${recommendedAction}`
+    };
   }
 
   const logText = await fs.readFile(logPath, "utf-8").catch(() => "");
   const startInfo = extractLatestWindsurfStartInfoFromLog(logText);
   if (!startInfo) {
-    return { attached: false, logPath, error: "Failed to parse pid/port from Windsurf.log." };
-  }
-  if (!isProcessAlive(startInfo.pid)) {
+    const recommendedAction = "Start a Cascade session in Windsurf so pid/port are logged.";
     return {
       attached: false,
+      attachMethod: "log",
+      logPath,
+      csrfTokenSource: "none",
+      recommendedAction,
+      lastError: "Failed to parse pid/port from Windsurf.log.",
+      error: `Failed to parse pid/port from Windsurf.log. ${recommendedAction}`
+    };
+  }
+
+  const pidAlive = isProcessAlive(startInfo.pid);
+  if (!pidAlive) {
+    const recommendedAction = "Keep Windsurf open and start a Cascade session to relaunch the language server.";
+    return {
+      attached: false,
+      attachMethod: "log",
       logPath,
       pid: startInfo.pid,
+      pidAlive,
       port: startInfo.port,
-      error: "Windsurf language server is not running. Keep Windsurf open and start a Cascade session."
+      csrfTokenSource: "none",
+      recommendedAction,
+      lastError: "Windsurf language server is not running.",
+      error: `Windsurf language server is not running. ${recommendedAction}`
     };
   }
 
   const cmd = await readProcessCommandLine(startInfo.pid);
   const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
-  const csrfToken = tokenFromPs ?? (config.windsurf.csrfTokenOverride?.trim() || null);
-  let attached = Boolean(startInfo.port) && Boolean(csrfToken);
-  let error: string | undefined;
+  const overrideToken = config.windsurf.csrfTokenOverride?.trim() || null;
+  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, overrideToken });
+  const csrfToken = tokenInfo.token;
+  const csrfTokenSource = tokenInfo.source === "discovery_file" ? "none" : tokenInfo.source;
 
-  if (!csrfToken) {
-    const baseUrl = `http://127.0.0.1:${startInfo.port}`;
-    const ok = await probeWindsurfHeartbeat({ baseUrl });
-    attached = ok;
-    error = ok
-      ? "Attached without CSRF token (probe succeeded). Some environments may require a token; set override if RPC fails."
-      : "Missing Windsurf CSRF token. Keep Windsurf running and ensure we can read the LS process args, or set a token override in Settings.";
+  const baseUrl = `http://127.0.0.1:${startInfo.port}`;
+  let heartbeatWithToken = false;
+  let heartbeatWithoutToken = false;
+
+  if (csrfToken) heartbeatWithToken = await probeWindsurfHeartbeat({ baseUrl, csrfToken });
+  heartbeatWithoutToken = await probeWindsurfHeartbeat({ baseUrl });
+
+  const heartbeatOk = heartbeatWithToken || heartbeatWithoutToken;
+  const attached = heartbeatOk;
+  const tokenRequired = heartbeatOk ? !heartbeatWithoutToken : !csrfToken;
+
+  let lastError: string | undefined;
+  if (!attached) {
+    lastError = csrfToken
+      ? "Windsurf heartbeat probe failed with and without CSRF token."
+      : "Missing Windsurf CSRF token and heartbeat probe failed without token.";
   }
+
+  const recommendedAction = attached
+    ? "Connection healthy."
+    : tokenRequired
+      ? "Set Windsurf CSRF token override in Settings if process args are unreadable."
+      : "Keep Windsurf open and start/restart a Cascade session, then refresh.";
 
   return {
     attached,
+    attachMethod: "log",
     logPath,
     pid: startInfo.pid,
+    pidAlive,
     port: startInfo.port,
     csrfTokenPresent: Boolean(csrfToken),
-    ...(error ? { error } : {})
+    csrfTokenSource,
+    tokenRequired,
+    heartbeatOk,
+    recommendedAction,
+    ...(lastError
+      ? {
+          lastError,
+          error: `${lastError} ${recommendedAction}`
+        }
+      : {})
   };
 }
 
