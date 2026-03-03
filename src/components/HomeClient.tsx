@@ -6,7 +6,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
+import { cn } from "@/lib/utils";
 import type {
   AppConfig,
   ChatMessage,
@@ -81,19 +87,14 @@ type TrajectoryRow =
       type: "message";
       groupId: string;
       message: ChatMessage;
+      sourceEventIds: string[];
     }
   | {
       id: string;
       type: "actions";
       groupId: string;
       counts: TranscriptHiddenCounts;
-      toolEvents: TrajectoryEvent[];
-    }
-  | {
-      id: string;
-      type: "hidden_summary";
-      groupId: string;
-      counts: TranscriptHiddenCounts;
+      actionEvents: TrajectoryEvent[];
     };
 
 function buildExecutionGroups(events: TrajectoryEvent[]): ExecutionGroup[] {
@@ -168,35 +169,171 @@ function hasAnyHiddenTranscriptCounts(counts: TranscriptHiddenCounts): boolean {
 
 function StatusPill(props: { label: string; tone: "ok" | "warn" | "bad"; title?: string }) {
   return (
-    <span className="pill" data-tone={props.tone} title={props.title}>
+    <Badge
+      variant={props.tone === "ok" ? "ok" : props.tone === "warn" ? "warn" : "bad"}
+      title={props.title}
+    >
       {props.label}
-    </span>
+    </Badge>
   );
 }
 
-function ChatMessageView({ message }: { message: ChatMessage }) {
+const bubbleBase =
+  "group relative rounded-2xl border px-3 py-2 text-sm leading-relaxed backdrop-blur-sm shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset,0_12px_36px_rgba(0,0,0,0.28)]";
+
+function bubbleTone(kind: string) {
+  switch (kind) {
+    case "user":
+      return "bg-accent/10 border-accent/35";
+    case "assistant":
+      return "bg-background/8 border-border/80";
+    case "thought":
+      return "bg-cyan-400/10 border-cyan-200/25";
+    case "command":
+      return "bg-accent/10 border-accent/35";
+    case "status":
+      return "bg-amber-400/10 border-amber-300/25";
+    case "other":
+      return "bg-indigo-400/10 border-indigo-300/25";
+    case "system":
+      return "bg-amber-400/10 border-amber-300/25 text-amber-200";
+    case "tool":
+      return "bg-panel/35 border-border/70";
+    default:
+      return "bg-background/8 border-border/80";
+  }
+}
+
+function MarkdownContent({ text }: { text: string }) {
+  return (
+    <div className="min-w-0 text-sm leading-relaxed">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight]}
+        components={{
+          h1: (props) => <h1 className="mt-2 text-lg font-semibold first:mt-0" {...props} />,
+          h2: (props) => <h2 className="mt-3 text-base font-semibold first:mt-0" {...props} />,
+          h3: (props) => <h3 className="mt-3 text-sm font-semibold first:mt-0" {...props} />,
+          p: (props) => <p className="mt-2 whitespace-pre-wrap first:mt-0" {...props} />,
+          a: (props) => (
+            <a className="text-accent underline underline-offset-4 hover:opacity-90" {...props} />
+          ),
+          ul: (props) => <ul className="mt-2 list-disc space-y-1 pl-5 first:mt-0" {...props} />,
+          ol: (props) => <ol className="mt-2 list-decimal space-y-1 pl-5 first:mt-0" {...props} />,
+          li: (props) => <li className="min-w-0" {...props} />,
+          blockquote: (props) => (
+            <blockquote className="mt-2 border-l-2 border-border/70 pl-3 text-muted first:mt-0" {...props} />
+          ),
+          hr: (props) => <hr className="my-3 border-border/70" {...props} />,
+          code: ({ className, children, ...props }) => {
+            const isBlock = typeof className === "string" && className.includes("language-");
+            if (isBlock) return <code className={className} {...props}>{children}</code>;
+            return (
+              <code
+                className={cn(
+                  "rounded-md border border-border/60 bg-background/10 px-1 py-0.5 font-mono text-[0.85em]",
+                  className
+                )}
+                {...props}
+              >
+                {children}
+              </code>
+            );
+          },
+          pre: (props) => (
+            <pre
+              className="mt-2 max-w-full overflow-x-auto rounded-xl border border-border/70 bg-background/12 p-2 text-xs first:mt-0"
+              {...props}
+            />
+          ),
+          table: (props) => (
+            <div className="mt-2 max-w-full overflow-x-auto first:mt-0">
+              <table className="w-full border-separate border-spacing-0 text-xs" {...props} />
+            </div>
+          ),
+          thead: (props) => <thead className="text-muted" {...props} />,
+          th: (props) => (
+            <th className="whitespace-nowrap border-b border-border/70 px-2 py-1 text-left font-medium" {...props} />
+          ),
+          td: (props) => <td className="whitespace-nowrap border-b border-border/40 px-2 py-1 align-top" {...props} />
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+function ChatMessageView({
+  message,
+  selected,
+  onSelect,
+  onJumpToTrajectory
+}: {
+  message: ChatMessage;
+  selected?: boolean;
+  onSelect?(): void;
+  onJumpToTrajectory?(): void;
+}) {
+  const clickable = typeof onSelect === "function";
+  const bubbleClass = cn(
+    "transition-shadow",
+    clickable && "cursor-pointer",
+    selected && "ring-2 ring-accent/40 ring-offset-0"
+  );
+
   if (message.role === "tool") {
     return (
-      <div className="bubble tool">
-        <div className="split">
-          <div className="mono muted">{message.title}</div>
-          <div className="muted">tool step</div>
+      <div className={cn(bubbleBase, bubbleTone("tool"), "break-words", bubbleClass)} onClick={onSelect}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 truncate font-mono text-xs text-muted">{message.title}</div>
+          <div className="shrink-0 text-xs text-muted">tool step</div>
         </div>
-        <details style={{ marginTop: 8 }}>
-          <summary className="muted" style={{ cursor: "pointer" }}>
-            payload
-          </summary>
-          <pre style={{ margin: 0, marginTop: 8, overflowX: "auto" }}>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-muted">payload</summary>
+          <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">
             {JSON.stringify(message.payload, null, 2)}
           </pre>
         </details>
       </div>
     );
   }
-  return <div className={`bubble ${message.role}`}>{message.text}</div>;
+
+  const shouldRenderMarkdown = message.role === "assistant";
+  return (
+    <div
+      className={cn(
+        bubbleBase,
+        bubbleTone(message.role),
+        shouldRenderMarkdown ? "break-words" : "whitespace-pre-wrap break-words",
+        onJumpToTrajectory && "pr-12",
+        bubbleClass
+      )}
+      onClick={onSelect}
+    >
+      {onJumpToTrajectory ? (
+        <button
+          type="button"
+          className="absolute right-2 top-2 rounded-md border border-border/60 bg-background/8 px-2 py-1 text-[10px] text-muted opacity-0 transition-opacity hover:border-accent/35 hover:text-foreground group-hover:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onJumpToTrajectory();
+          }}
+          title="Jump to Trajectory"
+        >
+          Trajectory
+        </button>
+      ) : null}
+      {shouldRenderMarkdown ? <MarkdownContent text={message.text} /> : message.text}
+    </div>
+  );
 }
 
-function TranscriptActionsRow(props: { counts: TranscriptHiddenCounts; toolEvents: TrajectoryEvent[] }) {
+function TranscriptActionsRow(props: {
+  counts: TranscriptHiddenCounts;
+  actionEvents: TrajectoryEvent[];
+  onJumpToTrajectoryEventId?(eventId: string): void;
+}) {
   const totalHidden =
     props.counts.thoughts +
     props.counts.tools +
@@ -214,109 +351,151 @@ function TranscriptActionsRow(props: { counts: TranscriptHiddenCounts; toolEvent
   if (props.counts.other) parts.push(`other ${props.counts.other}`);
 
   return (
-    <div className="bubble system">
+    <div className={cn(bubbleBase, bubbleTone("system"))}>
       <details>
-        <summary className="muted" style={{ cursor: "pointer" }}>
-          Actions ({parts.join(" • ")})
+        <summary className="cursor-pointer text-xs text-muted">
+          <span className="flex items-center gap-2">
+            <span>Actions ({parts.join(" • ")})</span>
+            {props.onJumpToTrajectoryEventId && props.actionEvents.length ? (
+              <button
+                type="button"
+                className="rounded-md border border-border/60 bg-background/8 px-2 py-1 text-[10px] text-muted hover:border-accent/35 hover:text-foreground"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  props.onJumpToTrajectoryEventId?.(props.actionEvents[0]!.id);
+                }}
+                title="Jump to Trajectory"
+              >
+                Trajectory
+              </button>
+            ) : null}
+          </span>
         </summary>
-        {props.toolEvents.length ? (
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-            {props.toolEvents.map((event) => (
-              <div key={event.id} className="muted" style={{ fontSize: 12 }}>
-                <span className="pill">tool</span> <span className="mono">{event.title}</span>{" "}
-                <span className="mono" style={{ opacity: 0.8 }}>
-                  {event.stepType}
-                </span>
-                {event.text ? (
-                  <div style={{ marginTop: 4, whiteSpace: "pre-wrap", opacity: 0.9 }}>{event.text}</div>
+        {props.actionEvents.length ? (
+          <div className="mt-2 flex flex-col gap-2">
+            {props.actionEvents.map((event) => (
+              <div key={event.id} className="text-xs text-muted">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>{event.kind}</Badge>
+                  <span className="font-mono">{event.title}</span>
+                  <span className="font-mono opacity-80">{event.stepType}</span>
+                  {props.onJumpToTrajectoryEventId ? (
+                    <button
+                      type="button"
+                      className="ml-auto rounded-md border border-border/60 bg-background/8 px-2 py-1 text-[10px] text-muted hover:border-accent/35 hover:text-foreground"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        props.onJumpToTrajectoryEventId?.(event.id);
+                      }}
+                      title="Jump to Trajectory"
+                    >
+                      Trajectory
+                    </button>
+                  ) : null}
+                </div>
+
+                {event.kind === "thought" && event.text ? (
+                  <div className="mt-2 pl-7">
+                    <div className="rounded-2xl border border-border/70 bg-background/8 px-3 py-2 text-foreground/90 shadow-sm">
+                      <MarkdownContent text={event.text} />
+                    </div>
+                  </div>
+                ) : event.text ? (
+                  <div className="mt-1 whitespace-pre-wrap break-words opacity-90">{event.text}</div>
                 ) : null}
               </div>
             ))}
           </div>
         ) : (
-          <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-            Switch to Trajectory for tool/command details.
-          </div>
+          <div className="mt-2 text-xs text-muted">Switch to Trajectory for tool/command details.</div>
         )}
       </details>
     </div>
   );
 }
 
-function HiddenSummaryRow(props: { counts: TranscriptHiddenCounts }) {
-  const totalHidden =
-    props.counts.thoughts +
-    props.counts.tools +
-    props.counts.commandsHidden +
-    props.counts.statusesHidden +
-    props.counts.other;
-
-  if (totalHidden <= 0) return null;
-
-  const parts: string[] = [];
-  if (props.counts.thoughts) parts.push(`thoughts ${props.counts.thoughts}`);
-  if (props.counts.tools) parts.push(`tools ${props.counts.tools}`);
-  if (props.counts.commandsHidden) parts.push(`commands ${props.counts.commandsHidden}`);
-  if (props.counts.statusesHidden) parts.push(`status ${props.counts.statusesHidden}`);
-  if (props.counts.other) parts.push(`other ${props.counts.other}`);
-
-  return (
-    <div className="bubble system">
-      <div className="split">
-        <div className="row" style={{ gap: 8 }}>
-          <span className="pill">Hidden</span>
-          <span className="muted">{parts.join(" • ")}</span>
-        </div>
-        <div className="muted" style={{ fontSize: 12 }}>
-          Switch to Trajectory for details
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TrajectoryEventView({ event }: { event: TrajectoryEvent }) {
+function TrajectoryEventView({
+  event,
+  selected,
+  onSelect,
+  onJumpToTrajectory
+}: {
+  event: TrajectoryEvent;
+  selected?: boolean;
+  onSelect?(): void;
+  onJumpToTrajectory?(): void;
+}) {
   const timeLabel = formatIsoTime(event.completedAt ?? event.createdAt);
   const hasDetails = Boolean(event.output || event.toolCalls?.length);
+  const clickable = typeof onSelect === "function";
+  const shouldRenderMarkdown = event.kind === "thought";
 
   return (
-    <div className={`bubble ${event.kind}`}>
-      <div className="split">
-        <div className="row" style={{ gap: 8 }}>
-          <span className="pill">{event.title}</span>
-          <span className="muted mono" style={{ fontSize: 12 }}>
-            {event.stepType}
-          </span>
+    <div
+      className={cn(
+        bubbleBase,
+        bubbleTone(event.kind),
+        shouldRenderMarkdown ? "break-words" : "whitespace-pre-wrap break-words",
+        onJumpToTrajectory && "pr-12",
+        "transition-shadow",
+        clickable && "cursor-pointer",
+        selected && "ring-2 ring-accent/40 ring-offset-0"
+      )}
+      onClick={onSelect}
+    >
+      {onJumpToTrajectory ? (
+        <button
+          type="button"
+          className="absolute right-2 top-2 rounded-md border border-border/60 bg-background/8 px-2 py-1 text-[10px] text-muted opacity-0 transition-opacity hover:border-accent/35 hover:text-foreground group-hover:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onJumpToTrajectory();
+          }}
+          title="Jump to Trajectory"
+        >
+          Trajectory
+        </button>
+      ) : null}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Badge title={event.title}>{event.title}</Badge>
+          <span className="truncate font-mono text-xs text-muted">{event.stepType}</span>
         </div>
-        <div className="muted" style={{ fontSize: 12 }}>
-          {timeLabel}
-        </div>
+        <div className="shrink-0 text-xs text-muted">{timeLabel}</div>
       </div>
 
       {event.commandLine ? (
-        <div className="mono" style={{ marginTop: 8, fontSize: 12 }}>
+        <div className="mt-2 font-mono text-xs">
           $ {event.commandLine}
         </div>
       ) : null}
 
       {event.cwd ? (
-        <div className="muted mono" style={{ marginTop: 6, fontSize: 12 }}>
+        <div className="mt-1 font-mono text-xs text-muted">
           cwd: {event.cwd}
           {typeof event.exitCode === "number" ? ` • exit=${event.exitCode}` : ""}
         </div>
       ) : null}
 
-      {event.text ? <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{event.text}</div> : null}
+      {event.text ? (
+        <div className="mt-2">
+          {shouldRenderMarkdown ? <MarkdownContent text={event.text} /> : <div>{event.text}</div>}
+        </div>
+      ) : null}
 
       {hasDetails ? (
-        <details style={{ marginTop: 8 }}>
-          <summary className="muted" style={{ cursor: "pointer" }}>
-            details
-          </summary>
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-muted">details</summary>
           {event.toolCalls?.length ? (
-            <pre style={{ margin: 0, marginTop: 8, overflowX: "auto" }}>{JSON.stringify(event.toolCalls, null, 2)}</pre>
+            <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">
+              {JSON.stringify(event.toolCalls, null, 2)}
+            </pre>
           ) : null}
-          {event.output ? <pre style={{ margin: 0, marginTop: 8, overflowX: "auto" }}>{event.output}</pre> : null}
+          {event.output ? (
+            <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">{event.output}</pre>
+          ) : null}
         </details>
       ) : null}
     </div>
@@ -328,12 +507,19 @@ function TrajectoryGroupRow(props: {
   onToggle(groupId: string): void;
 }) {
   return (
-    <div className="trajectory-group-row">
-      <button className="btn trajectory-group-btn" onClick={() => props.onToggle(props.row.group.id)}>
-        <span className="mono">{props.row.collapsed ? "▸" : "▾"}</span>
-        <span>{props.row.group.label}</span>
-        <span className="pill">{props.row.group.events.length}</span>
-      </button>
+    <div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full justify-between"
+        onClick={() => props.onToggle(props.row.group.id)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="font-mono text-xs">{props.row.collapsed ? "▸" : "▾"}</span>
+          <span className="truncate">{props.row.group.label}</span>
+        </span>
+        <Badge className="shrink-0">{props.row.group.events.length}</Badge>
+      </Button>
     </div>
   );
 }
@@ -358,8 +544,13 @@ function VirtualMeasuredRow(props: {
   }, [rowId, onHeight]);
 
   return (
-    <div ref={ref} className="trajectory-virtual-row" style={{ transform: `translateY(${top}px)` }}>
-      {children}
+    <div
+      ref={ref}
+      data-row-id={rowId}
+      className="absolute inset-x-0 top-0 will-change-transform"
+      style={{ transform: `translateY(${top}px)` }}
+    >
+      <div className="pb-3">{children}</div>
     </div>
   );
 }
@@ -367,21 +558,43 @@ function VirtualMeasuredRow(props: {
 function VirtualizedTrajectoryRows(props: {
   rows: TrajectoryRow[];
   onToggleGroup(groupId: string): void;
+  onSelectRow?(row: TrajectoryRow): void;
+  selectedRowId?: string | null;
+  scrollToRowId?: string | null;
+  onScrolledToRowId?(rowId: string): void;
+  onJumpToTrajectoryEventId?(eventId: string): void;
+  autoOpenDetailsRowId?: string | null;
+  autoOpenDetailsToken?: number;
+  onAutoOpenedDetails?(rowId: string, token: number): void;
 }) {
+  const {
+    rows,
+    onToggleGroup,
+    onSelectRow,
+    selectedRowId,
+    scrollToRowId,
+    onScrolledToRowId,
+    onJumpToTrajectoryEventId,
+    autoOpenDetailsRowId,
+    autoOpenDetailsToken,
+    onAutoOpenedDetails
+  } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(600);
   const [rowHeights, setRowHeights] = useState<Record<string, number>>({});
+  const pendingScrollRef = useRef<{ rowId: string; attempts: number } | null>(null);
+  const lastAutoOpenTokenRef = useRef<number | null>(null);
 
   const estimateHeight = 148;
   const overscanPx = 700;
 
-  const offsets = useMemo(() => computeRowOffsets(props.rows, rowHeights, estimateHeight), [props.rows, rowHeights]);
+  const offsets = useMemo(() => computeRowOffsets(rows, rowHeights, estimateHeight), [rows, rowHeights]);
   const totalHeight = useMemo(() => {
-    if (props.rows.length === 0) return 0;
-    const last = props.rows[props.rows.length - 1]!;
-    return offsets[props.rows.length - 1]! + (rowHeights[last.id] ?? estimateHeight);
-  }, [props.rows, offsets, rowHeights]);
+    if (rows.length === 0) return 0;
+    const last = rows[rows.length - 1]!;
+    return offsets[rows.length - 1]! + (rowHeights[last.id] ?? estimateHeight);
+  }, [rows, offsets, rowHeights]);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -404,6 +617,92 @@ function VirtualizedTrajectoryRows(props: {
     };
   }, []);
 
+  useEffect(() => {
+    if (!scrollToRowId) {
+      pendingScrollRef.current = null;
+      return;
+    }
+    pendingScrollRef.current = { rowId: scrollToRowId, attempts: 0 };
+  }, [scrollToRowId]);
+
+  useEffect(() => {
+    const pending = pendingScrollRef.current;
+    const targetId = scrollToRowId;
+    if (!pending || !targetId || pending.rowId !== targetId) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const index = rows.findIndex((r) => r.id === targetId);
+    if (index < 0) return;
+
+    const estimateTop = offsets[index] ?? 0;
+    if (Math.abs(el.scrollTop - estimateTop) > 2) {
+      el.scrollTo({ top: estimateTop, behavior: "auto" });
+    }
+
+    const escapeSelector = (value: string) => {
+      const css = (globalThis as any).CSS;
+      if (css && typeof css.escape === "function") return css.escape(value);
+      return value.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+    };
+
+    const align = () => {
+      const current = pendingScrollRef.current;
+      if (!current || !scrollToRowId || current.rowId !== scrollToRowId) return;
+      const container = containerRef.current;
+      if (!container) return;
+
+      const selector = `[data-row-id="${escapeSelector(scrollToRowId)}"]`;
+      const node = container.querySelector(selector) as HTMLElement | null;
+      current.attempts += 1;
+
+      if (node) {
+        if (
+          autoOpenDetailsRowId &&
+          autoOpenDetailsToken &&
+          autoOpenDetailsRowId === scrollToRowId &&
+          lastAutoOpenTokenRef.current !== autoOpenDetailsToken
+        ) {
+          lastAutoOpenTokenRef.current = autoOpenDetailsToken;
+          const details = node.querySelector("details") as HTMLDetailsElement | null;
+          if (details) details.open = true;
+          onAutoOpenedDetails?.(autoOpenDetailsRowId, autoOpenDetailsToken);
+        }
+
+        const nodeRect = node.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const delta = nodeRect.top - containerRect.top;
+        const paddingTop = 10;
+        if (Math.abs(delta - paddingTop) > 6) {
+          container.scrollTop = container.scrollTop + (delta - paddingTop);
+        } else {
+          pendingScrollRef.current = null;
+          onScrolledToRowId?.(scrollToRowId);
+          return;
+        }
+      }
+
+      if (current.attempts >= 10) {
+        pendingScrollRef.current = null;
+        onScrolledToRowId?.(scrollToRowId);
+        return;
+      }
+
+      requestAnimationFrame(align);
+    };
+
+    requestAnimationFrame(align);
+  }, [
+    scrollToRowId,
+    rows,
+    offsets,
+    rowHeights,
+    onScrolledToRowId,
+    autoOpenDetailsRowId,
+    autoOpenDetailsToken,
+    onAutoOpenedDetails
+  ]);
+
   const updateHeight = useCallback((rowId: string, height: number) => {
     setRowHeights((prev) => {
       const current = prev[rowId];
@@ -415,7 +714,7 @@ function VirtualizedTrajectoryRows(props: {
   const start = useMemo(() => {
     const target = Math.max(scrollTop - overscanPx, 0);
     let low = 0;
-    let high = props.rows.length - 1;
+    let high = rows.length - 1;
     let best = 0;
     while (low <= high) {
       const mid = (low + high) >> 1;
@@ -428,54 +727,290 @@ function VirtualizedTrajectoryRows(props: {
       }
     }
     return best;
-  }, [scrollTop, overscanPx, props.rows.length, offsets]);
+  }, [scrollTop, overscanPx, rows.length, offsets]);
 
   const end = useMemo(() => {
     const limit = scrollTop + viewportHeight + overscanPx;
     let idx = start;
-    while (idx < props.rows.length) {
-      const row = props.rows[idx]!;
+    while (idx < rows.length) {
+      const row = rows[idx]!;
       const top = offsets[idx] ?? 0;
       const height = rowHeights[row.id] ?? estimateHeight;
       if (top > limit) break;
       idx += 1;
       if (top + height > limit) break;
     }
-    return clamp(idx + 1, 0, props.rows.length);
-  }, [start, scrollTop, viewportHeight, overscanPx, props.rows, offsets, rowHeights]);
+    return clamp(idx + 1, 0, rows.length);
+  }, [start, scrollTop, viewportHeight, overscanPx, rows, offsets, rowHeights]);
 
   const visible = useMemo(
     () =>
-      props.rows.slice(start, end).map((row, localIndex) => {
+      rows.slice(start, end).map((row, localIndex) => {
         const index = start + localIndex;
         return {
           row,
           top: offsets[index] ?? 0
         };
       }),
-    [props.rows, start, end, offsets]
+    [rows, start, end, offsets]
   );
 
   return (
-    <div ref={containerRef} className="trajectory-virtual">
-      <div className="trajectory-virtual-inner" style={{ height: totalHeight }}>
+    <div ref={containerRef} className="relative max-h-[calc(100vh-330px)] overflow-auto pr-1">
+      <div className="relative w-full" style={{ height: totalHeight }}>
         {visible.map(({ row, top }) => (
           <VirtualMeasuredRow key={row.id} rowId={row.id} top={top} onHeight={updateHeight}>
             {row.type === "group" ? (
-              <TrajectoryGroupRow row={row} onToggle={props.onToggleGroup} />
+              <TrajectoryGroupRow row={row} onToggle={onToggleGroup} />
             ) : row.type === "event" ? (
-              <TrajectoryEventView event={row.event} />
+              <TrajectoryEventView
+                event={row.event}
+                selected={selectedRowId === row.id}
+                onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
+                onJumpToTrajectory={onJumpToTrajectoryEventId ? () => onJumpToTrajectoryEventId(row.event.id) : undefined}
+              />
             ) : row.type === "message" ? (
-              <ChatMessageView message={row.message} />
+              <ChatMessageView
+                message={row.message}
+                selected={selectedRowId === row.id}
+                onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
+                onJumpToTrajectory={
+                  onJumpToTrajectoryEventId
+                    ? () => {
+                        const eventId = row.sourceEventIds[row.sourceEventIds.length - 1];
+                        if (eventId) onJumpToTrajectoryEventId(eventId);
+                      }
+                    : undefined
+                }
+              />
             ) : row.type === "actions" ? (
-              <TranscriptActionsRow counts={row.counts} toolEvents={row.toolEvents} />
-            ) : (
-              <HiddenSummaryRow counts={row.counts} />
-            )}
+              <TranscriptActionsRow
+                counts={row.counts}
+                actionEvents={row.actionEvents}
+                onJumpToTrajectoryEventId={onJumpToTrajectoryEventId}
+              />
+            ) : null}
           </VirtualMeasuredRow>
         ))}
       </div>
     </div>
+  );
+}
+
+function InspectorPanel(props: {
+  mode: "event" | "message" | "errors";
+  event: TrajectoryEvent | null;
+  message: ChatMessage | null;
+  errorEvents: TrajectoryEvent[];
+  wrapText: boolean;
+  onToggleWrapText(): void;
+  onSelectError(event: TrajectoryEvent): void;
+  onClose(): void;
+}) {
+  const { mode, event, message, errorEvents, wrapText, onToggleWrapText, onSelectError, onClose } = props;
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const copy = useCallback(async (key: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      window.setTimeout(() => setCopiedKey((prev) => (prev === key ? null : prev)), 1200);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const Field = ({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) => (
+    <div className="flex gap-2">
+      <div className="w-28 shrink-0 text-xs text-muted">{label}</div>
+      <div className={cn("min-w-0 text-xs text-foreground", mono && "font-mono break-words")}>{value}</div>
+    </div>
+  );
+
+  const Pre = ({ text }: { text: string }) => (
+    <pre className={cn("mt-2 rounded-lg border border-border bg-background/20 p-2 text-xs", wrapText ? "whitespace-pre-wrap break-words" : "whitespace-pre overflow-x-auto")}>
+      {text}
+    </pre>
+  );
+
+  return (
+    <Card className="min-w-0 p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold">Inspector</div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={onToggleWrapText}>
+            {wrapText ? "No wrap" : "Wrap"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+
+      {mode === "errors" ? (
+        <div>
+          <div className="text-xs text-muted">Errors: {errorEvents.length}</div>
+          <div className="mt-2 flex flex-col gap-2">
+            {errorEvents.length ? (
+              errorEvents.map((e) => {
+                const time = formatIsoTime(e.completedAt ?? e.createdAt);
+                return (
+                  <button
+                    key={e.id}
+                    className="rounded-lg border border-border bg-background/10 p-2 text-left text-xs hover:border-accent/40"
+                    onClick={() => onSelectError(e)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 font-medium">
+                        <span className="font-mono">{e.kind}</span> • {e.title}
+                      </div>
+                      <div className="shrink-0 text-muted">{time}</div>
+                    </div>
+                    <div className="mt-1 font-mono text-muted">
+                      {e.stepType}
+                      {typeof e.exitCode === "number" ? ` • exit=${e.exitCode}` : ""}
+                      {e.status ? ` • ${e.status}` : ""}
+                    </div>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="text-xs text-muted">No errors detected in this session.</div>
+            )}
+          </div>
+        </div>
+      ) : mode === "message" ? (
+        message ? (
+          <div className="space-y-2">
+            <Field label="role" value={message.role} mono />
+            {"title" in message && message.title ? <Field label="title" value={message.title} mono /> : null}
+            {"payload" in message && message.payload ? (
+              <div>
+                {(() => {
+                  const payloadText = JSON.stringify(message.payload, null, 2);
+                  return (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-muted">payload</div>
+                        <Button variant="ghost" size="sm" onClick={() => copy("message-payload", payloadText)}>
+                          {copiedKey === "message-payload" ? "Copied" : "Copy"}
+                        </Button>
+                      </div>
+                      <Pre text={payloadText} />
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+            {"text" in message && message.text ? (
+              <div>
+                {(() => {
+                  const text = message.text;
+                  return (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-muted">text</div>
+                        <Button variant="ghost" size="sm" onClick={() => copy("message-text", text)}>
+                          {copiedKey === "message-text" ? "Copied" : "Copy"}
+                        </Button>
+                      </div>
+                      <Pre text={text} />
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="text-xs text-muted">Select a message to inspect.</div>
+        )
+      ) : event ? (
+        <div className="space-y-2">
+          <Field label="id" value={event.id} mono />
+          <Field label="kind" value={event.kind} mono />
+          <Field label="title" value={event.title} />
+          <Field label="stepType" value={event.stepType} mono />
+          {event.executionId ? <Field label="executionId" value={event.executionId} mono /> : null}
+          {event.status ? <Field label="status" value={event.status} mono /> : null}
+          {typeof event.exitCode === "number" ? <Field label="exitCode" value={String(event.exitCode)} mono /> : null}
+          {event.cwd ? <Field label="cwd" value={event.cwd} mono /> : null}
+          {event.commandLine ? (
+            <div>
+              {(() => {
+                const commandLine = event.commandLine;
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted">commandLine</div>
+                      <Button variant="ghost" size="sm" onClick={() => copy("event-command", commandLine)}>
+                        {copiedKey === "event-command" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <Pre text={commandLine} />
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
+          {event.text ? (
+            <div>
+              {(() => {
+                const text = event.text;
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted">text</div>
+                      <Button variant="ghost" size="sm" onClick={() => copy("event-text", text)}>
+                        {copiedKey === "event-text" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <Pre text={text} />
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
+          {event.toolCalls?.length ? (
+            <div>
+              {(() => {
+                const toolCallsText = JSON.stringify(event.toolCalls, null, 2);
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted">toolCalls</div>
+                      <Button variant="ghost" size="sm" onClick={() => copy("event-toolCalls", toolCallsText)}>
+                        {copiedKey === "event-toolCalls" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <Pre text={toolCallsText} />
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
+          {event.output ? (
+            <div>
+              {(() => {
+                const output = event.output;
+                return (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-xs text-muted">output</div>
+                      <Button variant="ghost" size="sm" onClick={() => copy("event-output", output)}>
+                        {copiedKey === "event-output" ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                    <Pre text={output} />
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-xs text-muted">Select an event to inspect.</div>
+      )}
+    </Card>
   );
 }
 
@@ -493,6 +1028,7 @@ export default function HomeClient() {
   const [error, setError] = useState<string | null>(null);
   const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("transcript");
   const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("transcript");
+  const [windsurfIncludeCleared, setWindsurfIncludeCleared] = useState(false);
   const [trajectoryFilters, setTrajectoryFilters] = useState({
     thought: true,
     tool: true,
@@ -500,6 +1036,15 @@ export default function HomeClient() {
     status: false
   });
   const [collapsedExecutionGroups, setCollapsedExecutionGroups] = useState<Record<string, boolean>>({});
+
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorMode, setInspectorMode] = useState<"event" | "message" | "errors">("event");
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  const [scrollToRowId, setScrollToRowId] = useState<string | null>(null);
+  const [inspectorWrapText, setInspectorWrapText] = useState(true);
+  const [pendingTrajectoryJumpEventId, setPendingTrajectoryJumpEventId] = useState<string | null>(null);
+  const [autoOpenDetailsRowId, setAutoOpenDetailsRowId] = useState<string | null>(null);
+  const [autoOpenDetailsToken, setAutoOpenDetailsToken] = useState(0);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -552,48 +1097,52 @@ export default function HomeClient() {
     if (content?.kind !== "trajectory") return [];
     const rows: TrajectoryRow[] = [];
 
-    for (const group of executionGroups) {
-      const collapsed = collapsedExecutionGroups[group.id] ?? false;
-      rows.push({
-        id: `group:${group.id}`,
-        type: "group",
-        group,
-        collapsed
-      });
+      for (const group of executionGroups) {
+        const collapsed = collapsedExecutionGroups[group.id] ?? false;
+        rows.push({
+          id: `group:${group.id}`,
+          type: "group",
+          group,
+          collapsed
+        });
 
-      if (collapsed) continue;
+        if (collapsed) continue;
 
-      let hidden = buildEmptyTranscriptHiddenCounts();
-      let pendingToolEvents: TrajectoryEvent[] = [];
+        let hidden = buildEmptyTranscriptHiddenCounts();
+        let pendingActionEvents: TrajectoryEvent[] = [];
 
-      const pushMessage = (groupId: string, message: ChatMessage, stableKey: string) => {
-        const last = rows[rows.length - 1];
-        if (last && last.type === "message" && last.groupId === groupId && last.message.role === message.role && last.message.role !== "tool") {
-          if ("text" in last.message && "text" in message) {
-            last.message = { ...last.message, text: `${last.message.text}\n\n${message.text}` };
-            return;
+        const pushMessage = (groupId: string, message: ChatMessage, stableKey: string) => {
+          const last = rows[rows.length - 1];
+          if (last && last.type === "message" && last.groupId === groupId && last.message.role === message.role && last.message.role !== "tool") {
+            if ("text" in last.message && "text" in message) {
+              last.message = { ...last.message, text: `${last.message.text}\n\n${message.text}` };
+              if (!last.sourceEventIds.includes(stableKey)) {
+                last.sourceEventIds = [...last.sourceEventIds, stableKey];
+              }
+              return;
+            }
           }
-        }
-        rows.push({
-          id: `msg:${groupId}:${stableKey}`,
-          type: "message",
-          groupId,
-          message
-        });
-      };
+          rows.push({
+            id: `msg:${groupId}:${stableKey}`,
+            type: "message",
+            groupId,
+            message,
+            sourceEventIds: [stableKey]
+          });
+        };
 
-      const flushActionsUnderAssistant = (groupId: string, stableKey: string) => {
-        if (!hasAnyHiddenTranscriptCounts(hidden)) return;
-        rows.push({
-          id: `actions:${groupId}:${stableKey}`,
-          type: "actions",
-          groupId,
-          counts: hidden,
-          toolEvents: pendingToolEvents
-        });
-        hidden = buildEmptyTranscriptHiddenCounts();
-        pendingToolEvents = [];
-      };
+        const flushActionsUnderAssistant = (groupId: string, stableKey: string) => {
+          if (!hasAnyHiddenTranscriptCounts(hidden)) return;
+          rows.push({
+            id: `actions:${groupId}:${stableKey}`,
+            type: "actions",
+            groupId,
+            counts: hidden,
+            actionEvents: pendingActionEvents
+          });
+          hidden = buildEmptyTranscriptHiddenCounts();
+          pendingActionEvents = [];
+        };
 
       for (const event of group.events) {
         if (event.kind === "user" && event.text) {
@@ -606,10 +1155,11 @@ export default function HomeClient() {
           continue;
         }
 
-        if (event.kind === "thought") {
-          hidden.thoughts += 1;
-          continue;
-        }
+          if (event.kind === "thought") {
+            hidden.thoughts += 1;
+            pendingActionEvents.push(event);
+            continue;
+          }
 
         if (isKeyStatusLikeEvent(event)) {
           const text = event.text ?? event.status ?? event.title;
@@ -633,11 +1183,11 @@ export default function HomeClient() {
           continue;
         }
 
-        if (event.kind === "tool") {
-          hidden.tools += 1;
-          pendingToolEvents.push(event);
-          continue;
-        }
+          if (event.kind === "tool") {
+            hidden.tools += 1;
+            pendingActionEvents.push(event);
+            continue;
+          }
 
         if (event.kind === "status") {
           hidden.statusesHidden += 1;
@@ -647,18 +1197,145 @@ export default function HomeClient() {
         hidden.other += 1;
       }
 
-      if (hasAnyHiddenTranscriptCounts(hidden)) {
-        rows.push({
-          id: `hidden:${group.id}`,
-          type: "hidden_summary",
-          groupId: group.id,
-          counts: hidden
-        });
+        if (hasAnyHiddenTranscriptCounts(hidden)) {
+          rows.push({
+            id: `actions:${group.id}:tail`,
+            type: "actions",
+            groupId: group.id,
+            counts: hidden,
+            actionEvents: pendingActionEvents
+          });
+        }
       }
+
+      return rows;
+  }, [content, executionGroups, collapsedExecutionGroups]);
+
+  const errorEvents = useMemo(() => rawTrajectoryEvents.filter(isErrorLikeEvent), [rawTrajectoryEvents]);
+
+  const eventsById = useMemo(() => {
+    const map = new Map<string, TrajectoryEvent>();
+    for (const event of rawTrajectoryEvents) map.set(event.id, event);
+    return map;
+  }, [rawTrajectoryEvents]);
+
+  const rowsById = useMemo(() => {
+    const map = new Map<string, TrajectoryRow>();
+    for (const row of trajectoryRows) map.set(row.id, row);
+    for (const row of transcriptRows) map.set(row.id, row);
+    return map;
+  }, [trajectoryRows, transcriptRows]);
+
+  const selectedRow = useMemo(() => (selectedRowId ? rowsById.get(selectedRowId) ?? null : null), [rowsById, selectedRowId]);
+
+  const selectedEvent = useMemo(() => {
+    if (selectedRow?.type === "event") return selectedRow.event;
+    if (selectedRowId?.startsWith("event:")) {
+      const eventId = selectedRowId.slice("event:".length);
+      return rawTrajectoryEvents.find((e) => e.id === eventId) ?? null;
+    }
+    return null;
+  }, [selectedRow, selectedRowId, rawTrajectoryEvents]);
+
+  const selectedMessage = useMemo(() => {
+    if (selectedRow?.type !== "message") return null;
+    return selectedRow.message;
+  }, [selectedRow]);
+
+  const onSelectRow = useCallback((row: TrajectoryRow) => {
+    if (row.type !== "event" && row.type !== "message") return;
+    setSelectedRowId(row.id);
+    setInspectorMode(row.type === "event" ? "event" : "message");
+    setInspectorOpen(true);
+  }, []);
+
+  const openErrorCenter = useCallback(() => {
+    setInspectorMode("errors");
+    setInspectorOpen(true);
+  }, []);
+
+  const jumpToEvent = useCallback(
+    (event: TrajectoryEvent) => {
+      const groupId = event.executionId ?? "ungrouped";
+      setCollapsedExecutionGroups((prev) => ({ ...prev, [groupId]: false }));
+      const rowId = `event:${event.id}`;
+      setSelectedRowId(rowId);
+      setInspectorMode("event");
+      setInspectorOpen(true);
+      setScrollToRowId(rowId);
+
+      if (event.kind === "thought" && !trajectoryFilters.thought) setTrajectoryFilters((prev) => ({ ...prev, thought: true }));
+      if (event.kind === "tool" && !trajectoryFilters.tool) setTrajectoryFilters((prev) => ({ ...prev, tool: true }));
+      if (event.kind === "command" && !trajectoryFilters.command) setTrajectoryFilters((prev) => ({ ...prev, command: true }));
+      if (event.kind === "status" && !trajectoryFilters.status) setTrajectoryFilters((prev) => ({ ...prev, status: true }));
+
+      if (content?.kind === "trajectory" && content.source === "antigravity" && antigravityView === "markdown") {
+        setAntigravityView("transcript");
+      }
+      if (source === "windsurf" && windsurfView === "chat") {
+        setWindsurfView("transcript");
+      }
+    },
+    [content, antigravityView, source, windsurfView, trajectoryFilters]
+  );
+
+  const requestJumpToTrajectoryEventId = useCallback((eventId: string) => {
+    setPendingTrajectoryJumpEventId(eventId);
+    setAutoOpenDetailsRowId(`event:${eventId}`);
+    setAutoOpenDetailsToken((prev) => prev + 1);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingTrajectoryJumpEventId) return;
+    if (content?.kind !== "trajectory") return;
+
+    const event = eventsById.get(pendingTrajectoryJumpEventId);
+    if (!event) {
+      setPendingTrajectoryJumpEventId(null);
+      return;
     }
 
-    return rows;
-  }, [content, executionGroups, collapsedExecutionGroups]);
+    if (content.source === "antigravity" && antigravityView !== "trajectory") setAntigravityView("trajectory");
+    if (content.source === "windsurf" && windsurfView !== "trajectory") setWindsurfView("trajectory");
+
+    const groupId = event.executionId ?? "ungrouped";
+    setCollapsedExecutionGroups((prev) => {
+      if (prev[groupId] === false) return prev;
+      return { ...prev, [groupId]: false };
+    });
+
+    setTrajectoryFilters((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      if (event.kind === "thought" && !prev.thought) {
+        next.thought = true;
+        changed = true;
+      }
+      if (event.kind === "tool" && !prev.tool) {
+        next.tool = true;
+        changed = true;
+      }
+      if (event.kind === "command" && !prev.command) {
+        next.command = true;
+        changed = true;
+      }
+      if (event.kind === "status" && !prev.status) {
+        next.status = true;
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+
+    const rowId = `event:${event.id}`;
+    const hasRow = trajectoryRows.some((row) => row.id === rowId);
+    if (!hasRow) return;
+
+    setSelectedRowId(rowId);
+    setInspectorMode("event");
+    setInspectorOpen(true);
+    setScrollToRowId(rowId);
+    setPendingTrajectoryJumpEventId(null);
+  }, [pendingTrajectoryJumpEventId, content, eventsById, trajectoryRows, antigravityView, windsurfView]);
 
   async function refreshConfigAndStatus() {
     const cfgRes = await fetch("/api/config");
@@ -686,7 +1363,13 @@ export default function HomeClient() {
     }
   }
 
-  async function loadConversation(nextSource: Source, id: string, stepOffset?: number, view?: "chat" | "trajectory") {
+  async function loadConversation(
+    nextSource: Source,
+    id: string,
+    stepOffset?: number,
+    view?: "chat" | "trajectory",
+    opts?: { includeCleared?: boolean }
+  ) {
     setLoadingContent(true);
     setError(null);
     try {
@@ -695,6 +1378,8 @@ export default function HomeClient() {
         const sp = new URLSearchParams();
         sp.set("stepOffset", String(stepOffset ?? 0));
         if (view === "trajectory") sp.set("view", "trajectory");
+        const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
+        if (includeCleared) sp.set("includeCleared", "1");
         qp = `?${sp.toString()}`;
       }
       const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
@@ -712,7 +1397,10 @@ export default function HomeClient() {
   async function loadMoreWindsurfChat() {
     if (!selectedId || source !== "windsurf" || content?.kind !== "chat") return;
     const currentOffset = content.stepOffset ?? 0;
-    const res = await fetch(`/api/conversations/windsurf/${selectedId}?stepOffset=${currentOffset}`);
+    const sp = new URLSearchParams();
+    sp.set("stepOffset", String(currentOffset));
+    if (windsurfIncludeCleared) sp.set("includeCleared", "1");
+    const res = await fetch(`/api/conversations/windsurf/${selectedId}?${sp.toString()}`);
     const json = (await res.json()) as any;
     if (!res.ok) {
       setError(json?.error ?? "Failed to load more");
@@ -731,7 +1419,11 @@ export default function HomeClient() {
   async function loadMoreWindsurfTrajectory() {
     if (!selectedId || source !== "windsurf" || content?.kind !== "trajectory" || content.source !== "windsurf") return;
     const currentOffset = content.stepOffset ?? 0;
-    const res = await fetch(`/api/conversations/windsurf/${selectedId}?stepOffset=${currentOffset}&view=trajectory`);
+    const sp = new URLSearchParams();
+    sp.set("stepOffset", String(currentOffset));
+    sp.set("view", "trajectory");
+    if (windsurfIncludeCleared) sp.set("includeCleared", "1");
+    const res = await fetch(`/api/conversations/windsurf/${selectedId}?${sp.toString()}`);
     const json = (await res.json()) as any;
     if (!res.ok) {
       setError(json?.error ?? "Failed to load more");
@@ -758,6 +1450,23 @@ export default function HomeClient() {
   useEffect(() => {
     refreshConfigAndStatus().catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("viewer:windsurf:includeCleared");
+      if (stored === "1") setWindsurfIncludeCleared(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("viewer:windsurf:includeCleared", windsurfIncludeCleared ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [windsurfIncludeCleared]);
 
   useEffect(() => {
     loadList(source).catch(() => {});
@@ -804,108 +1513,149 @@ export default function HomeClient() {
     setCollapsedExecutionGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   }, []);
 
+  const inspectorNode = inspectorOpen ? (
+    <InspectorPanel
+      mode={inspectorMode}
+      event={selectedEvent}
+      message={selectedMessage}
+      errorEvents={errorEvents}
+      wrapText={inspectorWrapText}
+      onToggleWrapText={() => setInspectorWrapText((v) => !v)}
+      onSelectError={jumpToEvent}
+      onClose={() => {
+        setInspectorOpen(false);
+        setSelectedRowId(null);
+      }}
+    />
+  ) : null;
+
+  const withInspector = (main: React.ReactNode) =>
+    inspectorOpen ? (
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="min-w-0">{main}</div>
+        {inspectorNode}
+      </div>
+    ) : (
+      main
+    );
+
   return (
-    <div className="container">
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
-        <div className="row">
-          <div style={{ fontSize: 18, fontWeight: 650 }}>Agent Storage Manager</div>
+    <div className="mx-auto max-w-[1200px] p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="text-lg font-semibold">Agent Storage Manager</div>
           {antigravityPill}
           {windsurfPill}
         </div>
-        <div className="row">
-          <button className="btn" onClick={() => refreshConfigAndStatus()}>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => refreshConfigAndStatus()}>
             Refresh
-          </button>
-          <Link className="btn" href="/settings">
-            Settings
-          </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/settings">Settings</Link>
+          </Button>
         </div>
       </div>
 
-      <div className="card" style={{ padding: 12, marginBottom: 12 }}>
-        <div className="row" style={{ gap: 10 }}>
-          <button className={`btn ${source === "antigravity" ? "primary" : ""}`} onClick={() => setSource("antigravity")}>
+      <Card className="mb-3 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={source === "antigravity" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSource("antigravity")}
+          >
             Antigravity
-          </button>
-          <button className={`btn ${source === "windsurf" ? "primary" : ""}`} onClick={() => setSource("windsurf")}>
+          </Button>
+          <Button
+            variant={source === "windsurf" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSource("windsurf")}
+          >
             Windsurf
-          </button>
-          <div style={{ flex: 1 }} />
-          <input className="input" placeholder="Search by id…" style={{ maxWidth: 360 }} value={filter} onChange={(e) => setFilter(e.target.value)} />
+          </Button>
+          <div className="flex-1" />
+          <div className="w-full sm:w-[360px] sm:max-w-[360px]">
+            <Input placeholder="Search by id…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          </div>
         </div>
-        <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
-          Roots: {config ? config.roots.filter((r) => r.source === source && r.enabled).length : "..."} • Items: {items.length}
+        <div className="mt-2 text-xs text-muted">
+          Roots: {config ? config.roots.filter((r) => r.source === source && r.enabled).length : "..."} • Items:{" "}
+          {items.length}
         </div>
-      </div>
+      </Card>
 
-      <div className="grid">
-        <div className="card">
-          <div style={{ padding: 12 }}>
-            <div className="split">
-              <div style={{ fontWeight: 600 }}>Conversations</div>
-              <div className="muted">{loadingList ? "Loading…" : ""}</div>
+      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <Card className="min-w-0 overflow-hidden">
+          <div className="p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold">Conversations</div>
+              <div className="text-xs text-muted">{loadingList ? "Loading…" : ""}</div>
             </div>
           </div>
-          <div className="list">
-            {filteredItems.map((it) => (
-              <div
-                key={`${it.rootId}:${it.id}`}
-                className="list-item"
-                data-selected={selectedKey === `${it.rootId}:${it.id}`}
-                onClick={() => {
-                  setSelectedKey(`${it.rootId}:${it.id}`);
-                  setSelectedId(it.id);
-                  setContent(null);
-                  setAntigravityView("transcript");
-                  setWindsurfView("transcript");
-                  setCollapsedExecutionGroups({});
-                  loadConversation(source, it.id, 0, source === "windsurf" ? "trajectory" : undefined).catch(() => {});
-                }}
-                title={it.path}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 650,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap"
+          <div className="max-h-[calc(100vh-240px)] overflow-auto border-t border-border/80">
+            {filteredItems.map((it) => {
+              const key = `${it.rootId}:${it.id}`;
+              const selected = selectedKey === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  className={cn(
+                    "w-full border-b border-border/40 px-3 py-2 text-left transition-colors hover:bg-background/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+                    selected && "border-accent/25 bg-accent/10"
+                  )}
+                  onClick={() => {
+                    setSelectedKey(key);
+                    setSelectedId(it.id);
+                    setContent(null);
+                    setInspectorOpen(false);
+                    setSelectedRowId(null);
+                    setScrollToRowId(null);
+                    setAntigravityView("transcript");
+                    setWindsurfView("transcript");
+                    setCollapsedExecutionGroups({});
+                    loadConversation(source, it.id, 0, source === "windsurf" ? "trajectory" : undefined).catch(() => {});
                   }}
-                  title={it.title ?? it.id}
+                  title={it.path}
                 >
-                  {it.title ?? it.id}
-                </div>
-                <div className="muted" style={{ fontSize: 12, marginTop: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {it.cwd ? `Running in ${it.cwd}` : <span className="mono">{it.id}</span>}
-                </div>
-                <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                  {formatTime(it.mtimeMs)} • {formatBytes(it.sizeBytes)}
-                </div>
-              </div>
-            ))}
+                  <div className="truncate text-sm font-semibold" title={it.title ?? it.id}>
+                    {it.title ?? it.id}
+                  </div>
+                  <div className="mt-1 truncate text-xs text-muted">
+                    {it.cwd ? (
+                      `Running in ${it.cwd}`
+                    ) : (
+                      <span className="font-mono">{it.id}</span>
+                    )}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {formatTime(it.mtimeMs)} • {formatBytes(it.sizeBytes)}
+                  </div>
+                </button>
+              );
+            })}
             {!loadingList && filteredItems.length === 0 ? (
-              <div className="muted" style={{ padding: 12 }}>
-                No conversations found for this source. Add roots in Settings.
-              </div>
+              <div className="p-3 text-sm text-muted">No conversations found for this source. Add roots in Settings.</div>
             ) : null}
           </div>
-        </div>
+        </Card>
 
-        <div className="card" style={{ padding: 12 }}>
-          <div className="split viewer-header" style={{ marginBottom: 10 }}>
-            <div style={{ fontWeight: 600 }}>Viewer</div>
-            <div className="muted viewer-header-meta">
+        <Card className="min-w-0 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold">Viewer</div>
+            <div className="min-w-0 flex-1 text-right text-xs text-muted">
               {loadingContent
                 ? "Loading…"
                 : selectedId
                   ? (
-                      <span title={selectedItem?.title ?? selectedId}>
+                      <span className="block truncate" title={selectedItem?.title ?? selectedId}>
                         {selectedItem?.title ? (
                           <>
-                            {selectedItem.title} <span className="mono">({selectedId})</span>
+                            {selectedItem.title}{" "}
+                            <span className="font-mono opacity-80">({selectedId})</span>
                           </>
                         ) : (
-                          <span className="mono">{selectedId}</span>
+                          <span className="font-mono">{selectedId}</span>
                         )}
                       </span>
                     )
@@ -914,27 +1664,36 @@ export default function HomeClient() {
           </div>
 
           {error ? (
-            <div className="bubble system" style={{ borderColor: "rgba(251, 113, 133, 0.55)", color: "rgba(251,113,133,0.95)" }}>
-              {error}
+            <div className="mb-3 rounded-2xl border border-danger/55 bg-danger/10 px-3 py-2 text-sm text-danger">
+              <span className="font-medium">Error:</span> {error}
             </div>
           ) : null}
 
           {selectedId ? (
-            <div className="row" style={{ justifyContent: "flex-end", marginBottom: 10 }}>
-              <a className="btn" href={`/api/conversations/${source}/${selectedId}/diagnostic`} title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)">
-                Diagnostic JSON
-              </a>
+            <div className="mb-2 flex justify-end">
+              <Button asChild variant="outline" size="sm">
+                <a
+                  href={`/api/conversations/${source}/${selectedId}/diagnostic`}
+                  title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)"
+                >
+                  Diagnostic JSON
+                </a>
+              </Button>
             </div>
           ) : null}
 
-          {!selectedId ? <div className="muted">Select a conversation on the left.</div> : null}
+          {!selectedId ? <div className="text-sm text-muted">Select a conversation on the left.</div> : null}
 
           {selectedId && source === "windsurf" ? (
-            <div className="row" style={{ justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
-              <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                <button
-                  className={`btn ${windsurfView === "chat" ? "primary" : ""}`}
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={windsurfView === "chat" ? "default" : "outline"}
+                  size="sm"
                   onClick={() => {
+                    setInspectorOpen(false);
+                    setSelectedRowId(null);
+                    setScrollToRowId(null);
                     setWindsurfView("chat");
                     setContent(null);
                     setCollapsedExecutionGroups({});
@@ -942,10 +1701,14 @@ export default function HomeClient() {
                   }}
                 >
                   Chat
-                </button>
-                <button
-                  className={`btn ${windsurfView === "transcript" ? "primary" : ""}`}
+                </Button>
+                <Button
+                  variant={windsurfView === "transcript" ? "default" : "outline"}
+                  size="sm"
                   onClick={() => {
+                    setInspectorOpen(false);
+                    setSelectedRowId(null);
+                    setScrollToRowId(null);
                     setWindsurfView("transcript");
                     if (content?.kind !== "trajectory" || content.source !== "windsurf") {
                       setContent(null);
@@ -955,10 +1718,14 @@ export default function HomeClient() {
                   }}
                 >
                   Transcript
-                </button>
-                <button
-                  className={`btn ${windsurfView === "trajectory" ? "primary" : ""}`}
+                </Button>
+                <Button
+                  variant={windsurfView === "trajectory" ? "default" : "outline"}
+                  size="sm"
                   onClick={() => {
+                    setInspectorOpen(false);
+                    setSelectedRowId(null);
+                    setScrollToRowId(null);
                     setWindsurfView("trajectory");
                     if (content?.kind !== "trajectory" || content.source !== "windsurf") {
                       setContent(null);
@@ -968,167 +1735,267 @@ export default function HomeClient() {
                   }}
                 >
                   Trajectory
-                </button>
+                </Button>
               </div>
-              <div className="muted" style={{ fontSize: 12 }}>
-                {windsurfView === "chat"
-                  ? "Legacy chat view"
-                  : windsurfView === "trajectory"
-                    ? "Process-first view"
-                    : "Transcript view (default)"}
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  <Switch
+                    checked={windsurfIncludeCleared}
+                    onCheckedChange={(checked) => {
+                      setWindsurfIncludeCleared(checked);
+                      if (!selectedId || source !== "windsurf") return;
+                      setInspectorOpen(false);
+                      setSelectedRowId(null);
+                      setScrollToRowId(null);
+                      setContent(null);
+                      setCollapsedExecutionGroups({});
+                      const nextView = windsurfView === "chat" ? "chat" : "trajectory";
+                      loadConversation("windsurf", selectedId, 0, nextView, { includeCleared: checked }).catch(() => {});
+                    }}
+                    aria-label="Show cleared steps"
+                  />
+                  Show cleared
+                </label>
+                <div className="text-xs text-muted">
+                  {windsurfView === "chat"
+                    ? "Legacy chat view"
+                    : windsurfView === "trajectory"
+                      ? "Process-first view"
+                      : "Transcript view (default)"}
+                </div>
               </div>
             </div>
           ) : null}
 
           {selectedId && content?.kind === "trajectory" && content.source === "antigravity" ? (
             <div>
-              <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <button className={`btn ${antigravityView === "transcript" ? "primary" : ""}`} onClick={() => setAntigravityView("transcript")}>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant={antigravityView === "transcript" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAntigravityView("transcript")}
+                  >
                     Transcript
-                  </button>
-                  <button className={`btn ${antigravityView === "trajectory" ? "primary" : ""}`} onClick={() => setAntigravityView("trajectory")}>
+                  </Button>
+                  <Button
+                    variant={antigravityView === "trajectory" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAntigravityView("trajectory")}
+                  >
                     Trajectory
-                  </button>
-                  <button className={`btn ${antigravityView === "markdown" ? "primary" : ""}`} onClick={() => setAntigravityView("markdown")}>
+                  </Button>
+                  <Button
+                    variant={antigravityView === "markdown" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAntigravityView("markdown")}
+                  >
                     Markdown
-                  </button>
+                  </Button>
                 </div>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <span className="pill">steps {content.summary.totalSteps}</span>
-                  <span className="pill">events {content.summary.renderedEvents}</span>
-                  <span className="pill">thoughts {content.summary.thoughtCount}</span>
-                  <span className="pill">tools {content.summary.toolCount + content.summary.commandCount}</span>
-                  {content.summary.errorCount > 0 ? <span className="pill" data-tone="bad">errors {content.summary.errorCount}</span> : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>steps {content.summary.totalSteps}</Badge>
+                  <Badge>events {content.summary.renderedEvents}</Badge>
+                  <Badge>thoughts {content.summary.thoughtCount}</Badge>
+                  <Badge>tools {content.summary.toolCount + content.summary.commandCount}</Badge>
+                  {content.summary.errorCount > 0 ? (
+                    <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
+                      errors {content.summary.errorCount}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
 
               {antigravityView === "trajectory" ? (
                 <div>
-                  <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                    <button
-                      className={`btn ${trajectoryFilters.thought ? "primary" : ""}`}
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={trajectoryFilters.thought ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought }))}
                     >
                       Thoughts
-                    </button>
-                    <button
-                      className={`btn ${trajectoryFilters.tool ? "primary" : ""}`}
+                    </Button>
+                    <Button
+                      variant={trajectoryFilters.tool ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool }))}
                     >
                       Tools
-                    </button>
-                    <button
-                      className={`btn ${trajectoryFilters.command ? "primary" : ""}`}
+                    </Button>
+                    <Button
+                      variant={trajectoryFilters.command ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command }))}
                     >
                       Commands
-                    </button>
-                    <button
-                      className={`btn ${trajectoryFilters.status ? "primary" : ""}`}
+                    </Button>
+                    <Button
+                      variant={trajectoryFilters.status ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status }))}
                     >
                       Status
-                    </button>
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      Groups: {executionGroups.length}
-                    </span>
+                    </Button>
+                    <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
-                  <VirtualizedTrajectoryRows rows={trajectoryRows} onToggleGroup={toggleExecutionGroup} />
+                  {withInspector(
+                    <VirtualizedTrajectoryRows
+                      rows={trajectoryRows}
+                      onToggleGroup={toggleExecutionGroup}
+                      onSelectRow={onSelectRow}
+                      selectedRowId={selectedRowId}
+                      scrollToRowId={scrollToRowId}
+                      onScrolledToRowId={() => setScrollToRowId(null)}
+                      autoOpenDetailsRowId={autoOpenDetailsRowId}
+                      autoOpenDetailsToken={autoOpenDetailsToken}
+                      onAutoOpenedDetails={(rowId, token) => {
+                        if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
+                      }}
+                    />
+                  )}
                 </div>
               ) : antigravityView === "transcript" ? (
                 <div>
-                  <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                  <div className="mb-2 text-xs text-muted">
                     Transcript shows user/assistant plus errors. Tools and successful commands are hidden behind a summary row.
                   </div>
-                  <VirtualizedTrajectoryRows rows={transcriptRows} onToggleGroup={toggleExecutionGroup} />
+                  {withInspector(
+                    <VirtualizedTrajectoryRows
+                      rows={transcriptRows}
+                      onToggleGroup={toggleExecutionGroup}
+                      onSelectRow={onSelectRow}
+                      selectedRowId={selectedRowId}
+                      scrollToRowId={scrollToRowId}
+                      onScrolledToRowId={() => setScrollToRowId(null)}
+                      onJumpToTrajectoryEventId={requestJumpToTrajectoryEventId}
+                    />
+                  )}
                 </div>
               ) : (
-                <div style={{ maxHeight: "calc(100vh - 290px)", overflow: "auto" }}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                    {content.markdown ?? ""}
-                  </ReactMarkdown>
-                </div>
+                withInspector(
+                  <div className="max-h-[calc(100vh-290px)] overflow-auto pr-1">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                      {content.markdown ?? ""}
+                    </ReactMarkdown>
+                  </div>
+                )
               )}
             </div>
           ) : null}
 
           {selectedId && content?.kind === "trajectory" && content.source === "windsurf" ? (
             <div>
-              <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-                <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-                  <span className="pill">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>
                     steps{" "}
                     {typeof content.stepOffset === "number"
                       ? `${content.stepOffset}${typeof content.numTotalSteps === "number" ? ` / ${content.numTotalSteps}` : ""}`
                       : content.summary.totalSteps}
-                  </span>
-                  <span className="pill">events {content.summary.renderedEvents}</span>
-                  <span className="pill">thoughts {content.summary.thoughtCount}</span>
-                  <span className="pill">tools {content.summary.toolCount + content.summary.commandCount}</span>
-                  {content.summary.errorCount > 0 ? <span className="pill" data-tone="bad">errors {content.summary.errorCount}</span> : null}
+                  </Badge>
+                  <Badge>events {content.summary.renderedEvents}</Badge>
+                  <Badge>thoughts {content.summary.thoughtCount}</Badge>
+                  <Badge>tools {content.summary.toolCount + content.summary.commandCount}</Badge>
+                  {content.summary.errorCount > 0 ? (
+                    <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
+                      errors {content.summary.errorCount}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
 
               {windsurfView === "trajectory" ? (
                 <div>
-                  <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                    <button
-                      className={`btn ${trajectoryFilters.thought ? "primary" : ""}`}
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant={trajectoryFilters.thought ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought }))}
                     >
                       Thoughts
-                    </button>
-                    <button
-                      className={`btn ${trajectoryFilters.tool ? "primary" : ""}`}
+                    </Button>
+                    <Button
+                      variant={trajectoryFilters.tool ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool }))}
                     >
                       Tools
-                    </button>
-                    <button
-                      className={`btn ${trajectoryFilters.command ? "primary" : ""}`}
+                    </Button>
+                    <Button
+                      variant={trajectoryFilters.command ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command }))}
                     >
                       Commands
-                    </button>
-                    <button
-                      className={`btn ${trajectoryFilters.status ? "primary" : ""}`}
+                    </Button>
+                    <Button
+                      variant={trajectoryFilters.status ? "default" : "outline"}
+                      size="sm"
                       onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status }))}
                     >
                       Status
-                    </button>
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      Groups: {executionGroups.length}
-                    </span>
+                    </Button>
+                    <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
-                  <VirtualizedTrajectoryRows rows={trajectoryRows} onToggleGroup={toggleExecutionGroup} />
+                  {withInspector(
+                    <VirtualizedTrajectoryRows
+                      rows={trajectoryRows}
+                      onToggleGroup={toggleExecutionGroup}
+                      onSelectRow={onSelectRow}
+                      selectedRowId={selectedRowId}
+                      scrollToRowId={scrollToRowId}
+                      onScrolledToRowId={() => setScrollToRowId(null)}
+                      autoOpenDetailsRowId={autoOpenDetailsRowId}
+                      autoOpenDetailsToken={autoOpenDetailsToken}
+                      onAutoOpenedDetails={(rowId, token) => {
+                        if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
+                      }}
+                    />
+                  )}
                 </div>
               ) : (
                 <div>
-                  <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                  <div className="mb-2 text-xs text-muted">
                     Transcript shows user/assistant plus errors. Tools and successful commands are hidden behind a summary row.
                   </div>
-                  <VirtualizedTrajectoryRows rows={transcriptRows} onToggleGroup={toggleExecutionGroup} />
+                  {withInspector(
+                    <VirtualizedTrajectoryRows
+                      rows={transcriptRows}
+                      onToggleGroup={toggleExecutionGroup}
+                      onSelectRow={onSelectRow}
+                      selectedRowId={selectedRowId}
+                      scrollToRowId={scrollToRowId}
+                      onScrolledToRowId={() => setScrollToRowId(null)}
+                      onJumpToTrajectoryEventId={requestJumpToTrajectoryEventId}
+                    />
+                  )}
                 </div>
               )}
 
-              <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-                <button className="btn" onClick={() => loadConversation("windsurf", selectedId, 0, "trajectory")} disabled={loadingContent}>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadConversation("windsurf", selectedId, 0, "trajectory")}
+                  disabled={loadingContent}
+                >
                   Reload
-                </button>
-                <button
-                  className="btn primary"
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
                   onClick={() => loadMoreWindsurfTrajectory()}
                   disabled={loadingContent || (typeof content.numTotalSteps === "number" && typeof content.stepOffset === "number" && content.stepOffset >= content.numTotalSteps)}
                 >
                   Load more
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
 
           {selectedId && content?.kind === "markdown" ? (
-            <div style={{ maxHeight: "calc(100vh - 240px)", overflow: "auto" }}>
+            <div className="max-h-[calc(100vh-240px)] overflow-auto pr-1">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {content.markdown}
               </ReactMarkdown>
@@ -1137,30 +2004,36 @@ export default function HomeClient() {
 
           {selectedId && content?.kind === "chat" ? (
             <div>
-              <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+              <div className="mb-2 text-xs text-muted">
                 Steps loaded: {content.stepOffset}
                 {typeof content.numTotalSteps === "number" ? ` / ${content.numTotalSteps}` : ""}
               </div>
-              <div className="chat" style={{ maxHeight: "calc(100vh - 290px)", overflow: "auto", paddingRight: 4 }}>
+              <div className="flex max-h-[calc(100vh-290px)] flex-col gap-3 overflow-auto pr-1">
                 {content.messages.map((m, idx) => (
                   <ChatMessageView key={idx} message={m} />
                 ))}
               </div>
-              <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-                <button className="btn" onClick={() => loadConversation("windsurf", selectedId, 0)} disabled={loadingContent}>
+              <div className="mt-3 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => loadConversation("windsurf", selectedId, 0)}
+                  disabled={loadingContent}
+                >
                   Reload
-                </button>
-                <button
-                  className="btn primary"
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
                   onClick={() => loadMoreWindsurfChat()}
                   disabled={loadingContent || (typeof content.numTotalSteps === "number" && content.stepOffset >= content.numTotalSteps)}
                 >
                   Load more
-                </button>
+                </Button>
               </div>
             </div>
           ) : null}
-        </div>
+        </Card>
       </div>
     </div>
   );

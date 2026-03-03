@@ -3,7 +3,13 @@
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import type { AppConfig, RootConfig, Source, SourcesStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type ApiConfigResponse = { path: string; config: AppConfig };
 
@@ -17,29 +23,33 @@ function RootRow(props: {
   onRemove(): void;
 }) {
   return (
-    <div className="card" style={{ padding: 12 }}>
-      <div className="split" style={{ gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <div className="mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
-              {props.root.path}
-            </div>
-            <span className="pill">{props.root.id}</span>
+    <Card className="p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 text-xs font-mono break-all">{props.root.path}</div>
+            <Badge className="shrink-0" title={props.root.id}>
+              {props.root.id.slice(0, 8)}
+            </Badge>
           </div>
-          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-            source: <span className="mono">{props.root.source}</span>
+          <div className="mt-1 text-xs text-muted">
+            source: <span className="font-mono">{props.root.source}</span>
           </div>
         </div>
-        <div className="row">
-          <button className={`btn ${props.root.enabled ? "primary" : ""}`} onClick={props.onToggle}>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+          <Button
+            variant={props.root.enabled ? "default" : "outline"}
+            size="sm"
+            onClick={props.onToggle}
+          >
             {props.root.enabled ? "Enabled" : "Disabled"}
-          </button>
-          <button className="btn danger" onClick={props.onRemove}>
+          </Button>
+          <Button variant="destructive" size="sm" onClick={props.onRemove}>
             Remove
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -99,38 +109,44 @@ export default function SettingsClient() {
   }, []);
 
   return (
-    <div className="container">
-      <div className="row" style={{ justifyContent: "space-between", marginBottom: 14 }}>
-        <div className="row">
-          <div style={{ fontSize: 18, fontWeight: 650 }}>Settings</div>
-          <span className="pill" title={configPath}>
-            config.json
-          </span>
+    <div className="mx-auto max-w-[1200px] p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-semibold">Settings</div>
+            <Badge title={configPath}>config.json</Badge>
+          </div>
+          {configPath ? (
+            <div className="mt-1 truncate text-xs text-muted" title={configPath}>
+              {configPath}
+            </div>
+          ) : null}
         </div>
-        <div className="row">
-          <button className="btn" onClick={() => refresh()} disabled={saving}>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => refresh()} disabled={saving}>
             Refresh
-          </button>
-          <Link className="btn" href="/">
-            Back
-          </Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/">Back</Link>
+          </Button>
         </div>
       </div>
 
       {error ? (
-        <div className="bubble system" style={{ borderColor: "rgba(251, 113, 133, 0.55)", color: "rgba(251,113,133,0.95)" }}>
-          {error}
+        <div className="mb-4 rounded-2xl border border-danger/55 bg-danger/10 px-3 py-2 text-sm text-danger">
+          <span className="font-medium">Error:</span> {error}
         </div>
       ) : null}
 
-      <div className="card" style={{ padding: 12, marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Windsurf token override (fallback)</div>
-        <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-          Attach mode prefers reading <span className="mono">--csrf_token</span> from the Windsurf LS process. If that fails on your system, you can paste the token here.
+      <Card className="mb-4 p-3">
+        <div className="mb-2 text-sm font-semibold">Windsurf token override (fallback)</div>
+        <div className="mb-3 text-xs text-muted">
+          Attach mode prefers reading <span className="font-mono">--csrf_token</span> from the Windsurf LS process.
+          If that fails on your system, you can paste the token here.
         </div>
-        <div className="row">
-          <input
-            className="input mono"
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input
+            className="font-mono"
             placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
             value={config?.windsurf.csrfTokenOverride ?? ""}
             onChange={(e) => {
@@ -140,22 +156,39 @@ export default function SettingsClient() {
               setConfig(next);
             }}
           />
-          <button className="btn primary" disabled={!config || saving} onClick={() => config && save(config)}>
+          <Button
+            className="sm:shrink-0"
+            variant="default"
+            size="sm"
+            disabled={!config || saving}
+            onClick={() => config && save(config)}
+          >
             Save
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="card" style={{ padding: 12, marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Add root</div>
-        <div className="row">
-          <select className="input" style={{ maxWidth: 180 }} value={newSource} onChange={(e) => setNewSource(e.target.value as Source)}>
+      <Card className="mb-4 p-3">
+        <div className="mb-2 text-sm font-semibold">Add root</div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select
+            className="sm:max-w-44"
+            value={newSource}
+            onChange={(e) => setNewSource(e.target.value as Source)}
+          >
             <option value="antigravity">antigravity</option>
             <option value="windsurf">windsurf</option>
-          </select>
-          <input className="input mono" placeholder="e.g. ~/.gemini/antigravity/conversations" value={newPath} onChange={(e) => setNewPath(e.target.value)} />
-          <button
-            className="btn primary"
+          </Select>
+          <Input
+            className="font-mono"
+            placeholder="e.g. ~/.gemini/antigravity/conversations"
+            value={newPath}
+            onChange={(e) => setNewPath(e.target.value)}
+          />
+          <Button
+            className="sm:shrink-0"
+            variant="default"
+            size="sm"
             disabled={!config || saving || !newPath.trim()}
             onClick={() => {
               if (!config) return;
@@ -171,14 +204,14 @@ export default function SettingsClient() {
             }}
           >
             Add
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="row" style={{ gap: 16, alignItems: "flex-start" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 650, marginBottom: 10 }}>Antigravity roots</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
+          <div className="mb-2 text-sm font-semibold">Antigravity roots</div>
+          <div className="flex flex-col gap-2">
             {rootsBySource.antigravity.map((r) => (
               <RootRow
                 key={r.id}
@@ -198,13 +231,13 @@ export default function SettingsClient() {
                 }}
               />
             ))}
-            {rootsBySource.antigravity.length === 0 ? <div className="muted">No roots.</div> : null}
+            {rootsBySource.antigravity.length === 0 ? <div className="text-sm text-muted">No roots.</div> : null}
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 650, marginBottom: 10 }}>Windsurf roots</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="min-w-0">
+          <div className="mb-2 text-sm font-semibold">Windsurf roots</div>
+          <div className="flex flex-col gap-2">
             {rootsBySource.windsurf.map((r) => (
               <RootRow
                 key={r.id}
@@ -224,16 +257,17 @@ export default function SettingsClient() {
                 }}
               />
             ))}
-            {rootsBySource.windsurf.length === 0 ? <div className="muted">No roots.</div> : null}
+            {rootsBySource.windsurf.length === 0 ? <div className="text-sm text-muted">No roots.</div> : null}
           </div>
         </div>
       </div>
 
-      <div className="card" style={{ padding: 12, marginTop: 16 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Diagnostics</div>
-        <pre style={{ margin: 0, overflowX: "auto" }}>{JSON.stringify(status, null, 2)}</pre>
-      </div>
+      <Card className="mt-4 p-3">
+        <div className="mb-2 text-sm font-semibold">Diagnostics</div>
+        <pre className={cn("m-0 max-w-full overflow-x-auto text-xs", "font-mono")}>
+          {JSON.stringify(status, null, 2)}
+        </pre>
+      </Card>
     </div>
   );
 }
-

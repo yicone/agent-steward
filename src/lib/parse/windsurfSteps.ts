@@ -7,6 +7,19 @@ function asNonEmptyString(value: unknown): string | null {
   return trimmed.length ? trimmed : null;
 }
 
+function pickObject<T extends object = Record<string, any>>(value: unknown): T | null {
+  if (!value || typeof value !== "object") return null;
+  return value as T;
+}
+
+function getField(obj: unknown, camel: string, snake?: string): unknown {
+  const o = pickObject(obj);
+  if (!o) return undefined;
+  if (camel in o) return (o as any)[camel];
+  if (snake && snake in o) return (o as any)[snake];
+  return undefined;
+}
+
 const STEP_TYPE_PREFIX = "CORTEX_STEP_TYPE_";
 
 function stepTypeLabel(stepType: string): string {
@@ -23,11 +36,15 @@ function truncate(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars)}\n\n[truncated]`;
 }
 
-export function normalizeWindsurfStepsToTrajectoryEvents(steps: unknown[]): {
+export function normalizeWindsurfStepsToTrajectoryEvents(
+  steps: unknown[],
+  opts?: { includeCleared?: boolean }
+): {
   events: TrajectoryEvent[];
   summary: TrajectorySummary;
 } {
   const events: TrajectoryEvent[] = [];
+  const includeCleared = opts?.includeCleared ?? false;
 
   for (let index = 0; index < steps.length; index += 1) {
     const step = steps[index];
@@ -42,6 +59,10 @@ export function normalizeWindsurfStepsToTrajectoryEvents(steps: unknown[]): {
     const createdAt = asNonEmptyString(s?.metadata?.createdAt) ?? undefined;
     const completedAt = asNonEmptyString(s?.metadata?.completedAt) ?? undefined;
     const executionId = asNonEmptyString(s?.metadata?.executionId) ?? undefined;
+
+    // Windsurf can keep the step metadata but clear the payload (especially after restarts).
+    // The app typically hides these, so we skip them for a closer match.
+    if (status === "CORTEX_STEP_STATUS_CLEARED" && !includeCleared) continue;
 
     const push = (
       kind: TrajectoryEvent["kind"],
@@ -63,26 +84,31 @@ export function normalizeWindsurfStepsToTrajectoryEvents(steps: unknown[]): {
       });
     };
 
-    const userInput = s.userInput;
+    const userInput = getField(s, "userInput", "user_input");
     if (userInput && typeof userInput === "object") {
-      const query = asNonEmptyString(userInput.query);
-      const userResponse = asNonEmptyString(userInput.userResponse);
-      const text = query ?? userResponse;
+      const query = asNonEmptyString(getField(userInput, "query") ?? (userInput as any).query);
+      const userResponse = asNonEmptyString(getField(userInput, "userResponse", "user_response") ?? (userInput as any).userResponse);
+      const text =
+        query ??
+        userResponse ??
+        asNonEmptyString(getField(userInput, "text") ?? (userInput as any).text) ??
+        asNonEmptyString(getField(userInput, "content") ?? (userInput as any).content) ??
+        asNonEmptyString(getField(userInput, "message") ?? (userInput as any).message);
       if (text) {
         push("user", "User", { text });
         continue;
       }
     }
 
-    const plannerResponse = s.plannerResponse;
+    const plannerResponse = getField(s, "plannerResponse", "planner_response");
     if (plannerResponse && typeof plannerResponse === "object") {
-      const thinking = asNonEmptyString(plannerResponse.thinking);
+      const thinking = asNonEmptyString(getField(plannerResponse, "thinking") ?? (plannerResponse as any).thinking);
       if (thinking) {
         push("thought", "Thinking", { text: truncate(thinking, 12000) });
       }
 
-      const modified = asNonEmptyString(plannerResponse.modifiedResponse);
-      const response = asNonEmptyString(plannerResponse.response);
+      const modified = asNonEmptyString(getField(plannerResponse, "modifiedResponse", "modified_response") ?? (plannerResponse as any).modifiedResponse);
+      const response = asNonEmptyString(getField(plannerResponse, "response") ?? (plannerResponse as any).response);
       const text = modified ?? response;
       if (text) {
         push("assistant", "Assistant", { text: truncate(text, 16000) });
@@ -90,10 +116,13 @@ export function normalizeWindsurfStepsToTrajectoryEvents(steps: unknown[]): {
       }
     }
 
-    const systemMessage = s.systemMessage;
+    const systemMessage = getField(s, "systemMessage", "system_message");
     if (systemMessage && typeof systemMessage === "object") {
-      const message = asNonEmptyString(systemMessage.message);
-      const text = message ?? asNonEmptyString(systemMessage.text) ?? asNonEmptyString(systemMessage.content);
+      const message = asNonEmptyString(getField(systemMessage, "message") ?? (systemMessage as any).message);
+      const text =
+        message ??
+        asNonEmptyString(getField(systemMessage, "text") ?? (systemMessage as any).text) ??
+        asNonEmptyString(getField(systemMessage, "content") ?? (systemMessage as any).content);
       if (text) {
         push("status", "System", { text: truncate(text, 8000) });
         continue;
@@ -109,7 +138,7 @@ export function normalizeWindsurfStepsToTrajectoryEvents(steps: unknown[]): {
   return { events, summary: summarizeTrajectoryEvents(events, steps.length) };
 }
 
-export function normalizeWindsurfStepsToMessages(steps: unknown[]): ChatMessage[] {
-  const { events } = normalizeWindsurfStepsToTrajectoryEvents(steps);
+export function normalizeWindsurfStepsToMessages(steps: unknown[], opts?: { includeCleared?: boolean }): ChatMessage[] {
+  const { events } = normalizeWindsurfStepsToTrajectoryEvents(steps, opts);
   return trajectoryEventsToChatMessages(events);
 }

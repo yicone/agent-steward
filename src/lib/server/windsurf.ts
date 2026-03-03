@@ -207,9 +207,10 @@ export async function getWindsurfChat(params: {
   config: AppConfig;
   cascadeId: string;
   stepOffset: number;
+  includeCleared?: boolean;
 }): Promise<{ messages: ChatMessage[]; nextStepOffset: number; numTotalSteps?: number }> {
   const { steps, nextStepOffset, numTotalSteps } = await getWindsurfStepChunk(params);
-  const messages = normalizeWindsurfStepsToMessages(steps);
+  const messages = normalizeWindsurfStepsToMessages(steps, { includeCleared: params.includeCleared });
 
   return {
     messages,
@@ -222,9 +223,10 @@ export async function getWindsurfTrajectory(params: {
   config: AppConfig;
   cascadeId: string;
   stepOffset: number;
+  includeCleared?: boolean;
 }): Promise<{ events: TrajectoryEvent[]; summary: TrajectorySummary; nextStepOffset: number; numTotalSteps?: number }> {
   const { steps, nextStepOffset, numTotalSteps } = await getWindsurfStepChunk(params);
-  const { events } = normalizeWindsurfStepsToTrajectoryEvents(steps);
+  const { events } = normalizeWindsurfStepsToTrajectoryEvents(steps, { includeCleared: params.includeCleared });
   const totalSteps = typeof numTotalSteps === "number" ? numTotalSteps : nextStepOffset;
   const summary = summarizeTrajectoryEvents(events, totalSteps);
   return {
@@ -239,6 +241,7 @@ async function getWindsurfStepChunk(params: {
   config: AppConfig;
   cascadeId: string;
   stepOffset: number;
+  includeCleared?: boolean;
 }): Promise<{ steps: unknown[]; nextStepOffset: number; numTotalSteps?: number }> {
   const { config, cascadeId, stepOffset } = params;
   const conn = await resolveWindsurfConnection(config);

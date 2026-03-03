@@ -38,10 +38,12 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
 
     const stepOffset = Math.max(Number(url.searchParams.get("stepOffset") ?? "0"), 0);
     const view = url.searchParams.get("view");
+    const includeCleared =
+      url.searchParams.get("includeCleared") === "1" || url.searchParams.get("includeCleared") === "true";
     const { config } = await readConfig();
 
     if (view === "trajectory") {
-      const trajectory = await getWindsurfTrajectory({ config, cascadeId: id, stepOffset });
+      const trajectory = await getWindsurfTrajectory({ config, cascadeId: id, stepOffset, includeCleared });
       const out: ConversationContent = {
         kind: "trajectory",
         source: "windsurf",
@@ -53,7 +55,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       return NextResponse.json(out);
     }
 
-    const chat = await getWindsurfChat({ config, cascadeId: id, stepOffset });
+    const chat = await getWindsurfChat({ config, cascadeId: id, stepOffset, includeCleared });
     const out: ConversationContent = {
       kind: "chat",
       messages: chat.messages,
