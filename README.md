@@ -38,6 +38,7 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 
 - Scan and list `.pb` session files (default directories + custom roots from Settings)
 - Antigravity:
+  - list enrichment: load `title/cwd` from Antigravity VS Code global state (`state.vscdb`) for better coverage vs LS-only summaries
   - fetch `GetCascadeTrajectory` and normalize steps into a unified event model
   - default Viewer mode: Transcript (user/assistant + errors; tools/commands summarized)
   - group trajectory events by `executionId` with collapsible sections
@@ -58,6 +59,7 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 
 - Antigravity: Antigravity must be running (and have started a session at least once). This app attaches to the running language server by parsing Antigravity logs for the LS pid/port, and extracting the CSRF token from process args when possible.
   - Legacy fallback: `~/.gemini/antigravity/daemon/ls_*.json` (may be stale on newer builds).
+- Antigravity: for conversation list `title/cwd`, this app reads `~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb` (VS Code global state) locally.
 - Windsurf: Windsurf must be running (and have started a Cascade session at least once). This app parses the language-server port from Windsurf logs and tries to read `--csrf_token` from process args.
   - If your system cannot read process args, set `csrfTokenOverride` in Settings as a fallback.
 
