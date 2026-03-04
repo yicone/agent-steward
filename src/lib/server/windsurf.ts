@@ -220,7 +220,12 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const heartbeatOk = heartbeatWithToken || heartbeatWithoutToken;
   const attached = heartbeatOk;
-  const tokenRequired = heartbeatOk ? !heartbeatWithoutToken : !csrfToken;
+  // When both probes fail with a token present, token requirement is unknown (undefined).
+  const tokenRequired: boolean | undefined = heartbeatOk
+    ? !heartbeatWithoutToken
+    : csrfToken
+      ? undefined
+      : false;
 
   let lastError: string | undefined;
   if (!attached) {
@@ -231,9 +236,11 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const recommendedAction = attached
     ? "Connection healthy."
-    : tokenRequired
+    : tokenRequired === true
       ? "Set Windsurf CSRF token override in Settings if process args are unreadable."
-      : "Keep Windsurf open and start/restart a Cascade session, then refresh.";
+      : tokenRequired === false
+        ? "Keep Windsurf open and start/restart a Cascade session, then refresh."
+        : "CSRF token may be invalid or expired. First try refreshing the override token in Settings; if that fails, restart a Cascade session.";
 
   return {
     attached,
