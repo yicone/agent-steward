@@ -295,7 +295,7 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
     }
   }
 
-  if (bestLogResult || logCandidates.length > 0) {
+  if (bestLogResult) {
     const recommendedAction = !bestLogPidAlive
       ? "Keep Antigravity open and start a session to relaunch the language server."
       : "Keep Antigravity running and start/restart a session, then refresh.";
