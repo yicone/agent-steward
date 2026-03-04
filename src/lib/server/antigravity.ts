@@ -268,7 +268,7 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
     try {
       const logText = await fs.readFile(c.p, "utf-8").catch(() => "");
       const startInfo = extractLatestAntigravityStartInfoFromLog(logText);
-      if (startInfo) {
+      if (startInfo && !bestLogResult) {
         bestLogPid = startInfo.pid;
         bestLogPidAlive = isProcessAlive(startInfo.pid);
       }
