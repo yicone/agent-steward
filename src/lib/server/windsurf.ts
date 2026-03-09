@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import type { AppConfig, ChatMessage, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
 import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
+import { getWindsurfRecommendedAction, inferWindsurfTokenRequired } from "@/lib/parse/windsurfStatus";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
@@ -220,7 +221,12 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const heartbeatOk = heartbeatWithToken || heartbeatWithoutToken;
   const attached = heartbeatOk;
-  const tokenRequired = heartbeatOk ? !heartbeatWithoutToken : !csrfToken;
+  // Keep token inference centralized and unit-tested to avoid flip-flop regressions in remediation routing.
+  const tokenRequired = inferWindsurfTokenRequired({
+    heartbeatOk,
+    heartbeatWithoutToken,
+    csrfTokenPresent: Boolean(csrfToken)
+  });
 
   let lastError: string | undefined;
   if (!attached) {
@@ -229,11 +235,7 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
       : "Missing Windsurf CSRF token and heartbeat probe failed without token.";
   }
 
-  const recommendedAction = attached
-    ? "Connection healthy."
-    : tokenRequired
-      ? "Set Windsurf CSRF token override in Settings if process args are unreadable."
-      : "Keep Windsurf open and start/restart a Cascade session, then refresh.";
+  const recommendedAction = getWindsurfRecommendedAction({ attached, tokenRequired });
 
   return {
     attached,
