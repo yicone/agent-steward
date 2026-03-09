@@ -7,6 +7,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
+import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
 import { extractLatestAntigravityStartInfoFromLog } from "@/lib/parse/antigravityLog";
 import { normalizeAntigravityTrajectoryToEvents } from "@/lib/parse/antigravitySteps";
 import type { SourcesStatus } from "@/lib/types";
@@ -141,6 +142,8 @@ async function tryResolveAntigravityFromLogFile(logPath: string): Promise<{
   httpPort?: number;
   httpsPort?: number;
   csrfToken: string;
+  csrfTokenSource: "ps_args" | "none";
+  tokenRequired: boolean;
   baseUrl: string;
   dispatcher?: unknown;
   heartbeatOk: boolean;
@@ -152,41 +155,48 @@ async function tryResolveAntigravityFromLogFile(logPath: string): Promise<{
 
   const cmd = await readProcessCommandLine(startInfo.pid);
   const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
-  const csrfToken = tokenFromPs ?? "";
+  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs });
+  const csrfToken = tokenInfo.token ?? "";
 
   const httpBaseUrl = startInfo.httpPort ? `http://127.0.0.1:${startInfo.httpPort}` : null;
   const httpsBaseUrl = startInfo.httpsPort ? `https://127.0.0.1:${startInfo.httpsPort}` : null;
 
   // Prefer HTTP to avoid TLS complexity.
   if (httpBaseUrl) {
-    const ok =
-      (csrfToken ? await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl, csrfToken }) : false) ||
-      (await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl }));
+    const okWithToken = csrfToken ? await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl, csrfToken }) : false;
+    const okWithoutToken = await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl });
+    const heartbeatOk = okWithToken || okWithoutToken;
     return {
       logPath,
       pid: startInfo.pid,
       httpPort: startInfo.httpPort,
       httpsPort: startInfo.httpsPort,
       csrfToken,
+      csrfTokenSource: tokenInfo.source === "ps_args" ? "ps_args" : "none",
+      tokenRequired: heartbeatOk ? !okWithoutToken : !csrfToken,
       baseUrl: httpBaseUrl,
-      heartbeatOk: ok
+      heartbeatOk
     };
   }
 
   if (httpsBaseUrl) {
     const dispatcher = await getInsecureLocalhostDispatcher();
-    const ok =
-      (csrfToken ? await probeAntigravityHeartbeat({ baseUrl: httpsBaseUrl, csrfToken, dispatcher: dispatcher ?? undefined }) : false) ||
-      (await probeAntigravityHeartbeat({ baseUrl: httpsBaseUrl, dispatcher: dispatcher ?? undefined }));
+    const okWithToken = csrfToken
+      ? await probeAntigravityHeartbeat({ baseUrl: httpsBaseUrl, csrfToken, dispatcher: dispatcher ?? undefined })
+      : false;
+    const okWithoutToken = await probeAntigravityHeartbeat({ baseUrl: httpsBaseUrl, dispatcher: dispatcher ?? undefined });
+    const heartbeatOk = okWithToken || okWithoutToken;
     return {
       logPath,
       pid: startInfo.pid,
       httpPort: startInfo.httpPort,
       httpsPort: startInfo.httpsPort,
       csrfToken,
+      csrfTokenSource: tokenInfo.source === "ps_args" ? "ps_args" : "none",
+      tokenRequired: heartbeatOk ? !okWithoutToken : !csrfToken,
       baseUrl: httpsBaseUrl,
       dispatcher: dispatcher ?? undefined,
-      heartbeatOk: ok
+      heartbeatOk
     };
   }
 
@@ -251,18 +261,32 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
     | Awaited<ReturnType<typeof tryResolveAntigravityFromLogFile>>
     | null = null;
   let bestLogError: string | undefined;
+  let bestLogPid: number | undefined;
+  let bestLogPidAlive = false;
 
   for (const c of logCandidates) {
     try {
+      const logText = await fs.readFile(c.p, "utf-8").catch(() => "");
+      const startInfo = extractLatestAntigravityStartInfoFromLog(logText);
+      if (startInfo && !bestLogResult) {
+        bestLogPid = startInfo.pid;
+        bestLogPidAlive = isProcessAlive(startInfo.pid);
+      }
       const res = await tryResolveAntigravityFromLogFile(c.p);
       if (!bestLogResult) bestLogResult = res;
       if (res.heartbeatOk) {
         return {
           discovered: true,
+          attachMethod: "log",
           discoveryPath: res.logPath,
+          pid: res.pid,
+          pidAlive: true,
           httpPort: res.httpPort,
           httpsPort: res.httpsPort,
           csrfTokenPresent: Boolean(res.csrfToken),
+          csrfTokenSource: res.csrfTokenSource,
+          tokenRequired: res.tokenRequired,
+          heartbeatOk: true,
           reachable: true
         };
       }
@@ -272,31 +296,50 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
   }
 
   if (bestLogResult) {
-    const tokenHint = bestLogResult.csrfToken
+    const recommendedAction = !bestLogPidAlive
+      ? "Keep Antigravity open and start a session to relaunch the language server."
+      : "Keep Antigravity running and start/restart a session, then refresh.";
+    const tokenHint = bestLogResult?.csrfToken
       ? "Token present but Heartbeat failed."
-      : "Missing CSRF token or Heartbeat failed. Ensure we can read LS process args; if not, we may need a token override.";
+      : "Token missing from process args (or Heartbeat failed).";
     return {
       discovered: true,
-      discoveryPath: bestLogResult.logPath,
-      httpPort: bestLogResult.httpPort,
-      httpsPort: bestLogResult.httpsPort,
-      csrfTokenPresent: Boolean(bestLogResult.csrfToken),
+      attachMethod: "log",
+      discoveryPath: bestLogResult?.logPath ?? logCandidates[0]?.p,
+      pid: bestLogResult?.pid ?? bestLogPid,
+      pidAlive: bestLogPidAlive,
+      httpPort: bestLogResult?.httpPort,
+      httpsPort: bestLogResult?.httpsPort,
+      csrfTokenPresent: Boolean(bestLogResult?.csrfToken),
+      csrfTokenSource: bestLogResult?.csrfTokenSource ?? "none",
+      tokenRequired: bestLogResult?.tokenRequired ?? true,
+      heartbeatOk: false,
       reachable: false,
-      error: `${tokenHint}${bestLogError ? ` (${bestLogError})` : ""}`
+      recommendedAction,
+      lastError: bestLogError,
+      error: `${tokenHint} ${recommendedAction}${bestLogError ? ` (${bestLogError})` : ""}`
     };
   }
 
   // Fallback to legacy discovery file mechanism.
   const found = await findLatestAntigravityDiscovery();
-  if (!found) return { discovered: false, error: "No Antigravity log or discovery file found." };
+  if (!found) {
+    const recommendedAction = "Open Antigravity and start a session so logs/discovery are generated.";
+    return {
+      discovered: false,
+      attachMethod: "legacy_discovery",
+      csrfTokenSource: "none",
+      recommendedAction,
+      lastError: "No Antigravity log or discovery file found.",
+      error: `No Antigravity log or discovery file found. ${recommendedAction}`
+    };
+  }
 
   const { discoveryPath, discovery } = found;
   const httpBaseUrl = discovery.httpPort ? `http://127.0.0.1:${discovery.httpPort}` : null;
   const httpsBaseUrl = discovery.httpsPort ? `https://127.0.0.1:${discovery.httpsPort}` : null;
 
   let reachable = false;
-  let lastError: string | undefined;
-
   if (httpBaseUrl) reachable = await probeAntigravityHeartbeat({ baseUrl: httpBaseUrl, csrfToken: discovery.csrfToken });
   if (!reachable && httpsBaseUrl) {
     const dispatcher = await getInsecureLocalhostDispatcher();
@@ -307,20 +350,34 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
     });
   }
 
+  const pidAlive = isProcessAlive(discovery.pid);
+  const tokenRequired = reachable ? Boolean(discovery.csrfToken) : true;
+  const recommendedAction = !pidAlive
+    ? "Keep Antigravity open and start a session to relaunch the language server."
+    : "Keep Antigravity running and start/restart a session, then refresh.";
+
+  let lastError: string | undefined;
   if (!reachable) {
-    lastError = !isProcessAlive(discovery.pid)
-      ? "Antigravity discovery is stale (language server pid not running). Keep Antigravity open and start a session to relaunch the daemon."
+    lastError = !pidAlive
+      ? "Antigravity discovery is stale (language server pid not running)."
       : "Antigravity discovery found but language server not reachable.";
   }
 
   return {
     discovered: true,
+    attachMethod: "legacy_discovery",
     discoveryPath,
+    pid: discovery.pid,
+    pidAlive,
     httpPort: discovery.httpPort,
     httpsPort: discovery.httpsPort,
     csrfTokenPresent: Boolean(discovery.csrfToken),
+    csrfTokenSource: classifyCsrfTokenSource({ discoveryToken: discovery.csrfToken }).source,
+    tokenRequired,
+    heartbeatOk: reachable,
     reachable,
-    ...(lastError ? { error: lastError } : {})
+    recommendedAction,
+    ...(lastError ? { lastError, error: `${lastError} ${recommendedAction}` } : {})
   };
 }
 

@@ -15,14 +15,16 @@ export async function GET() {
   try {
     antigravity = await getAntigravityStatus();
   } catch (e) {
-    antigravity = { discovered: false, error: e instanceof Error ? e.message : String(e) };
+    const message = e instanceof Error ? e.message : String(e);
+    antigravity = { discovered: false, attachMethod: "legacy_discovery", error: message, lastError: message };
   }
 
   let windsurf: SourcesStatus["windsurf"];
   try {
     windsurf = await getWindsurfStatus(config);
   } catch (e) {
-    windsurf = { attached: false, error: e instanceof Error ? e.message : String(e) };
+    const message = e instanceof Error ? e.message : String(e);
+    windsurf = { attached: false, attachMethod: "log", error: message, lastError: message };
   }
 
   const status: SourcesStatus = { antigravity, windsurf };
