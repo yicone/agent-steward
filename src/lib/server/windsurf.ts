@@ -221,11 +221,12 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
   const heartbeatOk = heartbeatWithToken || heartbeatWithoutToken;
   const attached = heartbeatOk;
   // When both probes fail with a token present, token requirement is unknown (undefined).
+  // When both probes fail and no token is available, treat as token-required (discovery/override likely failed).
   const tokenRequired: boolean | undefined = heartbeatOk
     ? !heartbeatWithoutToken
     : csrfToken
       ? undefined
-      : false;
+      : true;
 
   let lastError: string | undefined;
   if (!attached) {
