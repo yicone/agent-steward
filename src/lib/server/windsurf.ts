@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import type { AppConfig, ChatMessage, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
 import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
+import { getWindsurfRecommendedAction, inferWindsurfTokenRequired } from "@/lib/parse/windsurfStatus";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
@@ -220,13 +221,12 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const heartbeatOk = heartbeatWithToken || heartbeatWithoutToken;
   const attached = heartbeatOk;
-  // When both probes fail with a token present, token requirement is unknown (undefined).
-  // When both probes fail and no token is available, treat as token-required (discovery/override likely failed).
-  const tokenRequired: boolean | undefined = heartbeatOk
-    ? !heartbeatWithoutToken
-    : csrfToken
-      ? undefined
-      : true;
+  // Keep token inference centralized and unit-tested to avoid flip-flop regressions in remediation routing.
+  const tokenRequired = inferWindsurfTokenRequired({
+    heartbeatOk,
+    heartbeatWithoutToken,
+    csrfTokenPresent: Boolean(csrfToken)
+  });
 
   let lastError: string | undefined;
   if (!attached) {
@@ -235,13 +235,7 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
       : "Missing Windsurf CSRF token and heartbeat probe failed without token.";
   }
 
-  const recommendedAction = attached
-    ? "Connection healthy."
-    : tokenRequired === true
-      ? "Set Windsurf CSRF token override in Settings if process args are unreadable."
-      : tokenRequired === false
-        ? "Keep Windsurf open and start/restart a Cascade session, then refresh."
-        : "CSRF token may be invalid or expired. First try refreshing the override token in Settings; if that fails, restart a Cascade session.";
+  const recommendedAction = getWindsurfRecommendedAction({ attached, tokenRequired });
 
   return {
     attached,
