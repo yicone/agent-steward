@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { JsonViewer } from "@/components/JsonViewer";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
@@ -847,6 +848,24 @@ function InspectorPanel(props: {
     }
   }, []);
 
+  const downloadJson = useCallback(
+    (filename: string, data: unknown) => {
+      try {
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 100);
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
   const Field = ({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) => (
     <div className="flex gap-2">
       <div className="w-28 shrink-0 text-xs text-muted">{label}</div>
@@ -860,11 +879,18 @@ function InspectorPanel(props: {
     </pre>
   );
 
+  const canDownload = mode === "event" && event != null;
+
   return (
     <Card className="min-w-0 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-sm font-semibold">Inspector</div>
         <div className="flex items-center gap-2">
+          {canDownload && (
+            <Button variant="ghost" size="sm" onClick={() => downloadJson(`event-${event.id}.json`, event)} title="Download event as JSON">
+              Download JSON
+            </Button>
+          )}
           <Button variant="ghost" size="sm" onClick={onToggleWrapText}>
             {wrapText ? "No wrap" : "Wrap"}
           </Button>
@@ -913,20 +939,13 @@ function InspectorPanel(props: {
             {"title" in message && message.title ? <Field label="title" value={message.title} mono /> : null}
             {"payload" in message && message.payload ? (
               <div>
-                {(() => {
-                  const payloadText = JSON.stringify(message.payload, null, 2);
-                  return (
-                    <>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs text-muted">payload</div>
-                        <Button variant="ghost" size="sm" onClick={() => copy("message-payload", payloadText)}>
-                          {copiedKey === "message-payload" ? "Copied" : "Copy"}
-                        </Button>
-                      </div>
-                      <Pre text={payloadText} />
-                    </>
-                  );
-                })()}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs text-muted">payload</div>
+                  <Button variant="ghost" size="sm" onClick={() => copy("message-payload", JSON.stringify(message.payload, null, 2))}>
+                    {copiedKey === "message-payload" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <JsonViewer data={message.payload} />
               </div>
             ) : null}
             {"text" in message && message.text ? (
@@ -999,20 +1018,13 @@ function InspectorPanel(props: {
           ) : null}
           {event.toolCalls?.length ? (
             <div>
-              {(() => {
-                const toolCallsText = JSON.stringify(event.toolCalls, null, 2);
-                return (
-                  <>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-muted">toolCalls</div>
-                      <Button variant="ghost" size="sm" onClick={() => copy("event-toolCalls", toolCallsText)}>
-                        {copiedKey === "event-toolCalls" ? "Copied" : "Copy"}
-                      </Button>
-                    </div>
-                    <Pre text={toolCallsText} />
-                  </>
-                );
-              })()}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-muted">toolCalls</div>
+                <Button variant="ghost" size="sm" onClick={() => copy("event-toolCalls", JSON.stringify(event.toolCalls, null, 2))}>
+                  {copiedKey === "event-toolCalls" ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              <JsonViewer data={event.toolCalls} />
             </div>
           ) : null}
           {event.output ? (
