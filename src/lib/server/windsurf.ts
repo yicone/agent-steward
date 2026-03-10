@@ -191,7 +191,11 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const pidAlive = isProcessAlive(startInfo.pid);
   if (!pidAlive) {
-    const recommendedAction = getSessionRestartAction({ appName: "Windsurf", sessionName: "Cascade session", pidAlive: false });
+    const recommendedAction = getSessionRestartAction({
+      appName: "Windsurf",
+      sessionName: "Cascade session",
+      pidAlive
+    });
     return {
       attached: false,
       attachMethod: "log",
