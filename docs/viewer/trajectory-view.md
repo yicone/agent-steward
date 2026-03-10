@@ -106,10 +106,13 @@ Default mode: `Transcript`
 Process mode: `Trajectory`
 
 - filter chips by kind (`thought`, `tool`, `command`, `status`)
+- includes an `Only errors` preset that filters to error-like events regardless of kind (e.g., failed commands, error status events) for quick triage
 - grouped by `executionId`, fallback bucket `Ungrouped`
+- Inspector Errors mode groups by execution + kind/stepType and supports prev/next navigation
 - default expansion: latest execution expanded, older groups collapsed
 - long sessions use virtualized rows with dynamic measurement + overscan
 - each event card supports expandable details for `toolCalls` and `output`
+- jump-to-error expands group, switches to trajectory view, scrolls to target row, and applies a temporary yellow highlight ring distinct from the selection ring
 
 For markdown rendering:
 
