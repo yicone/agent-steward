@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import type { AppConfig, ChatMessage, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
 import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
+import { getHeartbeatFailureSummary, getSessionRestartAction } from "@/lib/parse/connectionDiagnostics";
 import { getWindsurfRecommendedAction, inferWindsurfTokenRequired } from "@/lib/parse/windsurfStatus";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
@@ -190,7 +191,11 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const pidAlive = isProcessAlive(startInfo.pid);
   if (!pidAlive) {
-    const recommendedAction = "Keep Windsurf open and start a Cascade session to relaunch the language server.";
+    const recommendedAction = getSessionRestartAction({
+      appName: "Windsurf",
+      sessionName: "Cascade session",
+      pidAlive
+    });
     return {
       attached: false,
       attachMethod: "log",
@@ -230,9 +235,7 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   let lastError: string | undefined;
   if (!attached) {
-    lastError = csrfToken
-      ? "Windsurf heartbeat probe failed with and without CSRF token."
-      : "Missing Windsurf CSRF token and heartbeat probe failed without token.";
+    lastError = getHeartbeatFailureSummary({ appName: "Windsurf", csrfTokenPresent: Boolean(csrfToken) });
   }
 
   const recommendedAction = getWindsurfRecommendedAction({ attached, tokenRequired });

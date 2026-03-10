@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
 import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
 import { extractLatestAntigravityStartInfoFromLog } from "@/lib/parse/antigravityLog";
+import { getHeartbeatFailureSummary, getSessionRestartAction } from "@/lib/parse/connectionDiagnostics";
 import { normalizeAntigravityTrajectoryToEvents } from "@/lib/parse/antigravitySteps";
 import type { SourcesStatus } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
@@ -296,12 +297,15 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
   }
 
   if (bestLogResult) {
-    const recommendedAction = !bestLogPidAlive
-      ? "Keep Antigravity open and start a session to relaunch the language server."
-      : "Keep Antigravity running and start/restart a session, then refresh.";
-    const tokenHint = bestLogResult?.csrfToken
-      ? "Token present but Heartbeat failed."
-      : "Token missing from process args (or Heartbeat failed).";
+    const recommendedAction = getSessionRestartAction({
+      appName: "Antigravity",
+      sessionName: "session",
+      pidAlive: bestLogPidAlive
+    });
+    const heartbeatSummary = getHeartbeatFailureSummary({
+      appName: "Antigravity",
+      csrfTokenPresent: Boolean(bestLogResult?.csrfToken)
+    });
     return {
       discovered: true,
       attachMethod: "log",
@@ -317,7 +321,7 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
       reachable: false,
       recommendedAction,
       lastError: bestLogError,
-      error: `${tokenHint} ${recommendedAction}${bestLogError ? ` (${bestLogError})` : ""}`
+      error: `${heartbeatSummary} ${recommendedAction}${bestLogError ? ` (${bestLogError})` : ""}`
     };
   }
 
@@ -352,9 +356,11 @@ export async function getAntigravityStatus(): Promise<SourcesStatus["antigravity
 
   const pidAlive = isProcessAlive(discovery.pid);
   const tokenRequired = reachable ? Boolean(discovery.csrfToken) : true;
-  const recommendedAction = !pidAlive
-    ? "Keep Antigravity open and start a session to relaunch the language server."
-    : "Keep Antigravity running and start/restart a session, then refresh.";
+  const recommendedAction = getSessionRestartAction({
+    appName: "Antigravity",
+    sessionName: "session",
+    pidAlive
+  });
 
   let lastError: string | undefined;
   if (!reachable) {
