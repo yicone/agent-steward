@@ -46,9 +46,12 @@ function JsonNodeContent({ value, depth }: { value: JsonValue; depth: number }) 
       : Object.entries(value as JsonObject)
     : [];
 
-  const [expanded, setExpanded] = useState(
-    !isObject || entries.length <= AUTO_COLLAPSE_THRESHOLD
-  );
+  const defaultExpanded = !isObject || entries.length <= AUTO_COLLAPSE_THRESHOLD;
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  useEffect(() => {
+    setExpanded(defaultExpanded);
+  }, [defaultExpanded, value]);
 
   useEffect(() => {
     setExpanded(!isObject || entries.length <= AUTO_COLLAPSE_THRESHOLD);
