@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type JsonPrimitive = string | number | boolean | null;
@@ -15,13 +15,12 @@ const AUTO_COLLAPSE_THRESHOLD = 5;
 
 function CopyButton({ getValue }: { getValue: () => string }) {
   const [copied, setCopied] = useState(false);
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      navigator.clipboard.writeText(getValue()).then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 1200);
-      });
+      await navigator.clipboard.writeText(getValue());
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1200);
     } catch {
       // ignore
     }
@@ -50,6 +49,10 @@ function JsonNodeContent({ value, depth }: { value: JsonValue; depth: number }) 
   const [expanded, setExpanded] = useState(
     !isObject || entries.length <= AUTO_COLLAPSE_THRESHOLD
   );
+
+  useEffect(() => {
+    setExpanded(!isObject || entries.length <= AUTO_COLLAPSE_THRESHOLD);
+  }, [value, isObject, entries.length]);
 
   // Primitive
   if (!isObject) {
