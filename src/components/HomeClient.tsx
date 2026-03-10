@@ -1410,7 +1410,7 @@ export default function HomeClient() {
 
   const navigateErrorByOffset = useCallback((offset: number) => {
     if (!errorEvents.length) return;
-    const baseIndex = activeErrorIndex >= 0 ? activeErrorIndex : 0;
+    const baseIndex = activeErrorIndex >= 0 ? activeErrorIndex : (offset >= 0 ? -1 : errorEvents.length);
     const nextIndex = (baseIndex + offset + errorEvents.length) % errorEvents.length;
     const next = errorEvents[nextIndex];
     if (next) jumpToEvent(next);
