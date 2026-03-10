@@ -294,11 +294,13 @@ function MarkdownContent({ text }: { text: string }) {
 function ChatMessageView({
   message,
   selected,
+  highlighted,
   onSelect,
   onJumpToTrajectory
 }: {
   message: ChatMessage;
   selected?: boolean;
+  highlighted?: boolean;
   onSelect?(): void;
   onJumpToTrajectory?(): void;
 }) {
@@ -306,7 +308,8 @@ function ChatMessageView({
   const bubbleClass = cn(
     "transition-shadow",
     clickable && "cursor-pointer",
-    selected && "ring-2 ring-accent/40 ring-offset-0"
+    selected && "ring-2 ring-accent/40 ring-offset-0",
+    highlighted && "ring-2 ring-yellow-400/70 ring-offset-0"
   );
 
   if (message.role === "tool") {
@@ -446,11 +449,13 @@ function TranscriptActionsRow(props: {
 function TrajectoryEventView({
   event,
   selected,
+  highlighted,
   onSelect,
   onJumpToTrajectory
 }: {
   event: TrajectoryEvent;
   selected?: boolean;
+  highlighted?: boolean;
   onSelect?(): void;
   onJumpToTrajectory?(): void;
 }) {
@@ -468,7 +473,8 @@ function TrajectoryEventView({
         onJumpToTrajectory && "pr-12",
         "transition-shadow",
         clickable && "cursor-pointer",
-        selected && "ring-2 ring-accent/40 ring-offset-0"
+        selected && "ring-2 ring-accent/40 ring-offset-0",
+        highlighted && "ring-2 ring-yellow-400/70 ring-offset-0"
       )}
       onClick={onSelect}
     >
@@ -794,14 +800,16 @@ function VirtualizedTrajectoryRows(props: {
             ) : row.type === "event" ? (
               <TrajectoryEventView
                 event={row.event}
-                selected={selectedRowId === row.id || highlightedRowId === row.id}
+                selected={selectedRowId === row.id}
+                highlighted={highlightedRowId === row.id}
                 onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
                 onJumpToTrajectory={onJumpToTrajectoryEventId ? () => onJumpToTrajectoryEventId(row.event.id) : undefined}
               />
             ) : row.type === "message" ? (
               <ChatMessageView
                 message={row.message}
-                selected={selectedRowId === row.id || highlightedRowId === row.id}
+                selected={selectedRowId === row.id}
+                highlighted={highlightedRowId === row.id}
                 onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
                 onJumpToTrajectory={
                   onJumpToTrajectoryEventId
@@ -1114,7 +1122,8 @@ export default function HomeClient() {
     thought: true,
     tool: true,
     command: true,
-    status: false
+    status: false,
+    errorsOnly: false
   });
   const [collapsedExecutionGroups, setCollapsedExecutionGroups] = useState<Record<string, boolean>>({});
 
@@ -1159,10 +1168,14 @@ export default function HomeClient() {
       });
       if (!collapsed) {
         for (const event of group.events) {
-          if (event.kind === "thought" && !trajectoryFilters.thought) continue;
-          if (event.kind === "tool" && !trajectoryFilters.tool) continue;
-          if (event.kind === "command" && !trajectoryFilters.command) continue;
-          if (event.kind === "status" && !trajectoryFilters.status) continue;
+          if (trajectoryFilters.errorsOnly) {
+            if (!isErrorLikeTrajectoryEvent(event)) continue;
+          } else {
+            if (event.kind === "thought" && !trajectoryFilters.thought) continue;
+            if (event.kind === "tool" && !trajectoryFilters.tool) continue;
+            if (event.kind === "command" && !trajectoryFilters.command) continue;
+            if (event.kind === "status" && !trajectoryFilters.status) continue;
+          }
           rows.push({
             id: `event:${event.id}`,
             type: "event",
@@ -1376,10 +1389,14 @@ export default function HomeClient() {
         setHighlightedRowId((current) => (current === rowId ? null : current));
       }, 1800);
 
-      if (event.kind === "thought" && !trajectoryFilters.thought) setTrajectoryFilters((prev) => ({ ...prev, thought: true }));
-      if (event.kind === "tool" && !trajectoryFilters.tool) setTrajectoryFilters((prev) => ({ ...prev, tool: true }));
-      if (event.kind === "command" && !trajectoryFilters.command) setTrajectoryFilters((prev) => ({ ...prev, command: true }));
-      if (event.kind === "status" && !trajectoryFilters.status) setTrajectoryFilters((prev) => ({ ...prev, status: true }));
+      if (trajectoryFilters.errorsOnly) {
+        setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: false }));
+      } else {
+        if (event.kind === "thought" && !trajectoryFilters.thought) setTrajectoryFilters((prev) => ({ ...prev, thought: true }));
+        if (event.kind === "tool" && !trajectoryFilters.tool) setTrajectoryFilters((prev) => ({ ...prev, tool: true }));
+        if (event.kind === "command" && !trajectoryFilters.command) setTrajectoryFilters((prev) => ({ ...prev, command: true }));
+        if (event.kind === "status" && !trajectoryFilters.status) setTrajectoryFilters((prev) => ({ ...prev, status: true }));
+      }
 
       if (content?.kind === "trajectory" && content.source === "antigravity" && antigravityView !== "trajectory") {
         setAntigravityView("trajectory");
@@ -1390,7 +1407,6 @@ export default function HomeClient() {
     },
     [content, antigravityView, source, windsurfView, trajectoryFilters]
   );
-
 
   const navigateErrorByOffset = useCallback((offset: number) => {
     if (!errorEvents.length) return;
@@ -1939,35 +1955,35 @@ export default function HomeClient() {
                     <Button
                       variant={trajectoryFilters.thought ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
                     >
                       Thoughts
                     </Button>
                     <Button
                       variant={trajectoryFilters.tool ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
                     >
                       Tools
                     </Button>
                     <Button
                       variant={trajectoryFilters.command ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
                     >
                       Commands
                     </Button>
                     <Button
                       variant={trajectoryFilters.status ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
                     >
                       Status
                     </Button>
                     <Button
-                      variant={!trajectoryFilters.thought && !trajectoryFilters.tool && !trajectoryFilters.command && trajectoryFilters.status ? "default" : "outline"}
+                      variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters({ thought: false, tool: false, command: false, status: true })}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
                     >
                       Only errors
                     </Button>
@@ -2047,35 +2063,35 @@ export default function HomeClient() {
                     <Button
                       variant={trajectoryFilters.thought ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
                     >
                       Thoughts
                     </Button>
                     <Button
                       variant={trajectoryFilters.tool ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
                     >
                       Tools
                     </Button>
                     <Button
                       variant={trajectoryFilters.command ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
                     >
                       Commands
                     </Button>
                     <Button
                       variant={trajectoryFilters.status ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status }))}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
                     >
                       Status
                     </Button>
                     <Button
-                      variant={!trajectoryFilters.thought && !trajectoryFilters.tool && !trajectoryFilters.command && trajectoryFilters.status ? "default" : "outline"}
+                      variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
                       size="sm"
-                      onClick={() => setTrajectoryFilters({ thought: false, tool: false, command: false, status: true })}
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
                     >
                       Only errors
                     </Button>
