@@ -53,6 +53,10 @@ function JsonNodeContent({ value, depth }: { value: JsonValue; depth: number }) 
     setExpanded(defaultExpanded);
   }, [defaultExpanded, value]);
 
+  useEffect(() => {
+    setExpanded(!isObject || entries.length <= AUTO_COLLAPSE_THRESHOLD);
+  }, [value, isObject, entries.length]);
+
   // Primitive
   if (!isObject) {
     const primitive = value as JsonPrimitive;
