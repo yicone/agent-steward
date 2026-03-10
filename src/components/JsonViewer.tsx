@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type JsonPrimitive = string | number | boolean | null;
@@ -140,14 +140,20 @@ function JsonNodeContent({ value, depth }: { value: JsonValue; depth: number }) 
  * Falls back to a plain `<pre>` block when the input is not valid JSON.
  */
 export function JsonViewer({ data, className }: { data: unknown; className?: string }) {
-  let parsed: JsonValue;
-  try {
-    parsed = (typeof data === "string" ? JSON.parse(data) : (data as JsonValue));
-    // Guard against plain primitives passed as the root – still show them.
-    if (parsed !== null && typeof parsed !== "object" && typeof data !== "string") {
-      parsed = data as JsonValue;
+  const parseResult = useMemo(() => {
+    try {
+      let parsed = (typeof data === "string" ? JSON.parse(data) : (data as JsonValue));
+      // Guard against plain primitives passed as the root – still show them.
+      if (parsed !== null && typeof parsed !== "object" && typeof data !== "string") {
+        parsed = data as JsonValue;
+      }
+      return { ok: true as const, parsed };
+    } catch {
+      return { ok: false as const };
     }
-  } catch {
+  }, [data]);
+
+  if (!parseResult.ok) {
     return (
       <pre
         className={cn(
@@ -167,7 +173,7 @@ export function JsonViewer({ data, className }: { data: unknown; className?: str
         className
       )}
     >
-      <JsonNodeContent value={parsed} depth={0} />
+      <JsonNodeContent value={parseResult.parsed} depth={0} />
     </div>
   );
 }
