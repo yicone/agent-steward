@@ -1,5 +1,12 @@
 import type { ChatMessage, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 
+export function isErrorLikeTrajectoryEvent(event: TrajectoryEvent): boolean {
+  if (event.title === "Error") return true;
+  if (event.status?.includes("ERROR")) return true;
+  if (typeof event.exitCode === "number" && event.exitCode !== 0) return true;
+  return false;
+}
+
 export function summarizeTrajectoryEvents(events: TrajectoryEvent[], totalSteps: number): TrajectorySummary {
   const summary: TrajectorySummary = {
     totalSteps,
@@ -18,8 +25,7 @@ export function summarizeTrajectoryEvents(events: TrajectoryEvent[], totalSteps:
     if (event.kind === "thought") summary.thoughtCount += 1;
     if (event.kind === "tool") summary.toolCount += 1;
     if (event.kind === "command") summary.commandCount += 1;
-    if (event.status?.includes("ERROR")) summary.errorCount += 1;
-    if (typeof event.exitCode === "number" && event.exitCode !== 0) summary.errorCount += 1;
+    if (isErrorLikeTrajectoryEvent(event)) summary.errorCount += 1;
   }
 
   return summary;
@@ -44,4 +50,3 @@ export function trajectoryEventsToChatMessages(events: TrajectoryEvent[]): ChatM
   }
   return messages;
 }
-

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
+import { isErrorLikeTrajectoryEvent, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { cn } from "@/lib/utils";
 import type {
   AppConfig,
@@ -59,6 +59,12 @@ type ExecutionGroup = {
   id: string;
   label: string;
   events: TrajectoryEvent[];
+};
+
+type ErrorGroup = {
+  id: string;
+  label: string;
+  errors: TrajectoryEvent[];
 };
 
 type TranscriptHiddenCounts = {
@@ -129,16 +135,9 @@ function computeRowOffsets(rows: TrajectoryRow[], rowHeights: Record<string, num
   return offsets;
 }
 
-function isErrorLikeEvent(event: TrajectoryEvent): boolean {
-  if (event.title === "Error") return true;
-  if (event.status?.includes("ERROR")) return true;
-  if (typeof event.exitCode === "number" && event.exitCode !== 0) return true;
-  return false;
-}
-
 function isKeyStatusLikeEvent(event: TrajectoryEvent): boolean {
   if (event.kind !== "status") return false;
-  if (isErrorLikeEvent(event)) return false;
+  if (isErrorLikeTrajectoryEvent(event)) return false;
   const haystack = `${event.status ?? ""} ${event.text ?? ""}`.toUpperCase();
   if (haystack.includes("RUNNING")) return true;
   if (haystack.includes("CANCEL")) return true;
@@ -614,6 +613,7 @@ function VirtualizedTrajectoryRows(props: {
   onToggleGroup(groupId: string): void;
   onSelectRow?(row: TrajectoryRow): void;
   selectedRowId?: string | null;
+  highlightedRowId?: string | null;
   scrollToRowId?: string | null;
   onScrolledToRowId?(rowId: string): void;
   onJumpToTrajectoryEventId?(eventId: string): void;
@@ -626,6 +626,7 @@ function VirtualizedTrajectoryRows(props: {
     onToggleGroup,
     onSelectRow,
     selectedRowId,
+    highlightedRowId,
     scrollToRowId,
     onScrolledToRowId,
     onJumpToTrajectoryEventId,
@@ -819,14 +820,14 @@ function VirtualizedTrajectoryRows(props: {
             ) : row.type === "event" ? (
               <TrajectoryEventView
                 event={row.event}
-                selected={selectedRowId === row.id}
+                selected={selectedRowId === row.id || highlightedRowId === row.id}
                 onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
                 onJumpToTrajectory={onJumpToTrajectoryEventId ? () => onJumpToTrajectoryEventId(row.event.id) : undefined}
               />
             ) : row.type === "message" ? (
               <ChatMessageView
                 message={row.message}
-                selected={selectedRowId === row.id}
+                selected={selectedRowId === row.id || highlightedRowId === row.id}
                 onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
                 onJumpToTrajectory={
                   onJumpToTrajectoryEventId
@@ -856,12 +857,29 @@ function InspectorPanel(props: {
   event: TrajectoryEvent | null;
   message: ChatMessage | null;
   errorEvents: TrajectoryEvent[];
+  groupedErrorEvents: ErrorGroup[];
+  activeErrorIndex: number;
   wrapText: boolean;
   onToggleWrapText(): void;
   onSelectError(event: TrajectoryEvent): void;
+  onPrevError(): void;
+  onNextError(): void;
   onClose(): void;
 }) {
-  const { mode, event, message, errorEvents, wrapText, onToggleWrapText, onSelectError, onClose } = props;
+  const {
+    mode,
+    event,
+    message,
+    errorEvents,
+    groupedErrorEvents,
+    activeErrorIndex,
+    wrapText,
+    onToggleWrapText,
+    onSelectError,
+    onPrevError,
+    onNextError,
+    onClose
+  } = props;
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const copy = useCallback(async (key: string, value: string) => {
@@ -903,31 +921,55 @@ function InspectorPanel(props: {
 
       {mode === "errors" ? (
         <div>
-          <div className="text-xs text-muted">Errors: {errorEvents.length}</div>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted">
+            <span>Errors: {errorEvents.length}</span>
+            {errorEvents.length ? (
+              <span>
+                {Math.max(activeErrorIndex, 0) + 1} / {errorEvents.length}
+              </span>
+            ) : null}
+          </div>
+          {errorEvents.length ? (
+            <div className="mt-2 flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={onPrevError}>Prev error</Button>
+              <Button variant="outline" size="sm" onClick={onNextError}>Next error</Button>
+            </div>
+          ) : null}
           <div className="mt-2 flex flex-col gap-2">
             {errorEvents.length ? (
-              errorEvents.map((e) => {
-                const time = formatIsoTime(e.completedAt ?? e.createdAt);
-                return (
-                  <button
-                    key={e.id}
-                    className="rounded-lg border border-border bg-background/10 p-2 text-left text-xs hover:border-accent/40"
-                    onClick={() => onSelectError(e)}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 font-medium">
-                        <span className="font-mono">{e.kind}</span> • {e.title}
-                      </div>
-                      <div className="shrink-0 text-muted">{time}</div>
-                    </div>
-                    <div className="mt-1 font-mono text-muted">
-                      {e.stepType}
-                      {typeof e.exitCode === "number" ? ` • exit=${e.exitCode}` : ""}
-                      {e.status ? ` • ${e.status}` : ""}
-                    </div>
-                  </button>
-                );
-              })
+              groupedErrorEvents.map((group) => (
+                <div key={group.id} className="rounded-lg border border-border/70 p-2">
+                  <div className="mb-2 text-xs font-medium text-muted">{group.label} • {group.errors.length}</div>
+                  <div className="flex flex-col gap-2">
+                    {group.errors.map((e) => {
+                      const time = formatIsoTime(e.completedAt ?? e.createdAt);
+                      const isActive = activeErrorIndex >= 0 && errorEvents[activeErrorIndex]?.id === e.id;
+                      return (
+                        <button
+                          key={e.id}
+                          className={cn(
+                            "rounded-lg border border-border bg-background/10 p-2 text-left text-xs hover:border-accent/40",
+                            isActive && "ring-2 ring-accent/40"
+                          )}
+                          onClick={() => onSelectError(e)}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0 font-medium">
+                              <span className="font-mono">{e.kind}</span> • {e.title}
+                            </div>
+                            <div className="shrink-0 text-muted">{time}</div>
+                          </div>
+                          <div className="mt-1 font-mono text-muted">
+                            {e.stepType}
+                            {typeof e.exitCode === "number" ? ` • exit=${e.exitCode}` : ""}
+                            {e.status ? ` • ${e.status}` : ""}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             ) : (
               <div className="text-xs text-muted">No errors detected in this session.</div>
             )}
@@ -1099,6 +1141,7 @@ export default function HomeClient() {
   const [pendingTrajectoryJumpEventId, setPendingTrajectoryJumpEventId] = useState<string | null>(null);
   const [autoOpenDetailsRowId, setAutoOpenDetailsRowId] = useState<string | null>(null);
   const [autoOpenDetailsToken, setAutoOpenDetailsToken] = useState(0);
+  const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -1222,7 +1265,7 @@ export default function HomeClient() {
         }
 
         // Always surface errors (including tool errors) in Transcript mode.
-        if (isErrorLikeEvent(event)) {
+        if (isErrorLikeTrajectoryEvent(event)) {
           rows.push({
             id: `event:${event.id}`,
             type: "event",
@@ -1265,7 +1308,33 @@ export default function HomeClient() {
       return rows;
   }, [content, executionGroups, collapsedExecutionGroups]);
 
-  const errorEvents = useMemo(() => rawTrajectoryEvents.filter(isErrorLikeEvent), [rawTrajectoryEvents]);
+  const errorEvents = useMemo(() => rawTrajectoryEvents.filter(isErrorLikeTrajectoryEvent), [rawTrajectoryEvents]);
+
+  const groupedErrorEvents = useMemo(() => {
+    const groups: ErrorGroup[] = [];
+    const byId = new Map<string, ErrorGroup>();
+    for (const event of errorEvents) {
+      const executionId = event.executionId ?? "ungrouped";
+      const kind = event.kind || "unknown";
+      const stepType = event.stepType || "unknown";
+      const id = `${executionId}:${kind}:${stepType}`;
+      let group = byId.get(id);
+      if (!group) {
+        const executionLabel = executionId === "ungrouped" ? "Ungrouped" : `Execution ${executionId.slice(0, 8)}`;
+        group = { id, label: `${executionLabel} • ${kind}/${stepType}`, errors: [] };
+        byId.set(id, group);
+        groups.push(group);
+      }
+      group.errors.push(event);
+    }
+    return groups;
+  }, [errorEvents]);
+
+  const activeErrorIndex = useMemo(() => {
+    if (!selectedRowId?.startsWith("event:")) return -1;
+    const eventId = selectedRowId.slice("event:".length);
+    return errorEvents.findIndex((event) => event.id === eventId);
+  }, [errorEvents, selectedRowId]);
 
   const eventsById = useMemo(() => {
     const map = new Map<string, TrajectoryEvent>();
@@ -1317,21 +1386,34 @@ export default function HomeClient() {
       setInspectorMode("event");
       setInspectorOpen(true);
       setScrollToRowId(rowId);
+      setHighlightedRowId(rowId);
+      window.setTimeout(() => {
+        setHighlightedRowId((current) => (current === rowId ? null : current));
+      }, 1800);
 
       if (event.kind === "thought" && !trajectoryFilters.thought) setTrajectoryFilters((prev) => ({ ...prev, thought: true }));
       if (event.kind === "tool" && !trajectoryFilters.tool) setTrajectoryFilters((prev) => ({ ...prev, tool: true }));
       if (event.kind === "command" && !trajectoryFilters.command) setTrajectoryFilters((prev) => ({ ...prev, command: true }));
       if (event.kind === "status" && !trajectoryFilters.status) setTrajectoryFilters((prev) => ({ ...prev, status: true }));
 
-      if (content?.kind === "trajectory" && content.source === "antigravity" && antigravityView === "markdown") {
-        setAntigravityView("transcript");
+      if (content?.kind === "trajectory" && content.source === "antigravity" && antigravityView !== "trajectory") {
+        setAntigravityView("trajectory");
       }
-      if (source === "windsurf" && windsurfView === "chat") {
-        setWindsurfView("transcript");
+      if (source === "windsurf" && windsurfView !== "trajectory") {
+        setWindsurfView("trajectory");
       }
     },
     [content, antigravityView, source, windsurfView, trajectoryFilters]
   );
+
+
+  const navigateErrorByOffset = useCallback((offset: number) => {
+    if (!errorEvents.length) return;
+    const baseIndex = activeErrorIndex >= 0 ? activeErrorIndex : 0;
+    const nextIndex = (baseIndex + offset + errorEvents.length) % errorEvents.length;
+    const next = errorEvents[nextIndex];
+    if (next) jumpToEvent(next);
+  }, [activeErrorIndex, errorEvents, jumpToEvent]);
 
   const requestJumpToTrajectoryEventId = useCallback((eventId: string) => {
     setPendingTrajectoryJumpEventId(eventId);
@@ -1573,9 +1655,13 @@ export default function HomeClient() {
       event={selectedEvent}
       message={selectedMessage}
       errorEvents={errorEvents}
+      groupedErrorEvents={groupedErrorEvents}
+      activeErrorIndex={activeErrorIndex}
       wrapText={inspectorWrapText}
       onToggleWrapText={() => setInspectorWrapText((v) => !v)}
       onSelectError={jumpToEvent}
+      onPrevError={() => navigateErrorByOffset(-1)}
+      onNextError={() => navigateErrorByOffset(1)}
       onClose={() => {
         setInspectorOpen(false);
         setSelectedRowId(null);
@@ -1893,6 +1979,13 @@ export default function HomeClient() {
                     >
                       Status
                     </Button>
+                    <Button
+                      variant={!trajectoryFilters.thought && !trajectoryFilters.tool && !trajectoryFilters.command && trajectoryFilters.status ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTrajectoryFilters({ thought: false, tool: false, command: false, status: true })}
+                    >
+                      Only errors
+                    </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
                   {withInspector(
@@ -1901,6 +1994,7 @@ export default function HomeClient() {
                       onToggleGroup={toggleExecutionGroup}
                       onSelectRow={onSelectRow}
                       selectedRowId={selectedRowId}
+                      highlightedRowId={highlightedRowId}
                       scrollToRowId={scrollToRowId}
                       onScrolledToRowId={() => setScrollToRowId(null)}
                       autoOpenDetailsRowId={autoOpenDetailsRowId}
@@ -1922,6 +2016,7 @@ export default function HomeClient() {
                       onToggleGroup={toggleExecutionGroup}
                       onSelectRow={onSelectRow}
                       selectedRowId={selectedRowId}
+                      highlightedRowId={highlightedRowId}
                       scrollToRowId={scrollToRowId}
                       onScrolledToRowId={() => setScrollToRowId(null)}
                       onJumpToTrajectoryEventId={requestJumpToTrajectoryEventId}
@@ -1992,6 +2087,13 @@ export default function HomeClient() {
                     >
                       Status
                     </Button>
+                    <Button
+                      variant={!trajectoryFilters.thought && !trajectoryFilters.tool && !trajectoryFilters.command && trajectoryFilters.status ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTrajectoryFilters({ thought: false, tool: false, command: false, status: true })}
+                    >
+                      Only errors
+                    </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
                   {withInspector(
@@ -2000,6 +2102,7 @@ export default function HomeClient() {
                       onToggleGroup={toggleExecutionGroup}
                       onSelectRow={onSelectRow}
                       selectedRowId={selectedRowId}
+                      highlightedRowId={highlightedRowId}
                       scrollToRowId={scrollToRowId}
                       onScrolledToRowId={() => setScrollToRowId(null)}
                       autoOpenDetailsRowId={autoOpenDetailsRowId}
@@ -2021,6 +2124,7 @@ export default function HomeClient() {
                       onToggleGroup={toggleExecutionGroup}
                       onSelectRow={onSelectRow}
                       selectedRowId={selectedRowId}
+                      highlightedRowId={highlightedRowId}
                       scrollToRowId={scrollToRowId}
                       onScrolledToRowId={() => setScrollToRowId(null)}
                       onJumpToTrajectoryEventId={requestJumpToTrajectoryEventId}
