@@ -14,7 +14,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = (url.searchParams.get("q") ?? "").trim();
   const sourceParam = url.searchParams.get("source");
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "20"), 1), 100);
+  const limitNum = Number(url.searchParams.get("limit") ?? "20");
+  const limit = Number.isNaN(limitNum) ? 20 : Math.min(Math.max(limitNum, 1), 100);
 
   if (!q) {
     return NextResponse.json({ results: [] });
