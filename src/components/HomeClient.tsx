@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { JsonViewer } from "@/components/JsonViewer";
+import { GlobalSearch } from "@/components/GlobalSearch";
 import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
@@ -1481,6 +1482,31 @@ export default function HomeClient() {
     setAutoOpenDetailsToken((prev) => prev + 1);
   }, []);
 
+  const handleGlobalSearchSelect = useCallback(
+    (sessionId: string, sessionSource: Source) => {
+      // Switch source tab if needed
+      if (sessionSource !== source) setSource(sessionSource);
+      // Find the matching list item to set the selectedKey (needed for UI highlight)
+      const match = items.find((it) => it.id === sessionId);
+      const key = match ? `${match.rootId}:${match.id}` : `unknown:${sessionId}`;
+      setSelectedKey(key);
+      setSelectedId(sessionId);
+      setContent(null);
+      setInspectorOpen(false);
+      setSelectedRowId(null);
+      setScrollToRowId(null);
+      setEventSearch("");
+      setAntigravityView("transcript");
+      setWindsurfView("transcript");
+      setCollapsedExecutionGroups({});
+      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "trajectory" : undefined).catch(
+        (e) => setError(e instanceof Error ? e.message : String(e))
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [source, items]
+  );
+
   useEffect(() => {
     if (!pendingTrajectoryJumpEventId) return;
     if (content?.kind !== "trajectory") return;
@@ -1749,6 +1775,7 @@ export default function HomeClient() {
           {windsurfPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <GlobalSearch onSelect={handleGlobalSearchSelect} />
           <Button variant="outline" size="sm" onClick={() => refreshConfigAndStatus()}>
             Refresh
           </Button>

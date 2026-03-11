@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
 
-import type { ConversationContent, Source } from "@/lib/types";
+import type { ConversationContent, Source, TrajectoryEvent } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getWindsurfChat, getWindsurfTrajectory } from "@/lib/server/windsurf";
+import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
+import { indexSession } from "@/lib/server/searchIndex";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isSource(value: string): value is Source {
   return value === "antigravity" || value === "windsurf";
+}
+
+/** Extract cwd from the first event that has one. */
+function extractCwd(events: TrajectoryEvent[]): string {
+  return events.find((e) => e.cwd)?.cwd ?? "";
 }
 
 export async function GET(req: Request, ctx: { params: { source: string; id: string } }) {
@@ -33,6 +40,20 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
         events: antigravity.events,
         summary: antigravity.summary
       };
+      // Index asynchronously — does not block the response.
+      // Fetch title/cwd from the metadata cache (same source as the list view).
+      const eventsSnap = antigravity.events;
+      setImmediate(() => {
+        readConfig()
+          .then(({ config }) => getTrajectoryMetaMapCached({ source: "antigravity", config }))
+          .then((metaMap) => {
+            const meta = metaMap[id] ?? {};
+            indexSession(id, "antigravity", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+          })
+          .catch((err) => {
+            console.warn(`[search] Failed to index antigravity session ${id}:`, err instanceof Error ? err.message : err);
+          });
+      });
       return NextResponse.json(out);
     }
 
@@ -52,6 +73,20 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
         stepOffset: trajectory.nextStepOffset,
         ...(typeof trajectory.numTotalSteps === "number" ? { numTotalSteps: trajectory.numTotalSteps } : {})
       };
+      // Index on first page only (stepOffset === 0) to avoid redundant re-indexing.
+      if (stepOffset === 0) {
+        const eventsSnap = trajectory.events;
+        setImmediate(() => {
+          getTrajectoryMetaMapCached({ source: "windsurf", config })
+            .then((metaMap) => {
+              const meta = metaMap[id] ?? {};
+              indexSession(id, "windsurf", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+            })
+            .catch((err) => {
+              console.warn(`[search] Failed to index windsurf session ${id}:`, err instanceof Error ? err.message : err);
+            });
+        });
+      }
       return NextResponse.json(out);
     }
 

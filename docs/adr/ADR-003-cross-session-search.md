@@ -1,6 +1,6 @@
 # ADR-003: Cross-Session Search Technology Selection
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-03-11
 
 ## Context
@@ -108,19 +108,56 @@ Use **MiniSearch (Option C) as an optional enhancement** to the existing session
 
 ### Implementation roadmap
 
-1. **Phase 1 (not yet started)**: Add `better-sqlite3` dependency. Create a server-side search index module (`src/lib/server/searchIndex.ts`) that:
-   - Opens/creates a SQLite database at a configurable path (e.g., `~/.local/share/agent-storage-manager/search.db`).
-   - Provides `indexSession(id, source, events)` called from the existing session-load API route.
-   - Provides `searchSessions(query)` returning `{ sessionId, source, title, snippets[] }[]`.
-2. **Phase 2**: Add `/api/search` route and a global search overlay UI component (keyboard shortcut `Cmd+K` or `Cmd+Shift+F`).
+1. **Phase 1 ✅**: Add `better-sqlite3` dependency. Search index module `src/lib/server/searchIndex.ts`:
+   - Opens/creates a SQLite database at `~/.agent-storage-manager/search.db` (overridable via `AGENT_STORAGE_MANAGER_SEARCH_DB_PATH`).
+   - Provides `indexSession(id, source, title, cwd, events)` called from the existing session-load API route.
+   - Provides `searchSessions(query, limit)` returning `{ sessionId, source, title, cwd, snippet }[]`.
+   - Provides `removeSession(id, source)` and `getIndexedSessionIds()`.
+2. **Phase 2 ✅**: `/api/search` route and global search overlay UI (`GlobalSearch` component, Cmd+K / Ctrl+K shortcut, keyboard-navigable result list).
 3. **Phase 3 (optional)**: Expose a "re-index all" action in the UI for users who want to search sessions they haven't opened since the index was created.
+
+## Chinese Text Handling
+
+### Question
+
+The session content is primarily English (code, tool output, file paths) with a non-trivial minority of Chinese (user messages, assistant responses, session titles). Does the solution need dedicated Chinese word-segmentation support?
+
+### Analysis
+
+**How the trigram tokenizer handles Chinese:**
+
+SQLite FTS5's `trigram` tokenizer works at the Unicode character level: it creates overlapping 3-character sequences from the source text. It is deliberately tokenizer-agnostic (no concept of word boundaries).
+
+For Chinese text, this has important implications:
+
+| Scenario | Example | Trigram result |
+|---|---|---|
+| 3-char Chinese phrase | `命令行` | exact trigram match ✅ |
+| 4-char Chinese phrase | `命令行工具` → trigrams `命令行`, `令行工`, `行工具` | substring match ✅ |
+| 2-char Chinese word | `工具`, `会话` | **no match** (trigram minimum = 3 chars) ❌ |
+| 1-char Chinese word | `页` | **no match** ❌ |
+
+**Why a dedicated Chinese tokenizer is not needed:**
+
+1. **English-primary content**: The majority of searchable content is English — file paths, command lines, tool names, code snippets. The trigram tokenizer handles all of these perfectly.
+
+2. **Chinese phrase searches work well**: Chinese users typically search for phrases (3+ characters in Chinese), not single characters. Searching for `命令行工具` ("command-line tool"), `会话管理` ("session management"), or `搜索功能` ("search feature") all generate valid trigrams.
+
+3. **Jieba/ICU complexity not justified**: Adding a Chinese word segmenter (jieba, Kuromoji, ICU break iterator) would require native Node.js bindings or a WASM module — adding significant installation complexity for a local-first tool that already requires `better-sqlite3`. The benefit (handling 2-char searches in event body content) is marginal.
+
+4. **2-char Chinese queries are handled by LIKE fallback**: For common 2-character Chinese queries like `会话`, `工具`, `命令`, the implementation falls back to a `LIKE` search on `sessions.title` and `sessions.cwd`. Session titles are the most important metadata for a 2-char "find which session?" query.
+
+**Summary verdict**: Trigram + LIKE fallback is sufficient. No dedicated Chinese tokenizer needed for v1.
+
+**Edge case left to a future iteration**: A user searching for a 2-char Chinese phrase like `工具` in event *body* content (not just titles) will not find results. This is an acceptable v1 limitation; it can be addressed in a future iteration by lowering the trigram minimum token size (SQLite FTS5 trigram `min_token_size` default is 3 and is not directly user-configurable without patching SQLite), or by adding a Chinese segmentation pre-processing step at index time.
 
 ## Consequences
 
-- **New native dependency**: `better-sqlite3` requires native compilation. This is already common in Node.js apps of this type and does not add deployment complexity for the local-only use case.
-- **Index drift**: Sessions deleted from the LS are not automatically removed from the FTS index. Implement a periodic prune or an "index health" check.
-- **Privacy**: The FTS index stores session content snippets on disk. Document this clearly; the index path should be in the same user-local directory as the rest of the app's data.
-- **Performance**: FTS5 with trigram tokenizer is fast for keyword search. For very large collections (1000+ sessions × 2000+ events), initial index population may be slow — it should be done lazily (index-on-open) rather than eagerly.
+- **New native dependency**: `better-sqlite3` requires native compilation (node-gyp). This is acceptable for a local-first Node.js app and is widely used in the ecosystem.
+- **Index drift**: Sessions deleted from the LS are not automatically removed from the FTS index. Implement a periodic prune or an "index health" check (Phase 3).
+- **Privacy**: The FTS index stores session content on disk at `~/.agent-storage-manager/search.db`. Document this clearly.
+- **Performance**: FTS5 with trigram tokenizer is fast for keyword search. Initial population is lazy (index-on-open) so there is no bulk indexing delay.
+- **Chinese 2-char query limitation**: Short (1–2 char) Chinese queries match only session titles/cwd via LIKE, not event body content. Acceptable for v1 (see Chinese Text Handling section above).
 
 ## Links
 

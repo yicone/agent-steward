@@ -117,6 +117,7 @@ Trajectory 视图支持以下结构化过滤（`trajectoryFilters` 状态）：
 | 结构化过滤：stepType（substring 文本过滤） | ✅ 已实现（`trajectoryFilters.stepTypeFilter`） |
 | 搜索结果支持 jump-to-row（上一处/下一处） | ✅ 已实现 |
 | 搜索命中在事件视图内文本高亮 | ✅ 已实现（`HighlightedText` 组件，title/text/commandLine/output） |
+| 跨会话全文搜索 | ✅ 已实现（SQLite FTS5 + Cmd+K 全局搜索面板） |
 | 大型会话性能可接受 | ✅ 依赖 `useMemo` 避免冗余计算；虚拟滚动已有 |
 
 ---
@@ -138,16 +139,31 @@ Trajectory 视图支持以下结构化过滤（`trajectoryFilters` 状态）：
 - `mark.js` 直接操作 DOM，在 React 虚拟 DOM 环境下有冲突风险。
 - 零依赖的 `HighlightedText` 在本项目的搜索场景（单词/短语子串匹配）中已完全满足需求。
 
-### 5.2 跨会话搜索 — 🔲 未实现（技术选型已确定）
+### 5.2 跨会话搜索 — ✅ 已实现
 
-当前实现只支持在已加载的单条会话内搜索。跨会话全文搜索需要服务端索引。
+当前实现只支持在已加载的单条会话内搜索。跨会话全文搜索已通过以下组件实现：
 
 **技术选型**：参见 [`docs/adr/ADR-003-cross-session-search.md`](../adr/ADR-003-cross-session-search.md)。
 
-结论摘要：
-- **推荐方案**：SQLite FTS5（通过 `better-sqlite3`）在 Next.js 服务端构建索引，按需填充（session-on-open indexing）。
-- **不推荐 QMD**：QMD 的架构假设是索引本地文件目录；本项目的会话内容来自 LS RPC，不存在可直接索引的本地文件。且 QMD 对向量搜索和 LLM 模型的依赖对此场景属于过度设计。
-- **入口**：建议作为 `Cmd+K` 全局搜索面板，与单会话搜索分开，不干扰现有 UI 流程。
+**中文分词**：参见 ADR-003 §"Chinese Text Handling"。结论摘要：FTS5 trigram tokenizer 对中文 3 字符以上短语可直接匹配；2 字符中文词通过 LIKE 降级搜索会话标题和路径，满足 v1 需求，无需引入 jieba 等中文分词依赖。
+
+**实现组件**：
+
+| 组件 | 说明 |
+|---|---|
+| `src/lib/server/searchIndex.ts` | SQLite FTS5（trigram）搜索索引模块：`indexSession`、`searchSessions`（含 LIKE 降级）、`removeSession`、`getIndexedSessionIds` |
+| `src/app/api/search/route.ts` | `GET /api/search?q=&limit=` 搜索 API，返回 `{ sessionId, source, title, cwd, snippet }[]` |
+| `src/app/api/conversations/[source]/[id]/route.ts` | 打开会话时异步调用 `indexSession`（fire-and-forget，不影响响应速度） |
+| `src/components/GlobalSearch.tsx` | Cmd+K / Ctrl+K 全局搜索面板：防抖输入、结果列表（高亮片段）、键盘导航（↑↓ Enter Esc） |
+| `src/components/HomeClient.tsx` | 挂载 `GlobalSearch`，`onSelect` 回调切换 source 标签并加载选中会话 |
+
+**索引策略**：
+- 索引文件：`~/.agent-storage-manager/search.db`（可通过 `AGENT_STORAGE_MANAGER_SEARCH_DB_PATH` 覆盖）
+- 触发时机：用户首次打开某条会话时，在服务端异步将该会话内容写入 FTS5 索引。无需手动触发，无需额外 daemon。
+- 搜索字段：`title`（会话标题）、`cwd`（工作目录）、事件 `text`（对话内容）、`commandLine`（命令行）、`output`（命令输出前 200 字符）。
+- Snippet：通过 SQLite `snippet()` 函数生成带 `<mark>` 标签的高亮片段。
+
+**入口**：页面顶部 "Search sessions" 按钮（🔍），或 Cmd+K / Ctrl+K 快捷键。
 
 ### 5.3 stepType 结构化过滤 — ✅ 已实现
 
@@ -166,7 +182,10 @@ UI：Trajectory 视图过滤栏底部新增 "Filter stepType…" 文本输入框
 ## 6. 参考文件
 
 - `src/lib/parse/trajectory.ts` — `matchesEventSearch`、`matchesConversationSearch`
-- `src/components/HomeClient.tsx` — 搜索状态、`trajectoryFilters`、`HighlightedText`、跳转逻辑
-- `docs/adr/ADR-003-cross-session-search.md` — 跨会话搜索技术选型决策
+- `src/components/HomeClient.tsx` — 搜索状态、`trajectoryFilters`、`HighlightedText`、跳转逻辑、GlobalSearch 挂载
+- `src/lib/server/searchIndex.ts` — SQLite FTS5 跨会话搜索索引
+- `src/app/api/search/route.ts` — 跨会话搜索 API
+- `src/components/GlobalSearch.tsx` — Cmd+K 全局搜索面板 UI
+- `docs/adr/ADR-003-cross-session-search.md` — 跨会话搜索技术选型决策（含中文分词分析）
 - `docs/viewer/agent-ui-ux-optimization.md` — 整体 UI/UX 优化方案
 - `docs/viewer/trajectory-view.md` — 统一事件模型定义
