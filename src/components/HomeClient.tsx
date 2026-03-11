@@ -1124,7 +1124,8 @@ export default function HomeClient() {
     tool: true,
     command: true,
     status: false,
-    errorsOnly: false
+    errorsOnly: false,
+    hasOutput: false
   });
   const [collapsedExecutionGroups, setCollapsedExecutionGroups] = useState<Record<string, boolean>>({});
 
@@ -1176,6 +1177,7 @@ export default function HomeClient() {
             if (event.kind === "command" && !trajectoryFilters.command) continue;
             if (event.kind === "status" && !trajectoryFilters.status) continue;
           }
+          if (trajectoryFilters.hasOutput && !event.output) continue;
           if (!matchesEventSearch(event, eventSearch)) continue;
           rows.push({
             id: `event:${event.id}`,
@@ -1309,10 +1311,16 @@ export default function HomeClient() {
 
   const errorEvents = useMemo(() => rawTrajectoryEvents.filter(isErrorLikeTrajectoryEvent), [rawTrajectoryEvents]);
 
-  const eventSearchMatchCount = useMemo(() => {
-    if (!eventSearch.trim()) return null;
-    return rawTrajectoryEvents.filter((e) => matchesEventSearch(e, eventSearch)).length;
+  const eventSearchMatchEvents = useMemo(() => {
+    if (!eventSearch.trim()) return [];
+    return rawTrajectoryEvents.filter((e) => matchesEventSearch(e, eventSearch));
   }, [rawTrajectoryEvents, eventSearch]);
+
+  const activeSearchMatchIndex = useMemo(() => {
+    if (!eventSearch.trim() || !selectedRowId?.startsWith("event:")) return -1;
+    const eventId = selectedRowId.slice("event:".length);
+    return eventSearchMatchEvents.findIndex((e) => e.id === eventId);
+  }, [eventSearch, eventSearchMatchEvents, selectedRowId]);
 
   const groupedErrorEvents = useMemo(() => {
     const groups: ErrorGroup[] = [];
@@ -1421,6 +1429,14 @@ export default function HomeClient() {
     const next = errorEvents[nextIndex];
     if (next) jumpToEvent(next);
   }, [activeErrorIndex, errorEvents, jumpToEvent]);
+
+  const navigateSearchMatchByOffset = useCallback((offset: number) => {
+    if (!eventSearchMatchEvents.length) return;
+    const baseIndex = activeSearchMatchIndex >= 0 ? activeSearchMatchIndex : (offset >= 0 ? -1 : eventSearchMatchEvents.length);
+    const nextIndex = (baseIndex + offset + eventSearchMatchEvents.length) % eventSearchMatchEvents.length;
+    const next = eventSearchMatchEvents[nextIndex];
+    if (next) jumpToEvent(next);
+  }, [activeSearchMatchIndex, eventSearchMatchEvents, jumpToEvent]);
 
   const requestJumpToTrajectoryEventId = useCallback((eventId: string) => {
     setPendingTrajectoryJumpEventId(eventId);
@@ -1995,6 +2011,13 @@ export default function HomeClient() {
                     >
                       Only errors
                     </Button>
+                    <Button
+                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+                    >
+                      Has output
+                    </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
                   <div className="mb-2 flex items-center gap-2">
@@ -2004,9 +2027,15 @@ export default function HomeClient() {
                       onChange={(e) => setEventSearch(e.target.value)}
                       className="h-7 text-xs"
                     />
-                    {eventSearchMatchCount !== null && (
-                      <span className="shrink-0 text-xs text-muted">{eventSearchMatchCount} match{eventSearchMatchCount !== 1 ? "es" : ""}</span>
-                    )}
+                    {eventSearchMatchEvents.length > 0 ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
+                      </>
+                    ) : eventSearch.trim() ? (
+                      <span className="shrink-0 text-xs text-muted">0 matches</span>
+                    ) : null}
                   </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
@@ -2114,6 +2143,13 @@ export default function HomeClient() {
                     >
                       Only errors
                     </Button>
+                    <Button
+                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+                    >
+                      Has output
+                    </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
                   <div className="mb-2 flex items-center gap-2">
@@ -2123,9 +2159,15 @@ export default function HomeClient() {
                       onChange={(e) => setEventSearch(e.target.value)}
                       className="h-7 text-xs"
                     />
-                    {eventSearchMatchCount !== null && (
-                      <span className="shrink-0 text-xs text-muted">{eventSearchMatchCount} match{eventSearchMatchCount !== 1 ? "es" : ""}</span>
-                    )}
+                    {eventSearchMatchEvents.length > 0 ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
+                      </>
+                    ) : eventSearch.trim() ? (
+                      <span className="shrink-0 text-xs text-muted">0 matches</span>
+                    ) : null}
                   </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
