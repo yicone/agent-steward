@@ -45,6 +45,9 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 
 - Follow SSoT / DRY.
 - Treat GitHub Issues / PRs as optional coordination artifacts, not as the only record of scope or completion.
+- Keep `ROADMAP.md` theme-first: organize entries by product / engineering topic, not by issue number.
+- In `ROADMAP.md`, use GitHub references only as secondary metadata (for example `refs: #8`), not as the primary structure.
+- Do not turn `ROADMAP.md` into a live GitHub status snapshot; record durable planning themes there and move shipped items to `CHANGELOG.md`.
 - If work is shipped/completed, update `CHANGELOG.md` instead of leaving it in `ROADMAP.md`.
 - If work changes current behavior or prerequisites, update `README.md`.
 - If work changes long-lived architectural direction, update the relevant ADR instead of inventing a parallel explanation elsewhere.

@@ -2,7 +2,7 @@
 
 This document is the forward-looking plan for Agent Storage Manager. It is not a commitment; items may change as upstream products evolve.
 
-**SSoT/DRY:** The canonical technical decision for “how we read sessions” lives in `docs/adr/ADR-001-use-language-server-rpc.md`. Historical shipped work lives in `CHANGELOG.md`. This roadmap stays future-looking. GitHub Issues are a useful planning index, but not a prerequisite for keeping this file accurate.
+**SSoT/DRY:** The canonical technical decision for “how we read sessions” lives in `docs/adr/ADR-001-use-language-server-rpc.md`. Historical shipped work lives in `CHANGELOG.md`. This roadmap stays future-looking. GitHub Issues are optional execution references, not the primary structure of this document.
 
 ## Guiding principles
 
@@ -11,31 +11,23 @@ This document is the forward-looking plan for Agent Storage Manager. It is not a
 - Make failures diagnosable (clear errors, actionable remediation)
 - Keep configuration explicit and portable
 
-## GitHub status snapshot (`2026-03-11`)
+## Tracking conventions
 
-- Open planning issues:
-  - `#8` Architecture Review v1: Platform abstraction for discovery
-  - `#7` Architecture Review v1: Privacy redaction options
-  - `#6` Architecture Review v1: Multi-root scaling (health, duplicates, caching)
-  - `#4` Architecture Review v1: Viewer deep links (URL state)
-- No open PRs at the time of this refresh.
-- Recently completed items moved out of this file and into `CHANGELOG.md`:
-  - `#5` Search + structured filters
-  - `#3` Inspector v2 structured viewers
-  - `#2` Error center upgrades
-  - `#1` Connection diagnostics evidence chain
-- If a future task has no GitHub Issue, record it here as a plain roadmap item and move it to `CHANGELOG.md` when shipped.
+- Organize roadmap items by **product / engineering theme**, not by GitHub issue number.
+- Add GitHub references only as secondary metadata when they exist, using `refs: #...`.
+- If a task has no GitHub Issue, record it here normally and move it to `CHANGELOG.md` when shipped.
+- If a theme spans multiple issues or PRs, keep the roadmap entry at the theme level and let GitHub carry the execution breakdown.
 
 ## Now
 
-- `#8` Platform abstraction for discovery
+- Platform abstraction for discovery (`refs: #8`)
   - Separate per-product attach/discovery details behind a cleaner internal interface
   - Preserve source diagnostics so attach failures remain debuggable instead of becoming opaque
-- `#6` Multi-root scaling
+- Multi-root scaling (`refs: #6`)
   - Add per-root health indicators
   - Detect duplicate sessions across roots
   - Improve session-list scanning with caching / incremental refresh for larger roots
-- `#4` Viewer deep links
+- Viewer deep links (`refs: #4`)
   - Persist selected root/session/view/filter state in the URL
   - Support direct links into a specific event or error location
 - Rendering hardening
@@ -47,9 +39,12 @@ This document is the forward-looking plan for Agent Storage Manager. It is not a
 
 ## Next
 
-- `#7` Privacy redaction options
+- Privacy redaction options (`refs: #7`)
   - Redact sensitive values from diagnostics / exports on demand
   - Make redaction state explicit so exported artifacts are interpretable
+- Search and navigation follow-through (`refs: shipped work in #5`)
+  - Extend the current search/filter baseline into a more shareable navigation model
+  - Keep search semantics, highlighting, and deep-link behavior aligned as URL state matures
 - Export
   - Export a session as Markdown/JSON (local file download)
   - Batch export for a root
