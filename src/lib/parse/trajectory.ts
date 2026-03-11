@@ -1,4 +1,4 @@
-import type { ChatMessage, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
+import type { ChatMessage, ConversationListItem, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 
 export function isErrorLikeTrajectoryEvent(event: TrajectoryEvent): boolean {
   if (event.title === "Error") return true;
@@ -29,6 +29,37 @@ export function summarizeTrajectoryEvents(events: TrajectoryEvent[], totalSteps:
   }
 
   return summary;
+}
+
+/**
+ * Returns true if the event matches the given search query.
+ * Searches across: title, text, output, stepType, commandLine, and tool call names.
+ * Pass an empty string to match all events.
+ */
+export function matchesEventSearch(event: TrajectoryEvent, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (event.title.toLowerCase().includes(q)) return true;
+  if (event.text?.toLowerCase().includes(q)) return true;
+  if (event.output?.toLowerCase().includes(q)) return true;
+  if (event.stepType.toLowerCase().includes(q)) return true;
+  if (event.commandLine?.toLowerCase().includes(q)) return true;
+  if (event.toolCalls?.some((tc) => tc.name?.toLowerCase().includes(q))) return true;
+  return false;
+}
+
+/**
+ * Returns true if the conversation list item matches the given search query.
+ * Searches across: id, title, and cwd.
+ * Pass an empty string to match all items.
+ */
+export function matchesConversationSearch(item: ConversationListItem, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (item.id.toLowerCase().includes(q)) return true;
+  if (item.title?.toLowerCase().includes(q)) return true;
+  if (item.cwd?.toLowerCase().includes(q)) return true;
+  return false;
 }
 
 export function trajectoryEventsToChatMessages(events: TrajectoryEvent[]): ChatMessage[] {

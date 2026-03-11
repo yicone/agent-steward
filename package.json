@@ -19,8 +19,12 @@
     "lint": "next lint",
     "test": "vitest run"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@radix-ui/react-slot": "^1.2.3",
+    "better-sqlite3": "^12.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "highlight.js": "^11.10.0",
@@ -36,6 +40,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",
     "@testing-library/react": "^16.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.11.30",
     "@types/react": "^18.2.79",
     "@types/react-dom": "^18.2.25",

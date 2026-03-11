@@ -12,7 +12,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { JsonViewer } from "@/components/JsonViewer";
-import { isErrorLikeTrajectoryEvent, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
 import type {
@@ -291,6 +292,33 @@ function MarkdownContent({ text }: { text: string }) {
   );
 }
 
+/**
+ * Splits `text` around case-insensitive occurrences of `query` and returns a
+ * React fragment with matching substrings wrapped in a highlighted <mark>.
+ * Returns plain text when query is empty or has no match.
+ */
+function HighlightedText({ text, query }: { text: string; query: string }): React.ReactElement {
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+  const lowerText = text.toLowerCase();
+  const lowerQ = q.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let idx = lowerText.indexOf(lowerQ, last);
+  while (idx !== -1) {
+    if (idx > last) parts.push(text.slice(last, idx));
+    parts.push(
+      <mark key={idx} className="rounded-sm bg-yellow-300/60 px-0 text-inherit dark:bg-yellow-500/40">
+        {text.slice(idx, idx + q.length)}
+      </mark>
+    );
+    last = idx + q.length;
+    idx = lowerText.indexOf(lowerQ, last);
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
 function ChatMessageView({
   message,
   selected,
@@ -450,12 +478,14 @@ function TrajectoryEventView({
   event,
   selected,
   highlighted,
+  highlightQuery,
   onSelect,
   onJumpToTrajectory
 }: {
   event: TrajectoryEvent;
   selected?: boolean;
   highlighted?: boolean;
+  highlightQuery?: string;
   onSelect?(): void;
   onJumpToTrajectory?(): void;
 }) {
@@ -463,6 +493,7 @@ function TrajectoryEventView({
   const hasDetails = Boolean(event.output || event.toolCalls?.length);
   const clickable = typeof onSelect === "function";
   const shouldRenderMarkdown = event.kind === "thought";
+  const hl = highlightQuery ?? "";
 
   return (
     <div
@@ -493,7 +524,7 @@ function TrajectoryEventView({
       ) : null}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge title={event.title}>{event.title}</Badge>
+          <Badge title={event.title}><HighlightedText text={event.title} query={hl} /></Badge>
           <span className="truncate font-mono text-xs text-muted">{event.stepType}</span>
         </div>
         <div className="shrink-0 text-xs text-muted">{timeLabel}</div>
@@ -501,7 +532,7 @@ function TrajectoryEventView({
 
       {event.commandLine ? (
         <div className="mt-2 font-mono text-xs">
-          $ {event.commandLine}
+          $ <HighlightedText text={event.commandLine} query={hl} />
         </div>
       ) : null}
 
@@ -514,7 +545,7 @@ function TrajectoryEventView({
 
       {event.text ? (
         <div className="mt-2">
-          {shouldRenderMarkdown ? <MarkdownContent text={event.text} /> : <div>{event.text}</div>}
+          {shouldRenderMarkdown ? <MarkdownContent text={event.text} /> : <div><HighlightedText text={event.text} query={hl} /></div>}
         </div>
       ) : null}
 
@@ -527,7 +558,9 @@ function TrajectoryEventView({
             </pre>
           ) : null}
           {event.output ? (
-            <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">{event.output}</pre>
+            <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">
+              {hl ? <HighlightedText text={event.output} query={hl} /> : event.output}
+            </pre>
           ) : null}
         </details>
       ) : null}
@@ -600,6 +633,7 @@ function VirtualizedTrajectoryRows(props: {
   autoOpenDetailsRowId?: string | null;
   autoOpenDetailsToken?: number;
   onAutoOpenedDetails?(rowId: string, token: number): void;
+  searchQuery?: string;
 }) {
   const {
     rows,
@@ -612,7 +646,8 @@ function VirtualizedTrajectoryRows(props: {
     onJumpToTrajectoryEventId,
     autoOpenDetailsRowId,
     autoOpenDetailsToken,
-    onAutoOpenedDetails
+    onAutoOpenedDetails,
+    searchQuery
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -802,6 +837,7 @@ function VirtualizedTrajectoryRows(props: {
                 event={row.event}
                 selected={selectedRowId === row.id}
                 highlighted={highlightedRowId === row.id}
+                highlightQuery={searchQuery}
                 onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
                 onJumpToTrajectory={onJumpToTrajectoryEventId ? () => onJumpToTrajectoryEventId(row.event.id) : undefined}
               />
@@ -1109,6 +1145,7 @@ export default function HomeClient() {
   const [source, setSource] = useState<Source>("antigravity");
   const [items, setItems] = useState<ConversationListItem[]>([]);
   const [filter, setFilter] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(false);
@@ -1123,7 +1160,9 @@ export default function HomeClient() {
     tool: true,
     command: true,
     status: false,
-    errorsOnly: false
+    errorsOnly: false,
+    hasOutput: false,
+    stepTypeFilter: ""
   });
   const [collapsedExecutionGroups, setCollapsedExecutionGroups] = useState<Record<string, boolean>>({});
 
@@ -1137,15 +1176,19 @@ export default function HomeClient() {
   const [autoOpenDetailsToken, setAutoOpenDetailsToken] = useState(0);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
 
+  // Set to true by handleGlobalSearchSelect when it triggers a cross-source switch.
+  // The useEffect([source]) reset checks this flag so it doesn't wipe the pending
+  // session selection that the callback already queued.
+  const crossSourceSelectionRef = useRef(false);
+
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
     return items.find((it) => `${it.rootId}:${it.id}` === selectedKey) ?? null;
   }, [items, selectedKey]);
 
   const filteredItems = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => it.id.toLowerCase().includes(q));
+    if (!filter.trim()) return items;
+    return items.filter((it) => matchesConversationSearch(it, filter));
   }, [items, filter]);
 
   const rawTrajectoryEvents = useMemo(() => {
@@ -1176,6 +1219,9 @@ export default function HomeClient() {
             if (event.kind === "command" && !trajectoryFilters.command) continue;
             if (event.kind === "status" && !trajectoryFilters.status) continue;
           }
+          if (trajectoryFilters.hasOutput && !event.output) continue;
+          if (trajectoryFilters.stepTypeFilter && !event.stepType.toLowerCase().includes(trajectoryFilters.stepTypeFilter.toLowerCase())) continue;
+          if (!matchesEventSearch(event, eventSearch)) continue;
           rows.push({
             id: `event:${event.id}`,
             type: "event",
@@ -1186,7 +1232,7 @@ export default function HomeClient() {
       }
     }
     return rows;
-  }, [content, executionGroups, collapsedExecutionGroups, trajectoryFilters]);
+  }, [content, executionGroups, collapsedExecutionGroups, trajectoryFilters, eventSearch]);
 
   const transcriptRows = useMemo(() => {
     if (content?.kind !== "trajectory") return [];
@@ -1308,6 +1354,23 @@ export default function HomeClient() {
 
   const errorEvents = useMemo(() => rawTrajectoryEvents.filter(isErrorLikeTrajectoryEvent), [rawTrajectoryEvents]);
 
+  const eventSearchMatchEvents = useMemo(() => {
+    if (!eventSearch.trim()) return [];
+    // Derive from trajectoryRows so navigation only considers events that are
+    // currently visible (respecting kind/hasOutput/stepTypeFilter/errorsOnly
+    // filters). trajectoryRows already applies matchesEventSearch, so all
+    // event rows in it are already search matches.
+    return trajectoryRows
+      .filter((row): row is Extract<TrajectoryRow, { type: "event" }> => row.type === "event")
+      .map((row) => row.event);
+  }, [trajectoryRows, eventSearch]);
+
+  const activeSearchMatchIndex = useMemo(() => {
+    if (!eventSearch.trim() || !selectedRowId?.startsWith("event:")) return -1;
+    const eventId = selectedRowId.slice("event:".length);
+    return eventSearchMatchEvents.findIndex((e) => e.id === eventId);
+  }, [eventSearch, eventSearchMatchEvents, selectedRowId]);
+
   const groupedErrorEvents = useMemo(() => {
     const groups: ErrorGroup[] = [];
     const byId = new Map<string, ErrorGroup>();
@@ -1416,11 +1479,80 @@ export default function HomeClient() {
     if (next) jumpToEvent(next);
   }, [activeErrorIndex, errorEvents, jumpToEvent]);
 
+  const navigateSearchMatchByOffset = useCallback((offset: number) => {
+    if (!eventSearchMatchEvents.length) return;
+    const baseIndex = activeSearchMatchIndex >= 0 ? activeSearchMatchIndex : (offset >= 0 ? -1 : eventSearchMatchEvents.length);
+    const nextIndex = (baseIndex + offset + eventSearchMatchEvents.length) % eventSearchMatchEvents.length;
+    const next = eventSearchMatchEvents[nextIndex];
+    if (next) jumpToEvent(next);
+  }, [activeSearchMatchIndex, eventSearchMatchEvents, jumpToEvent]);
+
   const requestJumpToTrajectoryEventId = useCallback((eventId: string) => {
     setPendingTrajectoryJumpEventId(eventId);
     setAutoOpenDetailsRowId(`event:${eventId}`);
     setAutoOpenDetailsToken((prev) => prev + 1);
   }, []);
+
+  const loadConversation = useCallback(async (
+    nextSource: Source,
+    id: string,
+    stepOffset?: number,
+    view?: "chat" | "trajectory",
+    opts?: { includeCleared?: boolean }
+  ) => {
+    setLoadingContent(true);
+    setError(null);
+    try {
+      let qp = "";
+      if (nextSource === "windsurf") {
+        const sp = new URLSearchParams();
+        sp.set("stepOffset", String(stepOffset ?? 0));
+        if (view === "trajectory") sp.set("view", "trajectory");
+        const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
+        if (includeCleared) sp.set("includeCleared", "1");
+        qp = `?${sp.toString()}`;
+      }
+      const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
+      const json = (await res.json()) as any;
+      if (!res.ok) throw new Error(json?.error ?? "Failed to load conversation");
+      setContent(json as ConversationContent);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setContent(null);
+    } finally {
+      setLoadingContent(false);
+    }
+  }, [windsurfIncludeCleared]);
+
+  const handleGlobalSearchSelect = useCallback(
+    (sessionId: string, sessionSource: Source) => {
+      // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
+      // below does not wipe the selection state we set here.
+      if (sessionSource !== source) {
+        crossSourceSelectionRef.current = true;
+        setSource(sessionSource);
+      }
+      // Best-effort: find the matching list item in the current items list.
+      // If we're switching source, items still holds the old source's list, so
+      // this may fail. A useEffect below corrects selectedKey once items reloads.
+      const match = items.find((it) => it.id === sessionId);
+      const key = match ? `${match.rootId}:${match.id}` : `unknown:${sessionId}`;
+      setSelectedKey(key);
+      setSelectedId(sessionId);
+      setContent(null);
+      setInspectorOpen(false);
+      setSelectedRowId(null);
+      setScrollToRowId(null);
+      setEventSearch("");
+      setAntigravityView("transcript");
+      setWindsurfView("transcript");
+      setCollapsedExecutionGroups({});
+      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "trajectory" : undefined).catch(
+        (e) => setError(e instanceof Error ? e.message : String(e))
+      );
+    },
+    [source, items, loadConversation]
+  );
 
   useEffect(() => {
     if (!pendingTrajectoryJumpEventId) return;
@@ -1500,37 +1632,6 @@ export default function HomeClient() {
     }
   }
 
-  async function loadConversation(
-    nextSource: Source,
-    id: string,
-    stepOffset?: number,
-    view?: "chat" | "trajectory",
-    opts?: { includeCleared?: boolean }
-  ) {
-    setLoadingContent(true);
-    setError(null);
-    try {
-      let qp = "";
-      if (nextSource === "windsurf") {
-        const sp = new URLSearchParams();
-        sp.set("stepOffset", String(stepOffset ?? 0));
-        if (view === "trajectory") sp.set("view", "trajectory");
-        const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
-        if (includeCleared) sp.set("includeCleared", "1");
-        qp = `?${sp.toString()}`;
-      }
-      const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
-      const json = (await res.json()) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Failed to load conversation");
-      setContent(json as ConversationContent);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setContent(null);
-    } finally {
-      setLoadingContent(false);
-    }
-  }
-
   async function loadMoreWindsurfChat() {
     if (!selectedId || source !== "windsurf" || content?.kind !== "chat") return;
     const currentOffset = content.stepOffset ?? 0;
@@ -1607,13 +1708,33 @@ export default function HomeClient() {
 
   useEffect(() => {
     loadList(source).catch(() => {});
+    // If this source change was triggered by a cross-source GlobalSearch selection
+    // (handleGlobalSearchSelect sets crossSourceSelectionRef), skip the reset so
+    // the pending session selection survives the source-change cycle.
+    if (crossSourceSelectionRef.current) {
+      crossSourceSelectionRef.current = false;
+      return;
+    }
     setSelectedKey(null);
     setSelectedId(null);
     setContent(null);
+    setEventSearch("");
     setAntigravityView("transcript");
     setWindsurfView("transcript");
     setCollapsedExecutionGroups({});
   }, [source]);
+
+  // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
+  // re-derive selectedKey from selectedId so the conversation list highlights
+  // the correct item. This corrects the `unknown:id` placeholder set in
+  // handleGlobalSearchSelect when the target session was in a different source.
+  useEffect(() => {
+    if (!selectedId) return;
+    const match = items.find((it) => it.id === selectedId);
+    if (!match) return;
+    const expectedKey = `${match.rootId}:${match.id}`;
+    setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
+  }, [items, selectedId]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;
@@ -1689,6 +1810,7 @@ export default function HomeClient() {
           {windsurfPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <GlobalSearch onSelect={handleGlobalSearchSelect} />
           <Button variant="outline" size="sm" onClick={() => refreshConfigAndStatus()}>
             Refresh
           </Button>
@@ -1718,7 +1840,7 @@ export default function HomeClient() {
           </Button>
           <div className="flex-1" />
           <div className="w-full sm:w-[360px] sm:max-w-[360px]">
-            <Input placeholder="Search by id…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <Input placeholder="Search by id, title or path…" value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
         </div>
         <div className="mt-2 text-xs text-muted">
@@ -1754,6 +1876,7 @@ export default function HomeClient() {
                     setInspectorOpen(false);
                     setSelectedRowId(null);
                     setScrollToRowId(null);
+                    setEventSearch("");
                     setAntigravityView("transcript");
                     setWindsurfView("transcript");
                     setCollapsedExecutionGroups({});
@@ -1987,7 +2110,39 @@ export default function HomeClient() {
                     >
                       Only errors
                     </Button>
+                    <Button
+                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+                    >
+                      Has output
+                    </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Search events…"
+                      value={eventSearch}
+                      onChange={(e) => setEventSearch(e.target.value)}
+                      className="h-7 text-xs"
+                    />
+                    {eventSearchMatchEvents.length > 0 ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
+                      </>
+                    ) : eventSearch.trim() ? (
+                      <span className="shrink-0 text-xs text-muted">0 matches</span>
+                    ) : null}
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Filter stepType…"
+                      value={trajectoryFilters.stepTypeFilter}
+                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+                      className="h-7 text-xs"
+                    />
                   </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
@@ -2003,6 +2158,7 @@ export default function HomeClient() {
                       onAutoOpenedDetails={(rowId, token) => {
                         if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
                       }}
+                      searchQuery={eventSearch}
                     />
                   )}
                 </div>
@@ -2095,7 +2251,39 @@ export default function HomeClient() {
                     >
                       Only errors
                     </Button>
+                    <Button
+                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+                    >
+                      Has output
+                    </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Search events…"
+                      value={eventSearch}
+                      onChange={(e) => setEventSearch(e.target.value)}
+                      className="h-7 text-xs"
+                    />
+                    {eventSearchMatchEvents.length > 0 ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
+                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
+                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
+                      </>
+                    ) : eventSearch.trim() ? (
+                      <span className="shrink-0 text-xs text-muted">0 matches</span>
+                    ) : null}
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Filter stepType…"
+                      value={trajectoryFilters.stepTypeFilter}
+                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+                      className="h-7 text-xs"
+                    />
                   </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
@@ -2111,6 +2299,7 @@ export default function HomeClient() {
                       onAutoOpenedDetails={(rowId, token) => {
                         if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
                       }}
+                      searchQuery={eventSearch}
                     />
                   )}
                 </div>
