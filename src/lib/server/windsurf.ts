@@ -14,7 +14,7 @@ import { getWindsurfRecommendedAction, inferWindsurfTokenRequired } from "@/lib/
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
-import { connectUnaryJson } from "@/lib/server/connect";
+import { ConnectUnaryError, connectUnaryJson } from "@/lib/server/connect";
 import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 
 const execFileAsync = promisify(execFile);
@@ -27,7 +27,31 @@ type WindsurfConnection = {
   csrfToken: string;
 };
 
-async function probeWindsurfHeartbeat(params: { baseUrl: string; csrfToken?: string }): Promise<boolean> {
+type HeartbeatProbeResult = {
+  ok: boolean;
+  errorCode?: string;
+  errorMessage?: string;
+  httpStatus?: number;
+};
+
+function extractErrCodeMessage(err: unknown): { code?: string; message?: string } {
+  if (!err || typeof err !== "object") return { message: String(err) };
+  const anyErr = err as any;
+  const cause = anyErr?.cause;
+  const code = (cause?.code ?? anyErr?.code) as string | undefined;
+  const message = (cause?.message ?? anyErr?.message) as string | undefined;
+  return { ...(code ? { code } : {}), ...(message ? { message } : {}) };
+}
+
+function isInvalidCsrfToken(res: HeartbeatProbeResult | null | undefined): boolean {
+  return res?.httpStatus === 401 && /invalid csrf token/i.test(res.errorMessage ?? "");
+}
+
+function isMissingCsrfToken(res: HeartbeatProbeResult | null | undefined): boolean {
+  return res?.httpStatus === 401 && /missing csrf token/i.test(res.errorMessage ?? "");
+}
+
+async function probeWindsurfHeartbeat(params: { baseUrl: string; csrfToken?: string }): Promise<HeartbeatProbeResult> {
   try {
     await connectUnaryJson({
       baseUrl: params.baseUrl,
@@ -37,9 +61,17 @@ async function probeWindsurfHeartbeat(params: { baseUrl: string; csrfToken?: str
       body: { metadata: {} },
       timeoutMs: 1200
     });
-    return true;
-  } catch {
-    return false;
+    return { ok: true };
+  } catch (e) {
+    if (e instanceof ConnectUnaryError) {
+      return {
+        ok: false,
+        httpStatus: e.status,
+        errorMessage: e.bodyText?.trim()?.slice(0, 280) || e.message
+      };
+    }
+    const { code, message } = extractErrCodeMessage(e);
+    return { ok: false, ...(code ? { errorCode: code } : {}), ...(message ? { errorMessage: message } : {}) };
   }
 }
 
@@ -126,11 +158,17 @@ async function findLatestWindsurfLogFile(): Promise<string | null> {
 
 async function readProcessCommandLine(pid: number): Promise<string | null> {
   try {
-    const { stdout } = await execFileAsync("ps", ["-o", "args=", "-ww", "-p", String(pid)], { timeout: 2500 });
+    const { stdout } = await execFileAsync("ps", ["eww", "-o", "command=", "-ww", "-p", String(pid)], { timeout: 2500 });
     const cmd = stdout?.trim();
     return cmd && cmd.length ? cmd : null;
   } catch {
-    return null;
+    try {
+      const { stdout } = await execFileAsync("ps", ["-o", "args=", "-ww", "-p", String(pid)], { timeout: 2500 });
+      const cmd = stdout?.trim();
+      return cmd && cmd.length ? cmd : null;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -147,17 +185,36 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
 
   const cmd = await readProcessCommandLine(startInfo.pid);
   const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
-  const csrfToken = tokenFromPs ?? (config.windsurf.csrfTokenOverride?.trim() || "");
+  const overrideToken = config.windsurf.csrfTokenOverride?.trim() || null;
+  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, overrideToken });
+  const csrfToken = tokenInfo.token ?? "";
 
-  // If we cannot extract a token, try to proceed without it. Some builds/configurations may
-  // allow local-only calls without the header; probing avoids breaking the UX unnecessarily.
-  if (!csrfToken) {
-    const baseUrl = `http://127.0.0.1:${startInfo.port}`;
-    const ok = await probeWindsurfHeartbeat({ baseUrl });
-    if (!ok) throw new Error("Missing Windsurf CSRF token. Use Settings -> Windsurf token override as fallback.");
+  const baseUrl = `http://127.0.0.1:${startInfo.port}`;
+  const resWithToken = csrfToken ? await probeWindsurfHeartbeat({ baseUrl, csrfToken }) : { ok: false };
+  const resWithoutToken = await probeWindsurfHeartbeat({ baseUrl });
+
+  if (resWithToken.ok) return { logPath, pid: startInfo.pid, port: startInfo.port, csrfToken };
+  if (resWithoutToken.ok) return { logPath, pid: startInfo.pid, port: startInfo.port, csrfToken: "" };
+
+  if (resWithToken.errorCode === "EPERM" || resWithoutToken.errorCode === "EPERM") {
+    throw new Error(
+      "Local network access is blocked (EPERM connect to 127.0.0.1). Run agent-storage-manager outside the sandboxed environment, then refresh."
+    );
   }
 
-  return { logPath, pid: startInfo.pid, port: startInfo.port, csrfToken };
+  if (!csrfToken) throw new Error("Missing Windsurf CSRF token. Use Settings -> Windsurf token override as fallback.");
+  if (tokenInfo.source === "override") {
+    if (isInvalidCsrfToken(resWithToken)) {
+      throw new Error("Windsurf rejected the Settings override token (401 invalid CSRF token).");
+    }
+    throw new Error("Windsurf heartbeat probe failed with the Settings override token. Refresh the override token, then retry.");
+  }
+  if (isInvalidCsrfToken(resWithToken)) {
+    throw new Error("Windsurf rejected the process-args CSRF token (401 invalid CSRF token). Restart a Cascade session, then refresh.");
+  }
+  throw new Error("Windsurf heartbeat probe failed with the process-args CSRF token. Restart a Cascade session, then refresh.");
+
+  // unreachable
 }
 
 export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatus["windsurf"]> {
@@ -215,30 +272,53 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
   const overrideToken = config.windsurf.csrfTokenOverride?.trim() || null;
   const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, overrideToken });
   const csrfToken = tokenInfo.token;
-  const csrfTokenSource = tokenInfo.source === "discovery_file" ? "none" : tokenInfo.source;
+  const csrfTokenSource = tokenInfo.source;
 
   const baseUrl = `http://127.0.0.1:${startInfo.port}`;
-  let heartbeatWithToken = false;
-  let heartbeatWithoutToken = false;
+  let heartbeatWithToken: HeartbeatProbeResult | null = null;
+  let heartbeatWithoutToken: HeartbeatProbeResult | null = null;
 
   if (csrfToken) heartbeatWithToken = await probeWindsurfHeartbeat({ baseUrl, csrfToken });
   heartbeatWithoutToken = await probeWindsurfHeartbeat({ baseUrl });
 
-  const heartbeatOk = heartbeatWithToken || heartbeatWithoutToken;
+  const heartbeatOk = Boolean(heartbeatWithToken?.ok || heartbeatWithoutToken?.ok);
   const attached = heartbeatOk;
   // Keep token inference centralized and unit-tested to avoid flip-flop regressions in remediation routing.
   const tokenRequired = inferWindsurfTokenRequired({
     heartbeatOk,
-    heartbeatWithoutToken,
+    heartbeatWithoutToken: Boolean(heartbeatWithoutToken?.ok),
     csrfTokenPresent: Boolean(csrfToken)
   });
 
   let lastError: string | undefined;
   if (!attached) {
-    lastError = getHeartbeatFailureSummary({ appName: "Windsurf", csrfTokenPresent: Boolean(csrfToken) });
+    if (heartbeatWithToken?.errorCode === "EPERM" || heartbeatWithoutToken?.errorCode === "EPERM") {
+      lastError = "Local network access blocked (EPERM connect to 127.0.0.1).";
+    } else if (isInvalidCsrfToken(heartbeatWithToken)) {
+      lastError = "Windsurf rejected the supplied CSRF token (401 invalid CSRF token).";
+    } else if (!csrfToken && isMissingCsrfToken(heartbeatWithoutToken)) {
+      lastError = "Missing Windsurf CSRF token (401 missing CSRF token).";
+    } else {
+      lastError = getHeartbeatFailureSummary({ appName: "Windsurf", csrfTokenPresent: Boolean(csrfToken) });
+      const suffix = heartbeatWithToken?.httpStatus
+        ? ` (with-token HTTP ${heartbeatWithToken.httpStatus})`
+        : heartbeatWithoutToken?.httpStatus
+          ? ` (no-token HTTP ${heartbeatWithoutToken.httpStatus})`
+          : heartbeatWithToken?.errorCode
+            ? ` (with-token ${heartbeatWithToken.errorCode})`
+            : heartbeatWithoutToken?.errorCode
+              ? ` (no-token ${heartbeatWithoutToken.errorCode})`
+              : "";
+      if (suffix) lastError += suffix;
+    }
   }
 
-  const recommendedAction = getWindsurfRecommendedAction({ attached, tokenRequired });
+  const recommendedAction =
+    heartbeatWithToken?.errorCode === "EPERM" || heartbeatWithoutToken?.errorCode === "EPERM"
+      ? "Run agent-storage-manager outside the sandboxed environment (needs localhost network access), then refresh."
+      : isInvalidCsrfToken(heartbeatWithToken)
+        ? "The override/auth UUID is not the live LS CSRF token. Restart Windsurf/Cascade and use the token from the running process if available."
+      : getWindsurfRecommendedAction({ attached, tokenRequired });
 
   return {
     attached,
@@ -368,7 +448,7 @@ export async function getWindsurfDiagnosticBundle(params: {
   logPath: string;
   pid: number;
   port: number;
-  csrfTokenPresent: true;
+  csrfTokenPresent: boolean;
   getCascadeTrajectoryResponse: unknown;
   getCascadeTrajectoryStepsPages: Array<{ stepOffset: number; response: unknown }>;
   numTotalSteps?: number;
@@ -443,7 +523,7 @@ export async function getWindsurfDiagnosticBundle(params: {
     logPath: conn.logPath,
     pid: conn.pid,
     port: conn.port,
-    csrfTokenPresent: true,
+    csrfTokenPresent: Boolean(conn.csrfToken),
     getCascadeTrajectoryResponse,
     getCascadeTrajectoryStepsPages,
     ...(typeof numTotalSteps === "number" ? { numTotalSteps } : {}),

@@ -32,4 +32,10 @@ describe("extractCsrfTokenFromCommand", () => {
       "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     );
   });
+
+  it("extracts token from Windsurf env var", () => {
+    expect(extractCsrfTokenFromCommand("... WINDSURF_CSRF_TOKEN=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee ...")).toBe(
+      "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    );
+  });
 });
