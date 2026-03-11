@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { JsonViewer } from "@/components/JsonViewer";
-import { isErrorLikeTrajectoryEvent, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
+import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
 import type {
@@ -1109,6 +1109,7 @@ export default function HomeClient() {
   const [source, setSource] = useState<Source>("antigravity");
   const [items, setItems] = useState<ConversationListItem[]>([]);
   const [filter, setFilter] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loadingList, setLoadingList] = useState(false);
@@ -1143,9 +1144,8 @@ export default function HomeClient() {
   }, [items, selectedKey]);
 
   const filteredItems = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((it) => it.id.toLowerCase().includes(q));
+    if (!filter.trim()) return items;
+    return items.filter((it) => matchesConversationSearch(it, filter));
   }, [items, filter]);
 
   const rawTrajectoryEvents = useMemo(() => {
@@ -1176,6 +1176,7 @@ export default function HomeClient() {
             if (event.kind === "command" && !trajectoryFilters.command) continue;
             if (event.kind === "status" && !trajectoryFilters.status) continue;
           }
+          if (!matchesEventSearch(event, eventSearch)) continue;
           rows.push({
             id: `event:${event.id}`,
             type: "event",
@@ -1186,7 +1187,7 @@ export default function HomeClient() {
       }
     }
     return rows;
-  }, [content, executionGroups, collapsedExecutionGroups, trajectoryFilters]);
+  }, [content, executionGroups, collapsedExecutionGroups, trajectoryFilters, eventSearch]);
 
   const transcriptRows = useMemo(() => {
     if (content?.kind !== "trajectory") return [];
@@ -1307,6 +1308,11 @@ export default function HomeClient() {
   }, [content, executionGroups, collapsedExecutionGroups]);
 
   const errorEvents = useMemo(() => rawTrajectoryEvents.filter(isErrorLikeTrajectoryEvent), [rawTrajectoryEvents]);
+
+  const eventSearchMatchCount = useMemo(() => {
+    if (!eventSearch.trim()) return null;
+    return rawTrajectoryEvents.filter((e) => matchesEventSearch(e, eventSearch)).length;
+  }, [rawTrajectoryEvents, eventSearch]);
 
   const groupedErrorEvents = useMemo(() => {
     const groups: ErrorGroup[] = [];
@@ -1610,6 +1616,7 @@ export default function HomeClient() {
     setSelectedKey(null);
     setSelectedId(null);
     setContent(null);
+    setEventSearch("");
     setAntigravityView("transcript");
     setWindsurfView("transcript");
     setCollapsedExecutionGroups({});
@@ -1718,7 +1725,7 @@ export default function HomeClient() {
           </Button>
           <div className="flex-1" />
           <div className="w-full sm:w-[360px] sm:max-w-[360px]">
-            <Input placeholder="Search by id…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <Input placeholder="Search by id, title or path…" value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
         </div>
         <div className="mt-2 text-xs text-muted">
@@ -1754,6 +1761,7 @@ export default function HomeClient() {
                     setInspectorOpen(false);
                     setSelectedRowId(null);
                     setScrollToRowId(null);
+                    setEventSearch("");
                     setAntigravityView("transcript");
                     setWindsurfView("transcript");
                     setCollapsedExecutionGroups({});
@@ -1989,6 +1997,17 @@ export default function HomeClient() {
                     </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
                   </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Search events…"
+                      value={eventSearch}
+                      onChange={(e) => setEventSearch(e.target.value)}
+                      className="h-7 text-xs"
+                    />
+                    {eventSearchMatchCount !== null && (
+                      <span className="shrink-0 text-xs text-muted">{eventSearchMatchCount} match{eventSearchMatchCount !== 1 ? "es" : ""}</span>
+                    )}
+                  </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2096,6 +2115,17 @@ export default function HomeClient() {
                       Only errors
                     </Button>
                     <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Search events…"
+                      value={eventSearch}
+                      onChange={(e) => setEventSearch(e.target.value)}
+                      className="h-7 text-xs"
+                    />
+                    {eventSearchMatchCount !== null && (
+                      <span className="shrink-0 text-xs text-muted">{eventSearchMatchCount} match{eventSearchMatchCount !== 1 ? "es" : ""}</span>
+                    )}
                   </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
