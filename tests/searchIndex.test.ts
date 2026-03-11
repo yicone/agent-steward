@@ -8,7 +8,12 @@ const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "asm-search-test-"));
 let testDbPath = path.join(tmpDir, "test-0.db");
 process.env.AGENT_STORAGE_MANAGER_SEARCH_DB_PATH = testDbPath;
 
-// Import AFTER setting the env var so searchIndex picks it up
+// Note: static `import` statements are hoisted by the module system and are
+// evaluated before any top-level code in this file. This is fine because
+// `searchIndex` reads `process.env.AGENT_STORAGE_MANAGER_SEARCH_DB_PATH`
+// lazily inside `dbPath()` — which is only called when the database is first
+// opened (on the initial `getDb()` call). As long as `resetDb()` sets the
+// env var before any search function is invoked, the correct path is used.
 import {
   closeDb,
   getIndexedSessionIds,
@@ -191,6 +196,37 @@ describe("searchIndex", () => {
     it("returns empty for empty query", () => {
       expect(searchSessions("")).toHaveLength(0);
       expect(searchSessions("  ")).toHaveLength(0);
+    });
+  });
+
+  describe("searchSessions — FTS5 query escaping (special characters)", () => {
+    beforeEach(() => {
+      indexSession("sess-special", "antigravity", 'foo"bar baz', "/projects/spec", [
+        makeEvent({ text: "contains colon like a:b and dash -hello and star *wild*" })
+      ]);
+    });
+
+    it("handles a query with double-quotes without throwing", () => {
+      expect(() => searchSessions('foo"bar')).not.toThrow();
+    });
+
+    it("handles a query with colon without throwing", () => {
+      expect(() => searchSessions("a:b")).not.toThrow();
+    });
+
+    it("handles a query with leading hyphen without throwing", () => {
+      expect(() => searchSessions("-hello")).not.toThrow();
+    });
+
+    it("handles a query with asterisk without throwing", () => {
+      expect(() => searchSessions("*wild*")).not.toThrow();
+    });
+
+    it("returns results for a query that contains double-quotes", () => {
+      // The session title contains foo"bar — an exact match should be found.
+      const results = searchSessions('foo"bar');
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0]!.sessionId).toBe("sess-special");
     });
   });
 });

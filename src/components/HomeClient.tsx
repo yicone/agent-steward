@@ -1351,8 +1351,14 @@ export default function HomeClient() {
 
   const eventSearchMatchEvents = useMemo(() => {
     if (!eventSearch.trim()) return [];
-    return rawTrajectoryEvents.filter((e) => matchesEventSearch(e, eventSearch));
-  }, [rawTrajectoryEvents, eventSearch]);
+    // Derive from trajectoryRows so navigation only considers events that are
+    // currently visible (respecting kind/hasOutput/stepTypeFilter/errorsOnly
+    // filters). trajectoryRows already applies matchesEventSearch, so all
+    // event rows in it are already search matches.
+    return trajectoryRows
+      .filter((row): row is Extract<TrajectoryRow, { type: "event" }> => row.type === "event")
+      .map((row) => row.event);
+  }, [trajectoryRows, eventSearch]);
 
   const activeSearchMatchIndex = useMemo(() => {
     if (!eventSearch.trim() || !selectedRowId?.startsWith("event:")) return -1;
@@ -1482,11 +1488,44 @@ export default function HomeClient() {
     setAutoOpenDetailsToken((prev) => prev + 1);
   }, []);
 
+  const loadConversation = useCallback(async (
+    nextSource: Source,
+    id: string,
+    stepOffset?: number,
+    view?: "chat" | "trajectory",
+    opts?: { includeCleared?: boolean }
+  ) => {
+    setLoadingContent(true);
+    setError(null);
+    try {
+      let qp = "";
+      if (nextSource === "windsurf") {
+        const sp = new URLSearchParams();
+        sp.set("stepOffset", String(stepOffset ?? 0));
+        if (view === "trajectory") sp.set("view", "trajectory");
+        const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
+        if (includeCleared) sp.set("includeCleared", "1");
+        qp = `?${sp.toString()}`;
+      }
+      const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
+      const json = (await res.json()) as any;
+      if (!res.ok) throw new Error(json?.error ?? "Failed to load conversation");
+      setContent(json as ConversationContent);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setContent(null);
+    } finally {
+      setLoadingContent(false);
+    }
+  }, [windsurfIncludeCleared]);
+
   const handleGlobalSearchSelect = useCallback(
     (sessionId: string, sessionSource: Source) => {
       // Switch source tab if needed
       if (sessionSource !== source) setSource(sessionSource);
-      // Find the matching list item to set the selectedKey (needed for UI highlight)
+      // Best-effort: find the matching list item in the current items list.
+      // If we're switching source, items still holds the old source's list, so
+      // this may fail. A useEffect below corrects selectedKey once items reloads.
       const match = items.find((it) => it.id === sessionId);
       const key = match ? `${match.rootId}:${match.id}` : `unknown:${sessionId}`;
       setSelectedKey(key);
@@ -1503,8 +1542,7 @@ export default function HomeClient() {
         (e) => setError(e instanceof Error ? e.message : String(e))
       );
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [source, items]
+    [source, items, loadConversation]
   );
 
   useEffect(() => {
@@ -1582,37 +1620,6 @@ export default function HomeClient() {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoadingList(false);
-    }
-  }
-
-  async function loadConversation(
-    nextSource: Source,
-    id: string,
-    stepOffset?: number,
-    view?: "chat" | "trajectory",
-    opts?: { includeCleared?: boolean }
-  ) {
-    setLoadingContent(true);
-    setError(null);
-    try {
-      let qp = "";
-      if (nextSource === "windsurf") {
-        const sp = new URLSearchParams();
-        sp.set("stepOffset", String(stepOffset ?? 0));
-        if (view === "trajectory") sp.set("view", "trajectory");
-        const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
-        if (includeCleared) sp.set("includeCleared", "1");
-        qp = `?${sp.toString()}`;
-      }
-      const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
-      const json = (await res.json()) as any;
-      if (!res.ok) throw new Error(json?.error ?? "Failed to load conversation");
-      setContent(json as ConversationContent);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-      setContent(null);
-    } finally {
-      setLoadingContent(false);
     }
   }
 
@@ -1700,6 +1707,18 @@ export default function HomeClient() {
     setWindsurfView("transcript");
     setCollapsedExecutionGroups({});
   }, [source]);
+
+  // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
+  // re-derive selectedKey from selectedId so the conversation list highlights
+  // the correct item. This corrects the `unknown:id` placeholder set in
+  // handleGlobalSearchSelect when the target session was in a different source.
+  useEffect(() => {
+    if (!selectedId) return;
+    const match = items.find((it) => it.id === selectedId);
+    if (!match) return;
+    const expectedKey = `${match.rootId}:${match.id}`;
+    setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
+  }, [items, selectedId]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;

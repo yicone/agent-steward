@@ -73,18 +73,38 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
         stepOffset: trajectory.nextStepOffset,
         ...(typeof trajectory.numTotalSteps === "number" ? { numTotalSteps: trajectory.numTotalSteps } : {})
       };
-      // Index on first page only (stepOffset === 0) to avoid redundant re-indexing.
+      // Index on first page only (stepOffset === 0).
+      // Fetch all remaining pages in the background so the full session is indexed,
+      // not just the first chunk the user loaded.
       if (stepOffset === 0) {
-        const eventsSnap = trajectory.events;
+        const firstPageEvents = trajectory.events;
+        const firstNextOffset = trajectory.nextStepOffset;
+        const totalSteps = trajectory.numTotalSteps;
         setImmediate(() => {
-          getTrajectoryMetaMapCached({ source: "windsurf", config })
-            .then((metaMap) => {
+          (async () => {
+            try {
+              const allEvents: TrajectoryEvent[] = [...firstPageEvents];
+              let nextOffset = firstNextOffset;
+              // Paginate until numTotalSteps is reached or the page returns no new events.
+              while (true) {
+                if (typeof totalSteps === "number" && nextOffset >= totalSteps) break;
+                const page = await getWindsurfTrajectory({
+                  config,
+                  cascadeId: id,
+                  stepOffset: nextOffset,
+                  includeCleared
+                });
+                if (page.events.length === 0) break;
+                allEvents.push(...page.events);
+                nextOffset = page.nextStepOffset;
+              }
+              const metaMap = await getTrajectoryMetaMapCached({ source: "windsurf", config });
               const meta = metaMap[id] ?? {};
-              indexSession(id, "windsurf", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
-            })
-            .catch((err) => {
+              indexSession(id, "windsurf", meta.title ?? id, meta.cwd ?? extractCwd(allEvents), allEvents);
+            } catch (err) {
               console.warn(`[search] Failed to index windsurf session ${id}:`, err instanceof Error ? err.message : err);
-            });
+            }
+          })();
         });
       }
       return NextResponse.json(out);

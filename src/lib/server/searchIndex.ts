@@ -27,7 +27,12 @@ export type SearchResult = {
 
 function dbPath(): string {
   const override = process.env.AGENT_STORAGE_MANAGER_SEARCH_DB_PATH;
-  if (override && override.trim().length) return override.trim();
+  if (override && override.trim().length) {
+    const p = override.trim();
+    const dir = path.dirname(p);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return p;
+  }
   const dir = path.join(os.homedir(), ".agent-storage-manager");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, "search.db");
@@ -93,6 +98,23 @@ function initSchema(db: Database.Database): void {
 /** Maximum characters of event.text / event.output to include per event. */
 const MAX_TEXT_PER_EVENT = 500;
 const MAX_OUTPUT_PER_EVENT = 200;
+
+/**
+ * Escape a user-provided string for safe use with FTS5 MATCH.
+ *
+ * FTS5 interprets characters like double-quotes, colons, hyphens, and stars as
+ * query syntax. To treat the entire input as a literal substring search
+ * (which works well with the trigram tokenizer), wrap the whole string in
+ * double-quotes and escape any internal double-quotes by doubling them.
+ *
+ * Examples:
+ *   foo"bar  →  "foo""bar"
+ *   a:b      →  "a:b"
+ *   -hello   →  "-hello"
+ */
+function escapeFts5Query(q: string): string {
+  return `"${q.replace(/"/g, '""')}"`;
+}
 
 /** Build the searchable body string from a session's events. */
 function buildBody(events: TrajectoryEvent[]): string {
@@ -196,7 +218,9 @@ export function searchSessions(query: string, limit = 20): SearchResult[] {
   if (!q) return [];
 
   if (q.length >= 3) {
-    // FTS5 trigram path
+    // FTS5 trigram path.
+    // The user query is escaped to prevent FTS5 syntax errors (e.g. from
+    // special characters like quotes, colons, or hyphens).
     // snippet() parameters: (table, column_index, open_tag, close_tag, ellipsis, num_tokens)
     // column_index 4 = body (0-indexed: session_id=0, source=1, title=2, cwd=3, body=4)
     type FtsRow = { session_id: string; source: string; title: string; cwd: string; snippet: string };
@@ -211,10 +235,10 @@ export function searchSessions(query: string, limit = 20): SearchResult[] {
         FROM sessions_fts f
         JOIN sessions s ON s.session_id = f.session_id AND s.source = f.source
         WHERE sessions_fts MATCH ?
-        ORDER BY rank
+        ORDER BY bm25(sessions_fts)
         LIMIT ?
       `)
-      .all(q, limit) as FtsRow[];
+      .all(escapeFts5Query(q), limit) as FtsRow[];
 
     return rows.map((r) => ({
       sessionId: r.session_id,
