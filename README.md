@@ -34,17 +34,30 @@ Optional: override the config file path via env var (useful for local workspace 
 export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 ```
 
+## Project Docs
+
+- `README.md`: current product scope, configuration, and runtime prerequisites
+- `ROADMAP.md`: open/planned work only
+- `CHANGELOG.md`: shipped changes and merged GitHub work
+- `docs/adr/ADR-001-use-language-server-rpc.md`: canonical decision for session retrieval strategy
+- `docs/storage/local-storage-notes.md`: version-scoped Antigravity / Windsurf storage and attach facts
+
 ## Features (v1)
 
 - Scan and list `.pb` session files (default directories + custom roots from Settings)
+- Search and filtering:
+  - full-text event search within the current conversation
+  - enhanced conversation filtering in the session list / viewer flow
 - Antigravity:
   - list enrichment: load `title/cwd` from Antigravity VS Code global state (`state.vscdb`) for better coverage vs LS-only summaries
   - fetch `GetCascadeTrajectory` and normalize steps into a unified event model
   - default Viewer mode: Transcript (user/assistant + errors; tools/commands summarized)
   - group trajectory events by `executionId` with collapsible sections
   - use virtualized list rendering for long sessions
+  - Inspector: inspect selected event/message, plus an error list with jump-to-event
   - allow switching to Markdown view rendered via `ConvertTrajectoryToMarkdown`
 - Windsurf: connect to the running language server (discover port from logs + CSRF token from process args)
+  - on newer builds, prefer `WINDSURF_CSRF_TOKEN` from the LS process environment when available
   - default Viewer mode: Transcript (trajectory-backed via `view=trajectory`)
   - legacy chat view available for raw transcript-style browsing
 - Unified trajectory model:
@@ -61,7 +74,15 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
   - Legacy fallback: `~/.gemini/antigravity/daemon/ls_*.json` (may be stale on newer builds).
 - Antigravity: for conversation list `title/cwd`, this app reads `~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb` (VS Code global state) locally.
 - Windsurf: Windsurf must be running (and have started a Cascade session at least once). This app parses the language-server port from Windsurf logs and tries to read `--csrf_token` from process args.
-  - If your system cannot read process args, set `csrfTokenOverride` in Settings as a fallback.
+  - On current Windsurf builds, the live token may be present in the LS process environment as `WINDSURF_CSRF_TOKEN`, so this app prefers `ps eww` output when available.
+  - Manual fallback: set `csrfTokenOverride` in Settings, but only if you obtained the live LS token from the running Windsurf process/session.
+  - Do not use `codeium.windsurf-windsurf_auth-` from `~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb`; that UUID is not the LS CSRF token on current Windsurf builds.
+
+## Project Status
+
+- Current planning is tracked in `ROADMAP.md`.
+- Current shipped milestones are tracked in `CHANGELOG.md`.
+- GitHub Issues / PRs help index work when they exist, but these docs remain usable without them.
 
 ## Technical Docs
 
