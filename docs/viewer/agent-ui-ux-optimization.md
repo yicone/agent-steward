@@ -32,7 +32,7 @@
 - **Chat (legacy)**：Windsurf 的旧式 chat 投影视图（lossy projection，保留用于对照/兼容）。
 - **Actions**：Transcript 下用于承载“被隐藏事件摘要 + 精简列表”的折叠块，通常挂在最近的 assistant bubble 之后。
 - **Hidden summary**：当没有合适的 assistant attachment point 时，用于兜底呈现“隐藏事件计数”的行。
-- **Inspector**：计划引入的结构化详情侧栏（统一展示 raw step / tool payload / output / 诊断信息）。
+- **Inspector**：已引入（基础版）的结构化详情侧栏（统一展示 raw step / tool payload / output / 诊断信息），后续可逐步增强。
 
 ## Status（Shipped / Next / Open Questions）
 
@@ -41,6 +41,8 @@
 - 统一事件模型：Antigravity/Windsurf 都归一为 `TrajectoryEvent[]`（便于同一套 UI/UX 投影）。
 - UI 样式体系迁移开始：引入 Tailwind CSS v4 + shadcn/ui 目录结构（用于后续逐步替换 legacy CSS）。
 - Inspector（基础版）：可选中事件/消息查看结构化字段与 raw 文本/JSON，并提供错误列表与跳转定位（scroll to event）。
+- 错误中心（当前以 Inspector 的 `Errors` 模式承载）：顶部 `errors N` 按钮打开列表；点击条目会自动展开对应 `executionId` 分组、启用必要的 kind 过滤，并滚动/选中目标事件。
+- Transcript → Trajectory 跳转：Transcript 下的 `Actions` 行提供 “Jump to Trajectory”，可切换到 Trajectory 并尽力定位/展开目标事件（含自动打开 details）。
 - Transcript 作为默认视图：
   - 以 `user/assistant` 气泡为主（相邻同角色可合并）。
   - 错误与关键状态可见（running/canceled/timeout 等）。

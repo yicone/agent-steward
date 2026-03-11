@@ -118,6 +118,19 @@ For markdown rendering:
 
 - currently available on Antigravity trajectories (`content.markdown`)
 
+## Inspector and Error Center (Implemented)
+
+The current Viewer includes a right-side Inspector panel (desktop) that supports:
+
+- Inspecting a selected **event** (including copy-to-clipboard for key fields and raw JSON).
+- Inspecting a selected **message** (role/text/payload).
+- An **Errors** mode ("error center") listing detected error-like events.
+  - Selecting an error jumps to the corresponding trajectory row:
+    - expands the relevant `executionId` group
+    - ensures the relevant kind filter is enabled
+    - scrolls to and selects `event:<eventId>`
+  - Transcript "Actions" rows can also "Jump to Trajectory" for a related event id, switching the UI into Trajectory mode and auto-opening the details row when possible.
+
 ## Current Limits
 
 - `executionId` quality depends on upstream data.
