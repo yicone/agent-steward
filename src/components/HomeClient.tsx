@@ -291,6 +291,33 @@ function MarkdownContent({ text }: { text: string }) {
   );
 }
 
+/**
+ * Splits `text` around case-insensitive occurrences of `query` and returns a
+ * React fragment with matching substrings wrapped in a highlighted <mark>.
+ * Returns plain text when query is empty or has no match.
+ */
+function HighlightedText({ text, query }: { text: string; query: string }): React.ReactElement {
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+  const lowerText = text.toLowerCase();
+  const lowerQ = q.toLowerCase();
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let idx = lowerText.indexOf(lowerQ, last);
+  while (idx !== -1) {
+    if (idx > last) parts.push(text.slice(last, idx));
+    parts.push(
+      <mark key={idx} className="rounded-sm bg-yellow-300/60 px-0 text-inherit dark:bg-yellow-500/40">
+        {text.slice(idx, idx + q.length)}
+      </mark>
+    );
+    last = idx + q.length;
+    idx = lowerText.indexOf(lowerQ, last);
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return <>{parts}</>;
+}
+
 function ChatMessageView({
   message,
   selected,
@@ -450,12 +477,14 @@ function TrajectoryEventView({
   event,
   selected,
   highlighted,
+  highlightQuery,
   onSelect,
   onJumpToTrajectory
 }: {
   event: TrajectoryEvent;
   selected?: boolean;
   highlighted?: boolean;
+  highlightQuery?: string;
   onSelect?(): void;
   onJumpToTrajectory?(): void;
 }) {
@@ -463,6 +492,7 @@ function TrajectoryEventView({
   const hasDetails = Boolean(event.output || event.toolCalls?.length);
   const clickable = typeof onSelect === "function";
   const shouldRenderMarkdown = event.kind === "thought";
+  const hl = highlightQuery ?? "";
 
   return (
     <div
@@ -493,7 +523,7 @@ function TrajectoryEventView({
       ) : null}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge title={event.title}>{event.title}</Badge>
+          <Badge title={event.title}><HighlightedText text={event.title} query={hl} /></Badge>
           <span className="truncate font-mono text-xs text-muted">{event.stepType}</span>
         </div>
         <div className="shrink-0 text-xs text-muted">{timeLabel}</div>
@@ -501,7 +531,7 @@ function TrajectoryEventView({
 
       {event.commandLine ? (
         <div className="mt-2 font-mono text-xs">
-          $ {event.commandLine}
+          $ <HighlightedText text={event.commandLine} query={hl} />
         </div>
       ) : null}
 
@@ -514,7 +544,7 @@ function TrajectoryEventView({
 
       {event.text ? (
         <div className="mt-2">
-          {shouldRenderMarkdown ? <MarkdownContent text={event.text} /> : <div>{event.text}</div>}
+          {shouldRenderMarkdown ? <MarkdownContent text={event.text} /> : <div><HighlightedText text={event.text} query={hl} /></div>}
         </div>
       ) : null}
 
@@ -527,7 +557,9 @@ function TrajectoryEventView({
             </pre>
           ) : null}
           {event.output ? (
-            <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">{event.output}</pre>
+            <pre className="mt-2 max-w-full overflow-x-auto whitespace-pre text-xs">
+              {hl ? <HighlightedText text={event.output} query={hl} /> : event.output}
+            </pre>
           ) : null}
         </details>
       ) : null}
@@ -600,6 +632,7 @@ function VirtualizedTrajectoryRows(props: {
   autoOpenDetailsRowId?: string | null;
   autoOpenDetailsToken?: number;
   onAutoOpenedDetails?(rowId: string, token: number): void;
+  searchQuery?: string;
 }) {
   const {
     rows,
@@ -612,7 +645,8 @@ function VirtualizedTrajectoryRows(props: {
     onJumpToTrajectoryEventId,
     autoOpenDetailsRowId,
     autoOpenDetailsToken,
-    onAutoOpenedDetails
+    onAutoOpenedDetails,
+    searchQuery
   } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -802,6 +836,7 @@ function VirtualizedTrajectoryRows(props: {
                 event={row.event}
                 selected={selectedRowId === row.id}
                 highlighted={highlightedRowId === row.id}
+                highlightQuery={searchQuery}
                 onSelect={onSelectRow ? () => onSelectRow?.(row) : undefined}
                 onJumpToTrajectory={onJumpToTrajectoryEventId ? () => onJumpToTrajectoryEventId(row.event.id) : undefined}
               />
@@ -1125,7 +1160,8 @@ export default function HomeClient() {
     command: true,
     status: false,
     errorsOnly: false,
-    hasOutput: false
+    hasOutput: false,
+    stepTypeFilter: ""
   });
   const [collapsedExecutionGroups, setCollapsedExecutionGroups] = useState<Record<string, boolean>>({});
 
@@ -1178,6 +1214,7 @@ export default function HomeClient() {
             if (event.kind === "status" && !trajectoryFilters.status) continue;
           }
           if (trajectoryFilters.hasOutput && !event.output) continue;
+          if (trajectoryFilters.stepTypeFilter && !event.stepType.toLowerCase().includes(trajectoryFilters.stepTypeFilter.toLowerCase())) continue;
           if (!matchesEventSearch(event, eventSearch)) continue;
           rows.push({
             id: `event:${event.id}`,
@@ -2037,6 +2074,14 @@ export default function HomeClient() {
                       <span className="shrink-0 text-xs text-muted">0 matches</span>
                     ) : null}
                   </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Filter stepType…"
+                      value={trajectoryFilters.stepTypeFilter}
+                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+                      className="h-7 text-xs"
+                    />
+                  </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2051,6 +2096,7 @@ export default function HomeClient() {
                       onAutoOpenedDetails={(rowId, token) => {
                         if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
                       }}
+                      searchQuery={eventSearch}
                     />
                   )}
                 </div>
@@ -2169,6 +2215,14 @@ export default function HomeClient() {
                       <span className="shrink-0 text-xs text-muted">0 matches</span>
                     ) : null}
                   </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Filter stepType…"
+                      value={trajectoryFilters.stepTypeFilter}
+                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+                      className="h-7 text-xs"
+                    />
+                  </div>
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2183,6 +2237,7 @@ export default function HomeClient() {
                       onAutoOpenedDetails={(rowId, token) => {
                         if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
                       }}
+                      searchQuery={eventSearch}
                     />
                   )}
                 </div>

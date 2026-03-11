@@ -47,14 +47,15 @@
   - 工具/命令/状态/思考等默认隐藏在 assistant 下方的 `Actions` 折叠块中（以计数摘要为主；可展开查看精简 tool 列表）。若没有可挂载的 assistant，则用 `Hidden summary` 行兜底呈现计数。
 - Trajectory 过程视图：
   - kind 过滤（thought/tool/command/status）
-  - `errorsOnly` / `hasOutput` 结构化过滤
+  - `errorsOnly` / `hasOutput` / `stepTypeFilter` 结构化过滤
   - `executionId` 分组折叠
   - 动态高度虚拟滚动（长会话更稳）
-- 搜索（基础版）：
+- 搜索（完整版，单会话内）：
   - 会话列表按 id / title / cwd 文本过滤（`matchesConversationSearch`）
   - Trajectory 视图内按 title / text / output / stepType / commandLine / toolName 全文搜索（`matchesEventSearch`）
   - 搜索命中事件支持上一处 / 下一处 jump-to-row（复用 `scrollToRowId` + `highlightedRowId`）
-  - 设计文档：`docs/viewer/search-design.md`
+  - 搜索命中词在 title / commandLine / text / output 字段内高亮（`HighlightedText` 零依赖组件）
+  - 设计文档：`docs/viewer/search-design.md`；跨会话搜索选型：`docs/adr/ADR-003-cross-session-search.md`
 - Windsurf：默认使用 trajectory-backed（`view=trajectory`）分页加载；legacy chat 仍保留。
 
 ### Next（建议按收益/成本排序）
@@ -65,9 +66,8 @@
    - errors 计数可点开列表，点击 `scrollToId` 并高亮
 3) 深链接（URL query）
    - 保留 `source/selectedId/view/mode/filters/selectedEventId`，刷新可复现状态
-4) 搜索（待完善）
-   - 搜索命中文本在事件内高亮（`react-highlight-words` 或 `mark.js`，见 `docs/viewer/search-design.md` 第 5.1 节）
-   - stepType 结构化过滤（动态枚举当前会话出现的 stepType）
+4) 跨会话搜索
+   - SQLite FTS5（`better-sqlite3`）服务端索引 + `Cmd+K` 全局搜索面板（详见 `docs/adr/ADR-003-cross-session-search.md`）
 
 ### Open Questions（需要产品决策或更真实数据验证）
 

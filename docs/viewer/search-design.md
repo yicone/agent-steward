@@ -2,6 +2,17 @@
 
 > 本文档对应 issue [#21](https://github.com/yicone/agent-storage-manager/issues/21) 的设计要求，同时也是 issue [#5](https://github.com/yicone/agent-storage-manager/issues/5)（Architecture Review v1: Search + structured filters）的实现说明文档。
 
+## 文档分类说明
+
+本文档**不是 ADR（Architecture Decision Record）**，原因如下：
+
+- 项目的 ADR 文档（`docs/adr/`）记录的是**技术决策**：在多个可选方案中做出不可轻易逆转的选择，包含 Context、Considered options、Decision、Consequences 等标准章节。典型示例：ADR-001（用 LS RPC 还是离线解码 `.pb`）、ADR-002（统一事件模型还是各源独立模型）。
+- 本文档描述的是**功能规格与实现说明**：解释搜索功能如何工作、各字段如何被索引、内存消耗如何估算、已实现了哪些验收标准。这类文档属于 viewer feature spec，与 `docs/viewer/trajectory-view.md` 性质相同。
+
+**存放位置**：`docs/viewer/search-design.md` ✅（当前位置正确）。
+
+**跨会话搜索**（§5.2）的技术选型决策（QMD vs SQLite FTS5 等选项对比）属于架构决策，已另立 ADR 文档：[`docs/adr/ADR-003-cross-session-search.md`](../adr/ADR-003-cross-session-search.md)。
+
 ---
 
 ## 1. 整体定位
@@ -103,39 +114,59 @@ Trajectory 视图支持以下结构化过滤（`trajectoryFilters` 状态）：
 | 结构化过滤：kind（thought/tool/command/status）| ✅ 已实现 |
 | 结构化过滤：onlyErrors | ✅ 已实现 |
 | 结构化过滤：hasOutput | ✅ 已实现 |
+| 结构化过滤：stepType（substring 文本过滤） | ✅ 已实现（`trajectoryFilters.stepTypeFilter`） |
 | 搜索结果支持 jump-to-row（上一处/下一处） | ✅ 已实现 |
-| 在主视图或 Inspector 中高亮匹配 | 🔲 **未实现**（见下方 "未来工作"） |
+| 搜索命中在事件视图内文本高亮 | ✅ 已实现（`HighlightedText` 组件，title/text/commandLine/output） |
 | 大型会话性能可接受 | ✅ 依赖 `useMemo` 避免冗余计算；虚拟滚动已有 |
 
 ---
 
-## 5. 未来工作
+## 5. 待实现功能
 
-### 5.1 文本高亮（in-text match highlighting）
+### 5.1 文本高亮（in-text match highlighting）— ✅ 已实现
 
-当 `eventSearch` 非空时，在事件的 `title`、`text`、`output` 等字段内，将命中的子串包裹在高亮标签中。
+当 `eventSearch` 非空时，事件的 `title`、`commandLine`、纯文本 `text`、`output` 字段内的命中子串被 `HighlightedText` 组件包裹为 `<mark>` 标签并高亮显示。
 
-**推荐方案**：引入 `mark.js` 或 `react-highlight-words`，在 EventRow 渲染文本时包装。
+**实现方式**（无额外依赖）：
+- `HighlightedText({ text, query })` — 纯函数，将字符串按查询词切分，命中部分包裹 `<mark className="bg-yellow-300/60">...</mark>`，未命中部分保留纯文本。
+- 适用范围：`title`、`commandLine`、非 Markdown 的 `text`、`output`（在折叠的 `<details>` 内）。
+- 跳过 Markdown 渲染的 `text`（thought 类型事件）以避免破坏 HTML 结构。
+- 虚拟滚动确保始终只高亮当前可见行，无性能问题。
 
-**注意事项**：
-- 仅对可见行做高亮（虚拟滚动已保证渲染行数有限）。
-- `output` 字段文本较长，需在截断/折叠后再高亮，避免布局抖动。
+**为何不引入 `react-highlight-words` 或 `mark.js`**：
+- `react-highlight-words` 仅处理纯文本 React 节点，与本项目已有自定义渲染逻辑重叠，引入收益有限。
+- `mark.js` 直接操作 DOM，在 React 虚拟 DOM 环境下有冲突风险。
+- 零依赖的 `HighlightedText` 在本项目的搜索场景（单词/短语子串匹配）中已完全满足需求。
 
-### 5.2 跨会话搜索
+### 5.2 跨会话搜索 — 🔲 未实现（技术选型已确定）
 
-当前实现只支持在已加载的单条会话内搜索。跨会话全文搜索需要：
-- 预构建搜索索引（SQLite FTS / in-process index）或全量加载（内存代价高）。
-- 建议作为独立功能（例如 `Cmd+Shift+F` 打开全局搜索面板），与单会话搜索分开实现。
+当前实现只支持在已加载的单条会话内搜索。跨会话全文搜索需要服务端索引。
 
-### 5.3 stepType 结构化过滤
+**技术选型**：参见 [`docs/adr/ADR-003-cross-session-search.md`](../adr/ADR-003-cross-session-search.md)。
 
-issue #5 中提到 `stepType` 可选过滤。当会话加载后，可枚举所有出现的 `stepType` 值，动态生成复选框供过滤。目前 `matchesEventSearch` 已支持对 `stepType` 文本搜索作为替代方案。
+结论摘要：
+- **推荐方案**：SQLite FTS5（通过 `better-sqlite3`）在 Next.js 服务端构建索引，按需填充（session-on-open indexing）。
+- **不推荐 QMD**：QMD 的架构假设是索引本地文件目录；本项目的会话内容来自 LS RPC，不存在可直接索引的本地文件。且 QMD 对向量搜索和 LLM 模型的依赖对此场景属于过度设计。
+- **入口**：建议作为 `Cmd+K` 全局搜索面板，与单会话搜索分开，不干扰现有 UI 流程。
+
+### 5.3 stepType 结构化过滤 — ✅ 已实现
+
+`trajectoryFilters.stepTypeFilter: string` — 非空时对 `event.stepType` 做大小写不敏感子串匹配（`includes`）。
+
+UI：Trajectory 视图过滤栏底部新增 "Filter stepType…" 文本输入框，与事件搜索框并列。
+用法示例：输入 `TOOL_CALL` 仅显示工具调用事件；输入 `RUN_COMMAND` 仅显示命令执行事件。
+
+**为何选择文本输入而非动态枚举复选框**：
+- 会话中可能出现数十种 stepType 值（完整字符串如 `CORTEX_STEP_TYPE_TOOL_CALL`），复选框列表会占用大量空间且不便阅读。
+- 文本子串过滤更灵活：可匹配 stepType 前缀或中缀，用户无需预先知道所有枚举值。
+- 与 eventSearch 保持一致的交互范式（文本输入）。
 
 ---
 
 ## 6. 参考文件
 
 - `src/lib/parse/trajectory.ts` — `matchesEventSearch`、`matchesConversationSearch`
-- `src/components/HomeClient.tsx` — 搜索状态、`trajectoryFilters`、跳转逻辑
+- `src/components/HomeClient.tsx` — 搜索状态、`trajectoryFilters`、`HighlightedText`、跳转逻辑
+- `docs/adr/ADR-003-cross-session-search.md` — 跨会话搜索技术选型决策
 - `docs/viewer/agent-ui-ux-optimization.md` — 整体 UI/UX 优化方案
 - `docs/viewer/trajectory-view.md` — 统一事件模型定义
