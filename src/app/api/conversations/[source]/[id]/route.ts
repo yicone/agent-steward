@@ -120,7 +120,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
     // Index on first page load if not already indexed, so sessions opened in
     // compact (chat) mode are still discoverable via cross-session search.
     // Skipping when already indexed avoids a redundant full trajectory RPC round-trip.
-    if (stepOffset === 0 && !isSessionIndexed(id, "windsurf")) {
+    if (stepOffset === 0 && !isSessionIndexed(id, source)) {
       const totalSteps = chat.numTotalSteps;
       setImmediate(() => {
         (async () => {
@@ -139,9 +139,9 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
               allEvents.push(...page.events);
               nextOffset = page.nextStepOffset;
             }
-            const metaMap = await getTrajectoryMetaMapCached({ source: "windsurf", config });
+            const metaMap = await getTrajectoryMetaMapCached({ source, config });
             const meta = metaMap[id] ?? {};
-            indexSession(id, "windsurf", meta.title ?? id, meta.cwd ?? extractCwd(allEvents), allEvents);
+            indexSession(id, source, meta.title ?? id, meta.cwd ?? extractCwd(allEvents), allEvents);
           } catch (err) {
             console.warn(`[search] Failed to index windsurf session ${id}:`, err instanceof Error ? err.message : err);
           }
