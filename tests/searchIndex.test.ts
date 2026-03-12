@@ -201,8 +201,8 @@ describe("searchIndex", () => {
 
   describe("searchSessions — FTS5 query escaping (special characters)", () => {
     beforeEach(() => {
-      indexSession("sess-special", "antigravity", 'foo"bar baz', "/projects/spec", [
-        makeEvent({ text: "contains colon like a:b and dash -hello and star *wild*" })
+      indexSession("sess-special", "antigravity", 'foo"bar baz', "/home/user/project", [
+        makeEvent({ text: "contains colon like a:b and dash -hello and star *wild* and flag --watch" })
       ]);
     });
 
@@ -220,6 +220,14 @@ describe("searchIndex", () => {
 
     it("handles a query with asterisk without throwing", () => {
       expect(() => searchSessions("*wild*")).not.toThrow();
+    });
+
+    it("handles a query with filesystem path slash without throwing", () => {
+      expect(() => searchSessions("/home/user")).not.toThrow();
+    });
+
+    it("handles a query with double-dash flag without throwing", () => {
+      expect(() => searchSessions("--watch")).not.toThrow();
     });
 
     it("returns results for a query that contains double-quotes", () => {
