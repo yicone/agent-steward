@@ -222,8 +222,10 @@ describe("searchIndex", () => {
       expect(() => searchSessions("*wild*")).not.toThrow();
     });
 
-    it("handles a query with filesystem path slash without throwing", () => {
-      expect(() => searchSessions("/home/user")).not.toThrow();
+    it("returns results for a query with a filesystem path slash", () => {
+      const results = searchSessions("/home/user/project");
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0]!.sessionId).toBe("sess-special");
     });
 
     it("handles a query with double-dash flag without throwing", () => {
