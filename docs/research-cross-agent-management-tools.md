@@ -33,7 +33,7 @@
 |---|---|---|---|
 | holstein13/mcp-config-manager | CLI + GUI | 开源 | MCP config 同步、preset、启停 |
 | MediaPublishing/mcp-manager | GUI(Web) | 开源 | MCP server 可视化管理 |
-| MCP-Club/mcpm | CLI | 开源 | MCP 包管理/管理 server |
+| MCP-Club/mcpm | CLI | 开源 | MCP 包管理 + server 启停/运行管理 |
 | Smithery | SaaS + CLI | SaaS | 托管式 MCP/skills 控制面 |
 | BoltAI / EnConvo / Msty | GUI desktop | 付费本地软件 | MCP 在本地应用中的连接与使用管理 |
 
