@@ -230,6 +230,8 @@ describe("searchIndex", () => {
 
     it("handles a query with double-dash flag without throwing", () => {
       expect(() => searchSessions("--watch")).not.toThrow();
+      const results = searchSessions("--watch");
+      expect(results.some(r => r.sessionId === "sess-special")).toBe(true);
     });
 
     it("returns results for a query that contains double-quotes", () => {
