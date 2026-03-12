@@ -1713,9 +1713,14 @@ export default function HomeClient() {
     // If this source change was triggered by a cross-source GlobalSearch selection
     // (handleGlobalSearchSelect sets crossSourceSelectionRef), skip the reset so
     // the pending session selection survives the source-change cycle.
-    if (crossSourceSelectionRef.current?.source === source) {
+    const crossSourceSelection = crossSourceSelectionRef.current;
+    if (crossSourceSelection) {
+      if (crossSourceSelection.source === source) {
+        crossSourceSelectionRef.current = null;
+        return;
+      }
+      // Stale ref for a different source; clear it so it cannot affect future switches.
       crossSourceSelectionRef.current = null;
-      return;
     }
     setSelectedKey(null);
     setSelectedId(null);
