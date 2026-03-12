@@ -12,7 +12,8 @@
 4. 命令资产管理（slash-commands / workflow / command-pack）  
 5. 多 Agent 运行时协作（含编排与会话调度）  
 6. Subagent 管理（定义、目录、安装、执行桥接）  
-7. Spec-driven（SDD）流程资产（需求→设计→任务→实现）
+7. Spec-driven（SDD）流程资产（需求→设计→任务→实现）  
+8. 本地会话观测与诊断（与本项目定位接近）
 
 ---
 
@@ -98,6 +99,22 @@
 | liatrio-labs/spec-driven-workflow | 模板/文档流程 | 开源 | 轻量 markdown SDD 流程 |
 | Kiro（内置） | 产品内置 | 商业产品 | 内置 SDD 体验与流程能力 |
 
+
+## 8) 本地会话观测与诊断（与本项目定位接近）
+
+> 该类别聚焦“本地会话历史浏览、跨来源检索、日志诊断、token/成本观测”等能力，和本项目（local-first 会话查看与诊断）定位最接近。
+
+| 工具/产品 | 形态 | 商业性质 | 定位 |
+|---|---|---|---|
+| esc5221/claude-code-viewer | Desktop App | 开源 | Claude Code 会话日志浏览与分析 |
+| tad-hq/universal-session-viewer | Desktop App | 开源 | 会话浏览/检索/分析（含续写链识别） |
+| dotneet/agent-session-view | CLI + Web/桌面 | 开源 | Claude Code + Codex CLI 会话查看/导出 |
+| softaworks/agent-trail | Local Web App | 开源 | 本地多 profile 会话历史浏览 |
+| InDate/claude-log-viewer | Local Web App | 开源 | 本地多项目 agent 日志查看与管理 |
+| junhoyeo/tokscale | CLI | 开源 | 多 agent token 使用量观测（OpenCode/Claude/Codex 等） |
+| sean-m-cooper/AgentTower | Terminal Monitor | 开源 | agentic 终端会话监控（跨多 CLI） |
+
+
 ---
 
 ## 结论
@@ -105,7 +122,8 @@
 1. **命令资产管理** 与 **多 Agent 运行时协作** 必须分开评估：前者是“静态资产复用”，后者是“运行时系统能力”。  
 2. **Subagent 管理**建议独立成类：至少区分目录（catalog）、管理器（manager）、执行桥（runtime bridge）。  
 3. **Spec-driven（SDD）**是独立能力域，不应混入“编排”或“命令资产”分类中；它常与二者组合使用。  
-4. 对流行 Coding Agent 的分析应纳入同一分类框架：其“内置能力”是各分类的产品内实现，而不是额外新类别。
+4. 对流行 Coding Agent 的分析应纳入同一分类框架：其“内置能力”是各分类的产品内实现，而不是额外新类别。  
+5. “本地会话观测与诊断”是独立高价值类别：它与配置管理/编排并列，关注历史可观测性、问题定位和跨来源检索。
 
 ## 选型建议
 
@@ -114,4 +132,5 @@
 - 若优先“编排”：先评估 `awslabs/agent-squad` / `ComposioHQ/agent-orchestrator` / `ruvnet/ruflo`。
 - 若优先“会话切换/调度”：关注 `kbwo/ccmanager` 与产品内置 Agent Manager 类能力。  
 - 若优先 subagent 跨工具执行：对比内容仓方案（如 `wshobson/agents`）与 MCP 执行桥方案（如 `shinpr/sub-agents-mcp`）。  
-- 若优先 SDD 治理：先评估 `github/spec-kit` + `Fission-AI/OpenSpec`，再叠加命令包和编排层。
+- 若优先 SDD 治理：先评估 `github/spec-kit` + `Fission-AI/OpenSpec`，再叠加命令包和编排层。  
+- 若优先“会话历史检索与诊断”：优先试用 `dotneet/agent-session-view` / `tad-hq/universal-session-viewer` / `esc5221/claude-code-viewer`，并结合 `tokscale` 做 token 观测。
