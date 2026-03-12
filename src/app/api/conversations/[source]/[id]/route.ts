@@ -5,7 +5,7 @@ import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getWindsurfChat, getWindsurfTrajectory } from "@/lib/server/windsurf";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
-import { indexSession } from "@/lib/server/searchIndex";
+import { indexSession, isSessionIndexed } from "@/lib/server/searchIndex";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,6 +117,37 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       stepOffset: chat.nextStepOffset,
       numTotalSteps: chat.numTotalSteps
     };
+    // Index on first page load if not already indexed, so sessions opened in
+    // compact (chat) mode are still discoverable via cross-session search.
+    // Skipping when already indexed avoids a redundant full trajectory RPC round-trip.
+    if (stepOffset === 0 && !isSessionIndexed(id, "windsurf")) {
+      const totalSteps = chat.numTotalSteps;
+      setImmediate(() => {
+        (async () => {
+          try {
+            const allEvents: TrajectoryEvent[] = [];
+            let nextOffset = 0;
+            while (true) {
+              if (typeof totalSteps === "number" && nextOffset >= totalSteps) break;
+              const page = await getWindsurfTrajectory({
+                config,
+                cascadeId: id,
+                stepOffset: nextOffset,
+                includeCleared
+              });
+              if (page.events.length === 0) break;
+              allEvents.push(...page.events);
+              nextOffset = page.nextStepOffset;
+            }
+            const metaMap = await getTrajectoryMetaMapCached({ source: "windsurf", config });
+            const meta = metaMap[id] ?? {};
+            indexSession(id, "windsurf", meta.title ?? id, meta.cwd ?? extractCwd(allEvents), allEvents);
+          } catch (err) {
+            console.warn(`[search] Failed to index windsurf session ${id}:`, err instanceof Error ? err.message : err);
+          }
+        })();
+      });
+    }
     return NextResponse.json(out);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
