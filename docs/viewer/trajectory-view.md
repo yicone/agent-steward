@@ -130,8 +130,17 @@ Practical distinction (structure/readability):
 
 Default mode: `Compact`
 
-- shows `user` + `assistant` text plus error-like events
-- shows key status events (e.g. running/canceled/timeout) as `system` bubbles
+- uses source-specific compact backing:
+  - Windsurf: legacy `chat` message list
+  - Antigravity: vendor `markdown` from `ConvertTrajectoryToMarkdown`
+- optimized for quick reading with lower structural density than `Transcript` / `Trajectory`
+- may omit fine-grained event structure and per-event tool/command details; use `Transcript` or `Trajectory` for deeper inspection
+
+Conversation mode: `Transcript`
+
+- source-agnostic projection from normalized `TrajectoryEvent[]`
+- conversation-first readability (`user` / `assistant` bubbles)
+- surfaces error-like and key-status events; keeps tool/command detail in `Actions` foldouts
 - hides `thought`, successful `command`, and non-key `status`
 - renders tools as a collapsible `Actions` row directly under the relevant assistant bubble
 - keeps command/status counts in the `Actions` summary (details require switching to `Trajectory`)
