@@ -1176,10 +1176,10 @@ export default function HomeClient() {
   const [autoOpenDetailsToken, setAutoOpenDetailsToken] = useState(0);
   const [highlightedRowId, setHighlightedRowId] = useState<string | null>(null);
 
-  // Set to true by handleGlobalSearchSelect when it triggers a cross-source switch.
-  // The useEffect([source]) reset checks this flag so it doesn't wipe the pending
+  // Set by handleGlobalSearchSelect when it triggers a cross-source switch.
+  // The useEffect([source]) reset checks this ref so it doesn't wipe the pending
   // session selection that the callback already queued.
-  const crossSourceSelectionRef = useRef(false);
+  const crossSourceSelectionRef = useRef<{ source: Source; sessionId: string } | null>(null);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -1529,8 +1529,10 @@ export default function HomeClient() {
       // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
       // below does not wipe the selection state we set here.
       if (sessionSource !== source) {
-        crossSourceSelectionRef.current = true;
+        crossSourceSelectionRef.current = { source: sessionSource, sessionId };
         setSource(sessionSource);
+      } else {
+        crossSourceSelectionRef.current = null;
       }
       // Best-effort: find the matching list item in the current items list.
       // If we're switching source, items still holds the old source's list, so
@@ -1711,8 +1713,8 @@ export default function HomeClient() {
     // If this source change was triggered by a cross-source GlobalSearch selection
     // (handleGlobalSearchSelect sets crossSourceSelectionRef), skip the reset so
     // the pending session selection survives the source-change cycle.
-    if (crossSourceSelectionRef.current) {
-      crossSourceSelectionRef.current = false;
+    if (crossSourceSelectionRef.current?.source === source) {
+      crossSourceSelectionRef.current = null;
       return;
     }
     setSelectedKey(null);
