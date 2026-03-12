@@ -19,6 +19,12 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Improved
 
+- `2026-03-12` — Clarified and unified Viewer view-mode semantics
+  - Unified readability mode naming to `Compact` and made it the first/default tab across sources
+  - Clarified that RPC shape differences do not imply source capability differences
+  - Kept normalized `Transcript`/`Trajectory` as the cross-source canonical surfaces
+  - Detailed semantics and alignment notes: `docs/viewer/trajectory-view.md`
+
 - `2026-03-10` — Error center milestone completed via GitHub issue `#2` and PRs `#17`, `#18`, `#19`, `#20`
   - Added grouped error navigation behavior
   - Improved selection, highlight, and “only errors” browsing flow
