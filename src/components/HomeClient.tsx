@@ -1179,7 +1179,7 @@ export default function HomeClient() {
   // Set by handleGlobalSearchSelect when it triggers a cross-source switch.
   // The useEffect([source]) reset checks this ref so it doesn't wipe the pending
   // session selection that the callback already queued.
-  const crossSourceSelectionRef = useRef<{ source: Source; sessionId: string } | null>(null);
+  const crossSourceSelectionRef = useRef<Source | null>(null);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -1529,7 +1529,7 @@ export default function HomeClient() {
       // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
       // below does not wipe the selection state we set here.
       if (sessionSource !== source) {
-        crossSourceSelectionRef.current = { source: sessionSource, sessionId };
+        crossSourceSelectionRef.current = sessionSource;
         setSource(sessionSource);
       } else {
         crossSourceSelectionRef.current = null;
@@ -1715,7 +1715,7 @@ export default function HomeClient() {
     // the pending session selection survives the source-change cycle.
     const crossSourceSelection = crossSourceSelectionRef.current;
     if (crossSourceSelection) {
-      if (crossSourceSelection.source === source) {
+      if (crossSourceSelection === source) {
         crossSourceSelectionRef.current = null;
         return;
       }
