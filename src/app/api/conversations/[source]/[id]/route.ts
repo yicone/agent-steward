@@ -117,14 +117,15 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       stepOffset: chat.nextStepOffset,
       numTotalSteps: chat.numTotalSteps
     };
-    // Index on first page load if not already indexed, so sessions opened in
-    // compact (chat) mode are still discoverable via cross-session search.
-    // Skipping when already indexed avoids a redundant full trajectory RPC round-trip.
-    if (stepOffset === 0 && !isSessionIndexed(id, source)) {
+    // Index on first page load in the background so sessions opened in compact
+    // (chat) mode are still discoverable via cross-session search.
+    // Any search DB failures are best-effort and must not break chat reads.
+    if (stepOffset === 0) {
       const totalSteps = chat.numTotalSteps;
       setImmediate(() => {
         (async () => {
           try {
+            if (isSessionIndexed(id, source)) return;
             const allEvents: TrajectoryEvent[] = [];
             let nextOffset = 0;
             while (true) {
