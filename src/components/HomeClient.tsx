@@ -2024,7 +2024,7 @@ export default function HomeClient() {
                 </label>
                 <div className="text-xs text-muted">
                   {windsurfView === "chat"
-                    ? "Compact view (legacy transcript structure)"
+                    ? "Compact view (backed by legacy chat data)"
                     : windsurfView === "trajectory"
                       ? "Process-first view"
                       : "Transcript view"}
