@@ -284,6 +284,19 @@ export function getIndexedSessionIds(): Array<{ sessionId: string; source: Sourc
   return rows.map((r) => ({ sessionId: r.session_id, source: r.source as Source }));
 }
 
+/**
+ * Return true if the given session already has an entry in the search index.
+ * Used to skip redundant background trajectory fetches (e.g. when opening a
+ * session in chat/compact mode that was previously indexed via trajectory view).
+ */
+export function isSessionIndexed(sessionId: string, source: Source): boolean {
+  const db = getDb();
+  const row = db
+    .prepare("SELECT 1 FROM sessions WHERE session_id = ? AND source = ?")
+    .get(sessionId, source);
+  return row !== undefined;
+}
+
 /** Close the database connection (useful in tests). */
 export function closeDb(): void {
   if (_db) {

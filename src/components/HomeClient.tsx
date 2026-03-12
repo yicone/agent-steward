@@ -1152,8 +1152,8 @@ export default function HomeClient() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [content, setContent] = useState<ConversationContent | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("transcript");
-  const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("transcript");
+  const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("markdown");
+  const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("chat");
   const [windsurfIncludeCleared, setWindsurfIncludeCleared] = useState(false);
   const [trajectoryFilters, setTrajectoryFilters] = useState({
     thought: true,
@@ -1544,10 +1544,10 @@ export default function HomeClient() {
       setSelectedRowId(null);
       setScrollToRowId(null);
       setEventSearch("");
-      setAntigravityView("transcript");
-      setWindsurfView("transcript");
+      setAntigravityView("markdown");
+      setWindsurfView("chat");
       setCollapsedExecutionGroups({});
-      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "trajectory" : undefined).catch(
+      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined).catch(
         (e) => setError(e instanceof Error ? e.message : String(e))
       );
     },
@@ -1719,8 +1719,8 @@ export default function HomeClient() {
     setSelectedId(null);
     setContent(null);
     setEventSearch("");
-    setAntigravityView("transcript");
-    setWindsurfView("transcript");
+    setAntigravityView("markdown");
+    setWindsurfView("chat");
     setCollapsedExecutionGroups({});
   }, [source]);
 
@@ -1877,10 +1877,10 @@ export default function HomeClient() {
                     setSelectedRowId(null);
                     setScrollToRowId(null);
                     setEventSearch("");
-                    setAntigravityView("transcript");
-                    setWindsurfView("transcript");
+                    setAntigravityView("markdown");
+                    setWindsurfView("chat");
                     setCollapsedExecutionGroups({});
-                    loadConversation(source, it.id, 0, source === "windsurf" ? "trajectory" : undefined).catch(() => {});
+                    loadConversation(source, it.id, 0, source === "windsurf" ? "chat" : undefined).catch(() => {});
                   }}
                   title={it.path}
                 >
@@ -1966,7 +1966,7 @@ export default function HomeClient() {
                     loadConversation("windsurf", selectedId, 0, "chat").catch(() => {});
                   }}
                 >
-                  Chat
+                  Compact
                 </Button>
                 <Button
                   variant={windsurfView === "transcript" ? "default" : "outline"}
@@ -2024,10 +2024,10 @@ export default function HomeClient() {
                 </label>
                 <div className="text-xs text-muted">
                   {windsurfView === "chat"
-                    ? "Legacy chat view"
+                    ? "Compact view (backed by legacy chat data)"
                     : windsurfView === "trajectory"
                       ? "Process-first view"
-                      : "Transcript view (default)"}
+                      : "Transcript view"}
                 </div>
               </div>
             </div>
@@ -2037,6 +2037,13 @@ export default function HomeClient() {
             <div>
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant={antigravityView === "markdown" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setAntigravityView("markdown")}
+                  >
+                    Compact
+                  </Button>
                   <Button
                     variant={antigravityView === "transcript" ? "default" : "outline"}
                     size="sm"
@@ -2050,13 +2057,6 @@ export default function HomeClient() {
                     onClick={() => setAntigravityView("trajectory")}
                   >
                     Trajectory
-                  </Button>
-                  <Button
-                    variant={antigravityView === "markdown" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setAntigravityView("markdown")}
-                  >
-                    Markdown
                   </Button>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">

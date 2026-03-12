@@ -51,15 +51,15 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 - Antigravity:
   - list enrichment: load `title/cwd` from Antigravity VS Code global state (`state.vscdb`) for better coverage vs LS-only summaries
   - fetch `GetCascadeTrajectory` and normalize steps into a unified event model
-  - default Viewer mode: Transcript (user/assistant + errors; tools/commands summarized)
+  - default Viewer mode: Compact
+  - Compact is backed by `ConvertTrajectoryToMarkdown`; Transcript and Trajectory remain available for structured analysis
   - group trajectory events by `executionId` with collapsible sections
   - use virtualized list rendering for long sessions
   - Inspector: inspect selected event/message, plus an error list with jump-to-event
-  - allow switching to Markdown view rendered via `ConvertTrajectoryToMarkdown`
 - Windsurf: connect to the running language server (discover port from logs + CSRF token from process args)
   - on newer builds, prefer `WINDSURF_CSRF_TOKEN` from the LS process environment when available
-  - default Viewer mode: Transcript (trajectory-backed via `view=trajectory`)
-  - legacy chat view available for raw transcript-style browsing
+  - default Viewer mode: Compact
+  - Compact is currently backed by legacy chat payloads; Transcript and Trajectory remain available for cross-source alignment and diagnostics
 - Unified trajectory model:
   - canonical event schema used by Antigravity trajectory viewer
   - Windsurf adapter available via API (`view=trajectory`) for cross-agent normalization
@@ -67,6 +67,8 @@ export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
   - download per-conversation diagnostic JSON from Viewer
   - includes raw LS payloads to compare UI-visible process data vs rendered output
   - note: may include sensitive content (paths, commands, outputs, conversation text)
+
+For detailed view semantics and cross-source alignment notes, see `docs/viewer/trajectory-view.md`.
 
 ## Prerequisites
 

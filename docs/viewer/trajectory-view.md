@@ -77,6 +77,11 @@ Output:
 - `TrajectoryEvent[]` + `TrajectorySummary` via `normalizeWindsurfStepsToTrajectoryEvents`
 - legacy chat messages still supported via `trajectoryEventsToChatMessages`
 
+Clarification:
+
+- Windsurf steps are not inherently “more chat-shaped” than Antigravity trajectory.
+- For both sources, transcript/chat is a projection from normalized events; process view and transcript view share the same data backbone.
+
 Current mapping highlights:
 
 - `userInput` -> `user`
@@ -93,12 +98,49 @@ Current mapping highlights:
   - default: `kind: "chat"`
   - `view=trajectory`: `kind: "trajectory"`, `source: "windsurf"`, `events`, `summary`
 
+Historical note:
+
+- The Windsurf default `chat` mode is retained for legacy compatibility.
+- Viewer default behavior is transcript-first on trajectory-backed data.
+
+## View-Type Semantics (Compact / Transcript / Trajectory)
+
+The view types are intentionally different projections with different goals. `Compact` is the unified name for source-specific readability modes (Windsurf chat + Antigravity markdown):
+
+- `Compact` (default, first tab):
+  - unified UX label with source-specific backing
+    - Windsurf: legacy `chat` payload/message list
+    - Antigravity: vendor `markdown` from `ConvertTrajectoryToMarkdown`
+  - optimized for quick reading with lower structural density
+- `Transcript`:
+  - source-agnostic projection from normalized `TrajectoryEvent[]`
+  - conversation-first readability (`user` / `assistant` bubbles)
+  - surfaces error-like and key-status events; keeps tool/command detail in `Actions` foldouts
+- `Trajectory`:
+  - process-first event stream for diagnostics and deep inspection
+  - filter/group/search/error-center capabilities rely on structured events
+
+Practical distinction (structure/readability):
+
+- `Compact` is the easiest to skim but differs in structure between Windsurf and Antigravity today.
+- `Transcript` and `Trajectory` share the normalized event backbone and are the alignment baseline for cross-source consistency.
+- The current alignment gap to investigate: how to reduce semantic drift between Windsurf compact (`chat`) and Antigravity compact (`markdown`) while preserving readability.
+
 ## Viewer Semantics
 
-Default mode: `Transcript`
+Default mode: `Compact`
 
-- shows `user` + `assistant` text plus error-like events
-- shows key status events (e.g. running/canceled/timeout) as `system` bubbles
+- uses source-specific compact backing:
+  - Windsurf: legacy `chat` message list
+  - Antigravity: vendor `markdown` from `ConvertTrajectoryToMarkdown`
+- optimized for quick reading with lower structural density than `Transcript` / `Trajectory`
+- may omit fine-grained event structure and per-event tool/command details; use `Transcript` or `Trajectory` for deeper inspection
+
+Conversation mode: `Transcript`
+
+- source-agnostic projection from normalized `TrajectoryEvent[]`
+- conversation-first readability (`user` / `assistant` bubbles)
+- surfaces error-like and key-status events; keeps tool/command detail in `Actions` foldouts
 - hides `thought`, successful `command`, and non-key `status`
 - renders tools as a collapsible `Actions` row directly under the relevant assistant bubble
 - keeps command/status counts in the `Actions` summary (details require switching to `Trajectory`)
@@ -114,9 +156,10 @@ Process mode: `Trajectory`
 - each event card supports expandable details for `toolCalls` and `output`
 - jump-to-error expands group, switches to trajectory view, scrolls to target row, and applies a temporary yellow highlight ring distinct from the selection ring
 
-For markdown rendering:
+For compact-mode backing data:
 
-- currently available on Antigravity trajectories (`content.markdown`)
+- Windsurf compact uses `kind: "chat"` (legacy message projection)
+- Antigravity compact uses `content.markdown` from `ConvertTrajectoryToMarkdown`
 
 ## Inspector and Error Center (Implemented)
 
@@ -136,4 +179,4 @@ The current Viewer includes a right-side Inspector panel (desktop) that supports
 - `executionId` quality depends on upstream data.
 - sparse or unknown step payloads degrade to generic tool/raw event cards.
 - virtualized rows may briefly reflow while heights are measured.
-- Windsurf chat is treated as a legacy view; the UI defaults to `Transcript` (trajectory-backed) and pages via `stepOffset`.
+- Compact mode still has source-specific backing differences; see "View-Type Semantics" above for scope and alignment direction.
