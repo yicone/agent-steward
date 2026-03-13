@@ -74,6 +74,21 @@ describe("createPlatformPaths", () => {
         else process.env.APPDATA = prev;
       }
     });
+
+    it("treats whitespace-only APPDATA as unset", () => {
+      const prev = process.env.APPDATA;
+      try {
+        process.env.APPDATA = "   ";
+        const home = os.homedir();
+        const p = createPlatformPaths("win32");
+        const expected = path.join(home, "AppData", "Roaming");
+
+        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
+      } finally {
+        if (prev === undefined) delete process.env.APPDATA;
+        else process.env.APPDATA = prev;
+      }
+    });
   });
 
   describe("linux", () => {
@@ -118,6 +133,21 @@ describe("createPlatformPaths", () => {
       const prev = process.env.XDG_CONFIG_HOME;
       try {
         process.env.XDG_CONFIG_HOME = "";
+        const home = os.homedir();
+        const p = createPlatformPaths("linux");
+        const expected = path.join(home, ".config");
+
+        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
+      } finally {
+        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
+        else process.env.XDG_CONFIG_HOME = prev;
+      }
+    });
+
+    it("treats whitespace-only XDG_CONFIG_HOME as unset", () => {
+      const prev = process.env.XDG_CONFIG_HOME;
+      try {
+        process.env.XDG_CONFIG_HOME = "   ";
         const home = os.homedir();
         const p = createPlatformPaths("linux");
         const expected = path.join(home, ".config");
