@@ -32,7 +32,7 @@ type DirCacheEntry = {
   cachedAtMs: number;
 };
 
-/** TTL for cached directory listings (seconds). */
+/** TTL for cached directory listings (milliseconds). */
 const DIR_CACHE_TTL_MS = 10_000;
 
 /**
