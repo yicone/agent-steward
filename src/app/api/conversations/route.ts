@@ -36,7 +36,12 @@ export async function GET(req: Request) {
   const { config } = await readConfig();
 
   /* duplicate detection across roots */
-  const cacheKey = JSON.stringify({ source: sourceParam, roots: config.roots });
+  const rootCacheKeyParts = config.roots
+    .map((root: any, index: number) =>
+      root && typeof root === "object" && "id" in root ? (root as any).id : `idx:${index}`
+    )
+    .sort();
+  const cacheKey = JSON.stringify({ source: sourceParam, roots: rootCacheKeyParts });
   const cacheEntry = duplicatesCache.get(cacheKey);
   let duplicates: ReturnType<typeof detectDuplicates>;
   const now = Date.now();
