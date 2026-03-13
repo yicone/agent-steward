@@ -138,8 +138,9 @@ describe("parseUrlState", () => {
     expect(result.inspectorOpen).toBeUndefined();
   });
 
-  it("parses includeCleared", () => {
+  it("parses includeCleared=1 as true, omits for other values (Partial result)", () => {
     expect(parseUrlState("?includeCleared=1").includeCleared).toBe(true);
+    // "0" is not recognised; the property stays absent (undefined) in the Partial result
     expect(parseUrlState("?includeCleared=0").includeCleared).toBeUndefined();
   });
 

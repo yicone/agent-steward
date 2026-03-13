@@ -198,7 +198,10 @@ export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
   }, debounceMs);
 }
 
-/** Flush any pending debounced push immediately (useful for tests). */
+/** Flush any pending debounced push immediately. */
 export function flushUrlState(): void {
-  // no-op when nothing pending
+  if (_timer !== null) {
+    clearTimeout(_timer);
+    _timer = null;
+  }
 }
