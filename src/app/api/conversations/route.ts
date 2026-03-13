@@ -33,23 +33,33 @@ export async function GET(req: Request) {
   const offset = Math.max(Number(url.searchParams.get("offset") ?? "0"), 0);
 
   const { config } = await readConfig();
-  const items = await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
   /* duplicate detection across roots */
   const cacheKey = JSON.stringify({ source: sourceParam, roots: config.roots });
   const cacheEntry = duplicatesCache.get(cacheKey);
   let duplicates: ReturnType<typeof detectDuplicates>;
   const now = Date.now();
+  let allItems: ConversationListItem[] | null = null;
   if (cacheEntry && cacheEntry.expiresAt > now) {
     duplicates = cacheEntry.value;
   } else {
-    const allItems = await listConversationFiles({ roots: config.roots, source: sourceParam, limit: Infinity, offset: 0 });
+    allItems = await listConversationFiles({
+      roots: config.roots,
+      source: sourceParam,
+      limit: Infinity,
+      offset: 0
+    });
     duplicates = detectDuplicates(allItems);
     duplicatesCache.set(cacheKey, {
       value: duplicates,
       expiresAt: now + 10_000 // 10s TTL, aligned with _dirCache behavior
     });
   }
+
+  const items: ConversationListItem[] =
+    allItems !== null
+      ? allItems.slice(offset, offset + limit)
+      : await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
   let metaMap: Record<string, { title?: string; cwd?: string }> = {};
   try {
