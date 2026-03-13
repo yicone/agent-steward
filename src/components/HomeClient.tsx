@@ -1739,10 +1739,11 @@ export default function HomeClient() {
       // Stale ref for a different source; clear it so it cannot affect future switches.
       crossSourceSelectionRef.current = null;
     }
-    // URL deep-link: on the very first source effect triggered by refreshConfigAndStatus,
-    // skip the reset so that the URL-restoration effect below can apply its state.
+    // URL deep-link: skip the reset only when the source change is the initial
+    // one driven by refreshConfigAndStatus setting the URL's target source.
+    // If the user actively switches to a different source, run the normal reset.
     const urlInit = urlInitRef.current;
-    if (urlInit.id) return;
+    if (urlInit.id && source === urlInit.source) return;
 
     setSelectedKey(null);
     setSelectedId(null);
