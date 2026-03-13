@@ -130,8 +130,8 @@ describe("createPlatformPaths", () => {
     });
   });
 
-  describe("unknown platform", () => {
-    it("falls back to linux-style paths", () => {
+  describe("unsupported platform", () => {
+    it("falls back to linux-style paths for unhandled platform values", () => {
       const prev = process.env.XDG_CONFIG_HOME;
       try {
         process.env.XDG_CONFIG_HOME = "/xdg";
