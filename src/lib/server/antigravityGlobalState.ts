@@ -228,9 +228,7 @@ export function buildMetaMapFromGlobalStateTrajectorySummariesValue(
   return out;
 }
 
-async function readVscdbValue(dbPath: string, key: string): Promise<string | null> {
-  const sqlite3 = platformPaths.sqlite3Binary();
-  if (!sqlite3) return null;
+async function readVscdbValue(dbPath: string, key: string, sqlite3: string): Promise<string | null> {
   const safeKey = key.replaceAll("'", "''");
   try {
     const { stdout } = await execFileAsync(
@@ -248,6 +246,9 @@ async function readVscdbValue(dbPath: string, key: string): Promise<string | nul
 export async function getAntigravityTrajectoryMetaMapFromVscdb(params?: {
   vscdbPath?: string;
 }): Promise<Record<string, ConversationMeta>> {
+  const sqlite3 = platformPaths.sqlite3Binary();
+  if (!sqlite3) return {};
+
   const vscdbPath = expandHome(params?.vscdbPath ?? DEFAULT_VSCDB_PATH);
   try {
     await fs.stat(vscdbPath);
@@ -256,7 +257,7 @@ export async function getAntigravityTrajectoryMetaMapFromVscdb(params?: {
   }
 
   for (const key of TRAJECTORY_SUMMARIES_KEYS) {
-    const b64 = await readVscdbValue(vscdbPath, key);
+    const b64 = await readVscdbValue(vscdbPath, key, sqlite3);
     if (!b64) continue;
     const map = buildMetaMapFromGlobalStateTrajectorySummariesValue(b64);
     if (Object.keys(map).length) return map;
