@@ -2,7 +2,6 @@ import "server-only";
 
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -15,6 +14,7 @@ import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
 import { ConnectUnaryError, connectUnaryJson } from "@/lib/server/connect";
+import { platformPaths } from "@/lib/server/platform";
 import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 
 const execFileAsync = promisify(execFile);
@@ -85,7 +85,7 @@ function isProcessAlive(pid: number): boolean {
 }
 
 async function listLogsDirsByMtime(): Promise<string[]> {
-  const logsRoot = path.join(os.homedir(), "Library", "Application Support", "Windsurf", "logs");
+  const logsRoot = platformPaths.windsurfLogsRoot();
   let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
   try {
     dirents = await fs.readdir(logsRoot, { withFileTypes: true });

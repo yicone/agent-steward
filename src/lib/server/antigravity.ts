@@ -2,7 +2,6 @@ import "server-only";
 
 import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
@@ -13,6 +12,7 @@ import { getHeartbeatFailureSummary, getSessionRestartAction } from "@/lib/parse
 import { normalizeAntigravityTrajectoryToEvents } from "@/lib/parse/antigravitySteps";
 import type { SourcesStatus } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
+import { platformPaths } from "@/lib/server/platform";
 import { connectUnaryJson } from "@/lib/server/connect";
 import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
@@ -73,7 +73,7 @@ async function probeAntigravityHeartbeat(params: { baseUrl: string; csrfToken?: 
 }
 
 async function listAntigravityLogsDirsByMtime(): Promise<string[]> {
-  const logsRoot = path.join(os.homedir(), "Library", "Application Support", "Antigravity", "logs");
+  const logsRoot = platformPaths.antigravityLogsRoot();
   let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
   try {
     dirents = await fs.readdir(logsRoot, { withFileTypes: true });
