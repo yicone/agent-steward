@@ -6,11 +6,12 @@ import { promisify } from "node:util";
 
 import type { ConversationMeta } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
+import { platformPaths } from "@/lib/server/platform";
 import { abbreviateHome, fileUriToPath } from "@/lib/server/trajectoryMeta";
 
 const execFileAsync = promisify(execFile);
 
-const DEFAULT_VSCDB_PATH = "~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb";
+const DEFAULT_VSCDB_PATH = platformPaths.antigravityVscdbPath();
 const TRAJECTORY_SUMMARIES_KEYS = [
   "antigravityUnifiedStateSync.trajectorySummaries",
   "unifiedStateSync.trajectorySummaries"
