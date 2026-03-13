@@ -1933,11 +1933,10 @@ export default function HomeClient() {
 
     // Determine the internal view mode from the unified URL value
     const effectiveSource = urlInit.source ?? source;
-    const internalView = viewFromUrl(view ?? null, effectiveSource);
     if (effectiveSource === "antigravity") {
-      setAntigravityView(internalView as "markdown" | "transcript" | "trajectory");
+      setAntigravityView(viewFromUrl(view ?? null, "antigravity"));
     } else {
-      setWindsurfView(internalView as "chat" | "transcript" | "trajectory");
+      setWindsurfView(viewFromUrl(view ?? null, "windsurf"));
     }
 
     if (filters) setTrajectoryFilters(filters);
