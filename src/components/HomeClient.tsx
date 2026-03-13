@@ -1812,13 +1812,15 @@ export default function HomeClient() {
 
     // Determine the internal view mode from the unified URL value
     const effectiveSource = urlInit.source ?? source;
-    let restoredView: string;
+    let apiView: "chat" | "trajectory" | undefined;
     if (effectiveSource === "antigravity") {
-      restoredView = viewFromUrl(view ?? null, "antigravity");
+      const restoredView = viewFromUrl(view ?? null, "antigravity");
       setAntigravityView(restoredView);
+      apiView = undefined;
     } else {
-      restoredView = viewFromUrl(view ?? null, "windsurf");
+      const restoredView = viewFromUrl(view ?? null, "windsurf");
       setWindsurfView(restoredView);
+      apiView = restoredView !== "chat" ? "trajectory" : "chat";
     }
 
     if (filters) setTrajectoryFilters(filters);
@@ -1836,9 +1838,6 @@ export default function HomeClient() {
     const key = match ? `${match.rootId}:${match.id}` : `unknown:${id}`;
     setSelectedKey(key);
     setSelectedId(id!);
-
-    // Determine API view param for windsurf
-    const apiView = (effectiveSource === "windsurf" && restoredView !== "chat") ? "trajectory" as const : (effectiveSource === "windsurf" ? "chat" as const : undefined);
 
     loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
