@@ -16,6 +16,8 @@ const TRAJECTORY_SUMMARIES_KEYS = [
   "unifiedStateSync.trajectorySummaries"
 ] as const;
 
+let _defaultVscdbPath: string | undefined;
+
 function base64ToBytes(b64: string): Uint8Array | null {
   try {
     return Uint8Array.from(Buffer.from(b64.trim(), "base64"));
@@ -248,7 +250,7 @@ export async function getAntigravityTrajectoryMetaMapFromVscdb(params?: {
   const sqlite3 = platformPaths.sqlite3Binary();
   if (!sqlite3) return {};
 
-  const vscdbPath = expandHome(params?.vscdbPath ?? platformPaths.antigravityVscdbPath());
+  const vscdbPath = expandHome(params?.vscdbPath ?? (_defaultVscdbPath ??= platformPaths.antigravityVscdbPath()));
   try {
     await fs.stat(vscdbPath);
   } catch {
