@@ -10,7 +10,13 @@ export const dynamic = "force-dynamic";
 
 // Cache duplicate detection results per (source, roots) to avoid
 // re-listing all conversation files with `limit: Infinity` on every request.
-const duplicatesCache = new Map<string, ReturnType<typeof detectDuplicates>>();
+const duplicatesCache = new Map<
+  string,
+  {
+    value: ReturnType<typeof detectDuplicates>;
+    expiresAt: number;
+  }
+>();
 
 function isSource(value: string | null): value is Source {
   return value === "antigravity" || value === "windsurf";
@@ -31,11 +37,18 @@ export async function GET(req: Request) {
 
   /* duplicate detection across roots */
   const cacheKey = JSON.stringify({ source: sourceParam, roots: config.roots });
-  let duplicates = duplicatesCache.get(cacheKey);
-  if (!duplicates) {
+  const cacheEntry = duplicatesCache.get(cacheKey);
+  let duplicates: ReturnType<typeof detectDuplicates>;
+  const now = Date.now();
+  if (cacheEntry && cacheEntry.expiresAt > now) {
+    duplicates = cacheEntry.value;
+  } else {
     const allItems = await listConversationFiles({ roots: config.roots, source: sourceParam, limit: Infinity, offset: 0 });
     duplicates = detectDuplicates(allItems);
-    duplicatesCache.set(cacheKey, duplicates);
+    duplicatesCache.set(cacheKey, {
+      value: duplicates,
+      expiresAt: now + 10_000 // 10s TTL, aligned with _dirCache behavior
+    });
   }
 
   let metaMap: Record<string, { title?: string; cwd?: string }> = {};
