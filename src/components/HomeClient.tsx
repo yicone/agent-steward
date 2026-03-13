@@ -17,6 +17,7 @@ import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSear
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
 import { parseUrlState, viewToUrl, viewFromUrl, pushUrlState } from "@/lib/urlState";
+import type { UrlViewerState } from "@/lib/urlState";
 import type {
   AppConfig,
   ChatMessage,
@@ -1802,6 +1803,8 @@ export default function HomeClient() {
     const { id, view, filters, expandedGroups, selectedRowId: urlRow, inspectorOpen: urlInspector, inspectorMode: urlInspMode, includeCleared: urlCleared } = urlInit;
     urlInitRef.current = {}; // clear so future source switches reset normally
 
+    let cancelled = false; // guard against stale async callbacks after unmount/re-render
+
     // Determine the internal view mode from the unified URL value
     const effectiveSource = urlInit.source ?? source;
     const internalView = viewFromUrl(view ?? null, effectiveSource);
@@ -1833,6 +1836,8 @@ export default function HomeClient() {
     loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
       if (!loaded) return;
+      // Guard against the user navigating away before this async callback fires.
+      if (cancelled) return;
       // Apply expanded groups authoritatively from the URL.  When the URL carried
       // an explicit 'expanded' param (even empty), pre-populate collapsedExecutionGroups
       // for ALL groups derived from the loaded content so that the content-change
@@ -1855,6 +1860,7 @@ export default function HomeClient() {
         setScrollToRowId(urlRow);
       }
     });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, loadingList, source]);
 
@@ -1885,7 +1891,8 @@ export default function HomeClient() {
       selectedRowId,
       inspectorOpen,
       inspectorMode,
-      includeCleared: windsurfIncludeCleared,
+      // Only encode includeCleared for windsurf; omit for antigravity to keep URLs clean.
+      includeCleared: source === "windsurf" ? windsurfIncludeCleared : false,
     });
   }, [
     config, source, selectedId, antigravityView, windsurfView,
