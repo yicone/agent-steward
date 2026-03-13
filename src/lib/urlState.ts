@@ -1,0 +1,204 @@
+import type { Source } from "./types";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Trajectory filter flags, ordered for compact bitfield encoding. */
+export interface TrajectoryFilterFlags {
+  thought: boolean;
+  tool: boolean;
+  command: boolean;
+  status: boolean;
+  errorsOnly: boolean;
+  hasOutput: boolean;
+}
+
+/** Full set of viewer state that we persist in the URL query string. */
+export interface UrlViewerState {
+  source: Source | null;
+  id: string | null;
+  /** Unified view mode across both sources (compact = markdown/chat). */
+  view: "compact" | "transcript" | "trajectory" | null;
+  filters: TrajectoryFilterFlags & { stepTypeFilter: string };
+  /** Expanded execution-group IDs (complement of collapsed). */
+  expandedGroups: string[];
+  selectedRowId: string | null;
+  inspectorOpen: boolean;
+  inspectorMode: "event" | "message" | "errors";
+  includeCleared: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Defaults & constants
+// ---------------------------------------------------------------------------
+
+const DEFAULT_FILTER_BITS = "111000"; // thought=1 tool=1 command=1 status=0 errorsOnly=0 hasOutput=0
+
+const FILTER_KEYS: readonly (keyof TrajectoryFilterFlags)[] = [
+  "thought",
+  "tool",
+  "command",
+  "status",
+  "errorsOnly",
+  "hasOutput"
+];
+
+// ---------------------------------------------------------------------------
+// Helpers – map between internal view values and URL "compact"
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert the source-specific internal view value to the unified URL value.
+ * Antigravity "markdown" and Windsurf "chat" both map to "compact".
+ */
+export function viewToUrl(
+  view: string,
+): "compact" | "transcript" | "trajectory" {
+  if (view === "markdown" || view === "chat") return "compact";
+  if (view === "transcript") return "transcript";
+  return "trajectory";
+}
+
+/**
+ * Convert the unified URL view value back to the source-specific internal
+ * value used by the component state.
+ */
+export function viewFromUrl(
+  urlView: "compact" | "transcript" | "trajectory" | null,
+  source: Source,
+): string {
+  if (!urlView || urlView === "compact") {
+    return source === "antigravity" ? "markdown" : "chat";
+  }
+  return urlView; // "transcript" | "trajectory" are the same internally
+}
+
+// ---------------------------------------------------------------------------
+// Parse
+// ---------------------------------------------------------------------------
+
+/** Parse the browser search string (including leading "?") into state. */
+export function parseUrlState(search: string): Partial<UrlViewerState> {
+  const p = new URLSearchParams(search);
+  const state: Partial<UrlViewerState> = {};
+
+  // source
+  const src = p.get("source");
+  if (src === "antigravity" || src === "windsurf") state.source = src;
+
+  // id
+  const id = p.get("id");
+  if (id) state.id = id;
+
+  // view
+  const view = p.get("view");
+  if (view === "compact" || view === "transcript" || view === "trajectory") {
+    state.view = view;
+  }
+
+  // trajectory filters (bitfield)
+  const ft = p.get("ft");
+  if (ft && /^[01]{6}$/.test(ft)) {
+    state.filters = {
+      thought: ft[0] === "1",
+      tool: ft[1] === "1",
+      command: ft[2] === "1",
+      status: ft[3] === "1",
+      errorsOnly: ft[4] === "1",
+      hasOutput: ft[5] === "1",
+      stepTypeFilter: p.get("stepType") ?? ""
+    };
+  } else if (p.has("stepType")) {
+    state.filters = {
+      thought: true,
+      tool: true,
+      command: true,
+      status: false,
+      errorsOnly: false,
+      hasOutput: false,
+      stepTypeFilter: p.get("stepType") ?? ""
+    };
+  }
+
+  // expanded groups
+  const expanded = p.get("expanded");
+  if (expanded !== null) {
+    state.expandedGroups = expanded.split(",").filter(Boolean);
+  }
+
+  // selected row
+  const row = p.get("row");
+  if (row) state.selectedRowId = row;
+
+  // inspector
+  const inspector = p.get("inspector");
+  if (inspector === "event" || inspector === "message" || inspector === "errors") {
+    state.inspectorOpen = true;
+    state.inspectorMode = inspector;
+  }
+
+  // includeCleared
+  if (p.get("includeCleared") === "1") state.includeCleared = true;
+
+  return state;
+}
+
+// ---------------------------------------------------------------------------
+// Serialize
+// ---------------------------------------------------------------------------
+
+/** Build a URL search string (with leading "?", or empty) from state. */
+export function buildUrlSearch(state: UrlViewerState): string {
+  const p = new URLSearchParams();
+
+  if (state.source) p.set("source", state.source);
+  if (state.id) p.set("id", state.id);
+
+  // Only include view when it is NOT the default "compact"
+  if (state.view && state.view !== "compact") p.set("view", state.view);
+
+  // Trajectory filter bitfield – only include when non-default
+  const bits = FILTER_KEYS.map((k) => (state.filters[k] ? "1" : "0")).join("");
+  if (bits !== DEFAULT_FILTER_BITS) p.set("ft", bits);
+  if (state.filters.stepTypeFilter) p.set("stepType", state.filters.stepTypeFilter);
+
+  // Expanded groups – only include when at least one group is expanded
+  if (state.expandedGroups.length > 0) {
+    p.set("expanded", state.expandedGroups.join(","));
+  }
+
+  if (state.selectedRowId) p.set("row", state.selectedRowId);
+
+  if (state.inspectorOpen) {
+    p.set("inspector", state.inspectorMode);
+  }
+
+  if (state.includeCleared) p.set("includeCleared", "1");
+
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+// ---------------------------------------------------------------------------
+// Debounced URL push
+// ---------------------------------------------------------------------------
+
+let _timer: ReturnType<typeof setTimeout> | null = null;
+
+/** Replace the current URL search with the serialised viewer state (debounced). */
+export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
+  if (typeof window === "undefined") return;
+  if (_timer !== null) clearTimeout(_timer);
+  _timer = setTimeout(() => {
+    const search = buildUrlSearch(state);
+    const url = `${window.location.pathname}${search}`;
+    window.history.replaceState(null, "", url);
+    _timer = null;
+  }, debounceMs);
+}
+
+/** Flush any pending debounced push immediately (useful for tests). */
+export function flushUrlState(): void {
+  // no-op when nothing pending
+}

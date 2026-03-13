@@ -16,6 +16,7 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
+import { parseUrlState, viewToUrl, viewFromUrl, pushUrlState } from "@/lib/urlState";
 import type {
   AppConfig,
   ChatMessage,
@@ -1302,6 +1303,9 @@ export default function HomeClient() {
   // session selection that the callback already queued.
   const crossSourceSelectionRef = useRef<Source | null>(null);
 
+  // URL deep-link: parsed once on mount, consumed during init effects.
+  const urlInitRef = useRef(parseUrlState(typeof window !== "undefined" ? window.location.search : ""));
+
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
     return items.find((it) => `${it.rootId}:${it.id}` === selectedKey) ?? null;
@@ -1733,7 +1737,11 @@ export default function HomeClient() {
     const cfgRes = await fetch("/api/config");
     const cfgJson = (await cfgRes.json()) as ApiConfigResponse;
     setConfig(cfgJson.config);
-    setSource(cfgJson.config.ui.defaultSource);
+
+    // URL deep-link: prefer source from URL over config default on first load
+    const urlInit = urlInitRef.current;
+    const initSource = urlInit.source ?? cfgJson.config.ui.defaultSource;
+    setSource(initSource);
 
     const stRes = await fetch("/api/sources");
     setStatus((await stRes.json()) as SourcesStatus);
@@ -1843,6 +1851,11 @@ export default function HomeClient() {
       // Stale ref for a different source; clear it so it cannot affect future switches.
       crossSourceSelectionRef.current = null;
     }
+    // URL deep-link: on the very first source effect triggered by refreshConfigAndStatus,
+    // skip the reset so that the URL-restoration effect below can apply its state.
+    const urlInit = urlInitRef.current;
+    if (urlInit.id) return;
+
     setSelectedKey(null);
     setSelectedId(null);
     setContent(null);
@@ -1880,6 +1893,98 @@ export default function HomeClient() {
       return next;
     });
   }, [content]);
+
+  // -----------------------------------------------------------------------
+  // URL deep-link: restore conversation + viewer state from URL query on
+  // initial page load. Runs once after the conversation list for the URL
+  // source has been fetched. All URL-derived values are consumed here and
+  // the ref is cleared so subsequent user interactions follow the normal
+  // state flow.
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    const urlInit = urlInitRef.current;
+    if (!urlInit.id) return; // nothing to restore
+    if (items.length === 0 && loadingList) return; // list not ready yet
+
+    // Consume the init ref so this runs only once.
+    const { id, view, filters, expandedGroups, selectedRowId: urlRow, inspectorOpen: urlInspector, inspectorMode: urlInspMode, includeCleared: urlCleared } = urlInit;
+    urlInitRef.current = {}; // clear so future source switches reset normally
+
+    // Determine the internal view mode from the unified URL value
+    const effectiveSource = urlInit.source ?? source;
+    const internalView = viewFromUrl(view ?? null, effectiveSource);
+    if (effectiveSource === "antigravity") {
+      setAntigravityView(internalView as "markdown" | "transcript" | "trajectory");
+    } else {
+      setWindsurfView(internalView as "chat" | "transcript" | "trajectory");
+    }
+
+    if (filters) setTrajectoryFilters(filters);
+    if (urlCleared) setWindsurfIncludeCleared(true);
+    if (urlInspector && urlInspMode) {
+      setInspectorOpen(true);
+      setInspectorMode(urlInspMode);
+    }
+
+    // Select the conversation
+    const match = items.find((it) => it.id === id);
+    const key = match ? `${match.rootId}:${match.id}` : `unknown:${id}`;
+    setSelectedKey(key);
+    setSelectedId(id!);
+
+    // Determine API view param for windsurf
+    const apiView = (effectiveSource === "windsurf" && internalView !== "chat") ? "trajectory" as const : (effectiveSource === "windsurf" ? "chat" as const : undefined);
+
+    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared }).then(() => {
+      // Deferred state that depends on content being loaded:
+      // expandedGroups and selectedRowId are applied via a separate effect
+      // triggered by the content change, or we set them here optimistically.
+      if (expandedGroups && expandedGroups.length > 0) {
+        setCollapsedExecutionGroups((prev) => {
+          const next = { ...prev };
+          for (const gid of expandedGroups) next[gid] = false;
+          return next;
+        });
+      }
+      if (urlRow) {
+        setSelectedRowId(urlRow);
+        setScrollToRowId(urlRow);
+      }
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, loadingList]);
+
+  // -----------------------------------------------------------------------
+  // URL sync: push current viewer state to URL on every relevant change
+  // (debounced to avoid noisy browser history).
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    // Only sync once config has loaded (avoids writing default-only URLs on SSR hydration)
+    if (!config) return;
+    const currentView = source === "antigravity" ? antigravityView : windsurfView;
+
+    // Derive expanded groups from collapsedExecutionGroups (inverse mapping)
+    const expanded: string[] = [];
+    for (const [gid, collapsed] of Object.entries(collapsedExecutionGroups)) {
+      if (!collapsed) expanded.push(gid);
+    }
+
+    pushUrlState({
+      source,
+      id: selectedId,
+      view: viewToUrl(currentView),
+      filters: trajectoryFilters,
+      expandedGroups: expanded,
+      selectedRowId,
+      inspectorOpen,
+      inspectorMode,
+      includeCleared: windsurfIncludeCleared,
+    });
+  }, [
+    config, source, selectedId, antigravityView, windsurfView,
+    trajectoryFilters, collapsedExecutionGroups, selectedRowId,
+    inspectorOpen, inspectorMode, windsurfIncludeCleared
+  ]);
 
   const antigravityPill = (() => {
     if (!status) return <StatusPill label="Antigravity: ..." tone="warn" />;
