@@ -33,8 +33,6 @@ export interface UrlViewerState {
 // Defaults & constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_FILTER_BITS = "111000"; // thought=1 tool=1 command=1 status=0 errorsOnly=0 hasOutput=0
-
 const FILTER_KEYS: readonly (keyof TrajectoryFilterFlags)[] = [
   "thought",
   "tool",
@@ -43,6 +41,18 @@ const FILTER_KEYS: readonly (keyof TrajectoryFilterFlags)[] = [
   "errorsOnly",
   "hasOutput"
 ];
+
+/** Default trajectory filter flag values (shared by parse and serialize). */
+export const DEFAULT_FILTERS: Readonly<TrajectoryFilterFlags> = {
+  thought: true,
+  tool: true,
+  command: true,
+  status: false,
+  errorsOnly: false,
+  hasOutput: false
+};
+
+const DEFAULT_FILTER_BITS = FILTER_KEYS.map((k) => (DEFAULT_FILTERS[k] ? "1" : "0")).join("");
 
 // ---------------------------------------------------------------------------
 // Helpers – map between internal view values and URL "compact"
@@ -111,12 +121,7 @@ export function parseUrlState(search: string): Partial<UrlViewerState> {
     };
   } else if (p.has("stepType")) {
     state.filters = {
-      thought: true,
-      tool: true,
-      command: true,
-      status: false,
-      errorsOnly: false,
-      hasOutput: false,
+      ...DEFAULT_FILTERS,
       stepTypeFilter: p.get("stepType") ?? ""
     };
   }
@@ -190,16 +195,23 @@ let _timer: ReturnType<typeof setTimeout> | null = null;
 export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
   if (typeof window === "undefined") return;
   if (_timer !== null) clearTimeout(_timer);
+  // Capture the pathname at schedule time so a late callback cannot overwrite
+  // a different route (e.g. /settings) that the user navigated to.
+  const scheduledPathname = window.location.pathname;
   _timer = setTimeout(() => {
+    if (window.location.pathname !== scheduledPathname) {
+      _timer = null;
+      return;
+    }
     const search = buildUrlSearch(state);
-    const url = `${window.location.pathname}${search}`;
+    const url = `${scheduledPathname}${search}`;
     window.history.replaceState(null, "", url);
     _timer = null;
   }, debounceMs);
 }
 
-/** Flush any pending debounced push immediately. */
-export function flushUrlState(): void {
+/** Cancel any pending debounced URL push without performing it. */
+export function cancelPendingUrlPush(): void {
   if (_timer !== null) {
     clearTimeout(_timer);
     _timer = null;

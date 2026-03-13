@@ -1920,7 +1920,10 @@ export default function HomeClient() {
     }
 
     if (filters) setTrajectoryFilters(filters);
-    if (urlCleared) setWindsurfIncludeCleared(true);
+    // For windsurf: explicitly set includeCleared from URL (treat absent as false)
+    if (effectiveSource === "windsurf") {
+      setWindsurfIncludeCleared(urlCleared === true);
+    }
     if (urlInspector && urlInspMode) {
       setInspectorOpen(true);
       setInspectorMode(urlInspMode);
@@ -1935,7 +1938,7 @@ export default function HomeClient() {
     // Determine API view param for windsurf
     const apiView = (effectiveSource === "windsurf" && internalView !== "chat") ? "trajectory" as const : (effectiveSource === "windsurf" ? "chat" as const : undefined);
 
-    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared }).then(() => {
+    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then(() => {
       // Deferred state that depends on content being loaded:
       // expandedGroups and selectedRowId are applied via a separate effect
       // triggered by the content change, or we set them here optimistically.
@@ -1961,6 +1964,9 @@ export default function HomeClient() {
   useEffect(() => {
     // Only sync once config has loaded (avoids writing default-only URLs on SSR hydration)
     if (!config) return;
+    // Skip while the deep-link restore effect has not yet consumed the initial URL state,
+    // otherwise replaceState would overwrite the URL before restoration completes.
+    if (urlInitRef.current.id) return;
     const currentView = source === "antigravity" ? antigravityView : windsurfView;
 
     // Derive expanded groups from collapsedExecutionGroups (inverse mapping)
