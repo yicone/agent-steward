@@ -1190,6 +1190,9 @@ export default function HomeClient() {
     () => (typeof window !== "undefined" ? parseUrlState(window.location.search) : {})
   );
   const urlInitRef = useRef<Partial<UrlViewerState>>(_urlInitOnce);
+  // True from when urlInitRef is consumed until the async restore promise
+  // settles, so the URL-sync effect stays suppressed for the whole restore.
+  const urlRestoringRef = useRef(false);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -1803,6 +1806,7 @@ export default function HomeClient() {
     // Consume the init ref so this runs only once.
     const { id, view, filters, expandedGroups, selectedRowId: urlRow, inspectorOpen: urlInspector, inspectorMode: urlInspMode, includeCleared: urlCleared } = urlInit;
     urlInitRef.current = {}; // clear so future source switches reset normally
+    urlRestoringRef.current = true; // block URL sync until the async restore fully settles
 
     let cancelled = false; // guard against stale async callbacks after unmount/re-render
 
@@ -1836,9 +1840,9 @@ export default function HomeClient() {
 
     loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
-      if (!loaded) return;
+      if (!loaded) { urlRestoringRef.current = false; return; }
       // Guard against the user navigating away before this async callback fires.
-      if (cancelled) return;
+      if (cancelled) { urlRestoringRef.current = false; return; }
       // Apply expanded groups authoritatively from the URL.  When the URL carried
       // an explicit 'expanded' param (even empty), pre-populate collapsedExecutionGroups
       // for ALL groups derived from the loaded content so that the content-change
@@ -1860,8 +1864,10 @@ export default function HomeClient() {
         setSelectedRowId(urlRow);
         setScrollToRowId(urlRow);
       }
+      // Restore complete — allow URL sync to resume.
+      urlRestoringRef.current = false;
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; urlRestoringRef.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, loadingList, source]);
 
@@ -1873,8 +1879,9 @@ export default function HomeClient() {
     // Only sync once config has loaded (avoids writing default-only URLs on SSR hydration)
     if (!config) return;
     // Skip while the deep-link restore effect has not yet consumed the initial URL state,
-    // otherwise replaceState would overwrite the URL before restoration completes.
-    if (urlInitRef.current.id) return;
+    // or while the async restore is still in progress, so replaceState never overwrites
+    // the URL before restoration (including row/expanded state) is fully applied.
+    if (urlInitRef.current.id || urlRestoringRef.current) return;
     const currentView = source === "antigravity" ? antigravityView : windsurfView;
 
     // Derive expanded groups from collapsedExecutionGroups (inverse mapping)
