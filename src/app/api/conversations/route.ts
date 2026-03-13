@@ -96,10 +96,5 @@ export async function GET(req: Request) {
     };
   });
 
-  const itemIds = new Set(items.map((it) => it.id));
-  const responseDuplicates = Object.fromEntries(
-    Object.entries(duplicates).filter(([id]) => itemIds.has(id))
-  );
-
-  return NextResponse.json({ items: withMeta, limit, offset, duplicates: responseDuplicates });
+  return NextResponse.json({ items: withMeta, limit, offset });
 }
