@@ -31,6 +31,19 @@ export type ConversationFile = {
 export type ConversationListItem = ConversationFile & {
   title?: string;
   cwd?: string;
+  /** Root IDs that contain a session with the same id (excluding the item's own rootId). */
+  duplicateRootIds?: string[];
+};
+
+export type RootHealthStatus = "healthy" | "missing" | "unreadable" | "slow";
+
+export type RootHealth = {
+  rootId: string;
+  path: string;
+  status: RootHealthStatus;
+  pbCount: number;
+  scanMs: number;
+  error?: string;
 };
 
 export type SourcesStatus = {
