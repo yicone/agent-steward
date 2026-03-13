@@ -168,8 +168,10 @@ export function buildUrlSearch(state: UrlViewerState): string {
   if (bits !== DEFAULT_FILTER_BITS) p.set("ft", bits);
   if (state.filters.stepTypeFilter) p.set("stepType", state.filters.stepTypeFilter);
 
-  // Expanded groups – only include when at least one group is expanded
-  if (state.expandedGroups.length > 0) {
+  // Always include 'expanded' when a conversation is selected, so that an
+  // empty list (all groups collapsed) round-trips faithfully and is
+  // distinguishable from "no URL constraint on groups" (param absent).
+  if (state.id !== null) {
     p.set("expanded", state.expandedGroups.join(","));
   }
 
@@ -205,7 +207,8 @@ export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
     }
     const search = buildUrlSearch(state);
     const url = `${scheduledPathname}${search}`;
-    window.history.replaceState(null, "", url);
+    // Preserve existing history.state so Next.js App Router metadata is not lost.
+    window.history.replaceState(window.history.state, "", url);
     _timer = null;
   }, debounceMs);
 }

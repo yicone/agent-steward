@@ -1303,8 +1303,13 @@ export default function HomeClient() {
   // session selection that the callback already queued.
   const crossSourceSelectionRef = useRef<Source | null>(null);
 
-  // URL deep-link: parsed once on mount, consumed during init effects.
-  const urlInitRef = useRef(parseUrlState(typeof window !== "undefined" ? window.location.search : ""));
+  // URL deep-link: parsed once on mount. The useState lazy initializer guarantees
+  // parseUrlState only runs on the first render; the ref gives mutable access
+  // to the same object so effects can clear it after consumption.
+  const [_urlInitOnce] = useState<Partial<UrlViewerState>>(
+    () => (typeof window !== "undefined" ? parseUrlState(window.location.search) : {})
+  );
+  const urlInitRef = useRef<Partial<UrlViewerState>>(_urlInitOnce);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -1624,7 +1629,7 @@ export default function HomeClient() {
     stepOffset?: number,
     view?: "chat" | "trajectory",
     opts?: { includeCleared?: boolean }
-  ) => {
+  ): Promise<ConversationContent | null> => {
     setLoadingContent(true);
     setError(null);
     try {
@@ -1640,10 +1645,13 @@ export default function HomeClient() {
       const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
       const json = (await res.json()) as any;
       if (!res.ok) throw new Error(json?.error ?? "Failed to load conversation");
-      setContent(json as ConversationContent);
+      const loaded = json as ConversationContent;
+      setContent(loaded);
+      return loaded;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setContent(null);
+      return null;
     } finally {
       setLoadingContent(false);
     }
@@ -1905,6 +1913,11 @@ export default function HomeClient() {
     const urlInit = urlInitRef.current;
     if (!urlInit.id) return; // nothing to restore
     if (items.length === 0 && loadingList) return; // list not ready yet
+    // Guard against the race where refreshConfigAndStatus has not yet called
+    // setSource(urlInit.source): if the URL specifies a source that differs
+    // from the current source, wait until the source-change effect has run
+    // and the list for the correct source is loaded.
+    if (urlInit.source && source !== urlInit.source) return;
 
     // Consume the init ref so this runs only once.
     const { id, view, filters, expandedGroups, selectedRowId: urlRow, inspectorOpen: urlInspector, inspectorMode: urlInspMode, includeCleared: urlCleared } = urlInit;
@@ -1938,14 +1951,23 @@ export default function HomeClient() {
     // Determine API view param for windsurf
     const apiView = (effectiveSource === "windsurf" && internalView !== "chat") ? "trajectory" as const : (effectiveSource === "windsurf" ? "chat" as const : undefined);
 
-    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then(() => {
-      // Deferred state that depends on content being loaded:
-      // expandedGroups and selectedRowId are applied via a separate effect
-      // triggered by the content change, or we set them here optimistically.
-      if (expandedGroups && expandedGroups.length > 0) {
-        setCollapsedExecutionGroups((prev) => {
-          const next = { ...prev };
-          for (const gid of expandedGroups) next[gid] = false;
+    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then((loaded) => {
+      // Gate follow-up state on a successful load (loadConversation returns null on failure).
+      if (!loaded) return;
+      // Apply expanded groups authoritatively from the URL.  When the URL carried
+      // an explicit 'expanded' param (even empty), pre-populate collapsedExecutionGroups
+      // for ALL groups derived from the loaded content so that the content-change
+      // effect (which defaults to expanding the last group) finds prev[id] already
+      // set and does not override our intent.
+      if (expandedGroups !== undefined) {
+        const allGroupIds = loaded.kind === "trajectory"
+          ? buildExecutionGroups(loaded.events).map((g) => g.id)
+          : [];
+        setCollapsedExecutionGroups(() => {
+          const next: Record<string, boolean> = {};
+          for (const gid of allGroupIds) {
+            next[gid] = !expandedGroups.includes(gid); // collapsed unless in expanded list
+          }
           return next;
         });
       }
@@ -1953,9 +1975,9 @@ export default function HomeClient() {
         setSelectedRowId(urlRow);
         setScrollToRowId(urlRow);
       }
-    }).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, loadingList]);
+  }, [items, loadingList, source]);
 
   // -----------------------------------------------------------------------
   // URL sync: push current viewer state to URL on every relevant change
