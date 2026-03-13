@@ -241,9 +241,19 @@ describe("buildUrlSearch", () => {
     expect(search).toContain("stepType=RUN");
   });
 
-  it("includes expanded groups", () => {
-    const search = buildUrlSearch(makeDefaultState({ expandedGroups: ["a", "b"] }));
+  it("includes expanded groups when a conversation is selected", () => {
+    const search = buildUrlSearch(makeDefaultState({ id: "sess-1", expandedGroups: ["a", "b"] }));
     expect(search).toContain("expanded=a%2Cb"); // comma is encoded
+  });
+
+  it("includes empty expanded= when selected but all groups collapsed", () => {
+    const search = buildUrlSearch(makeDefaultState({ id: "sess-1", expandedGroups: [] }));
+    expect(search).toContain("expanded=");
+  });
+
+  it("omits expanded when no conversation is selected", () => {
+    const search = buildUrlSearch(makeDefaultState({ id: null, expandedGroups: [] }));
+    expect(search).not.toContain("expanded");
   });
 
   it("includes selectedRowId", () => {
@@ -305,5 +315,14 @@ describe("round-trip", () => {
     const parsed = parseUrlState(search);
     // "compact" is the default and omitted from URL; parse returns undefined
     expect(parsed.view).toBeUndefined();
+  });
+
+  it("round-trips empty expanded groups (all collapsed)", () => {
+    // An empty expandedGroups should encode as 'expanded=' so parse can restore it
+    // as an explicit empty array (distinguished from "param absent = no constraint").
+    const original = makeDefaultState({ id: "sess-1", expandedGroups: [] });
+    const search = buildUrlSearch(original);
+    const parsed = parseUrlState(search);
+    expect(parsed.expandedGroups).toEqual([]);
   });
 });
