@@ -52,6 +52,14 @@ export async function GET(req: Request) {
     });
     duplicates = detectDuplicates(allItems);
 
+    // First, evict any entries that have already expired by TTL.
+    for (const [key, entry] of duplicatesCache) {
+      if (entry.expiresAt <= now) {
+        duplicatesCache.delete(key);
+      }
+    }
+
+    // If we're still at or above capacity, evict the oldest remaining entry.
     if (duplicatesCache.size >= MAX_DUPLICATES_CACHE_ENTRIES) {
       const oldestKey = duplicatesCache.keys().next().value as string | undefined;
       if (oldestKey !== undefined) {
