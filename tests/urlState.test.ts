@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildUrlSearch,
-  cancelPendingUrlPush,
   DEFAULT_FILTERS,
   parseUrlState,
   viewFromUrl,
@@ -336,8 +335,10 @@ describe("round-trip", () => {
 /**
  * Helper: creates a minimal window stub that records replaceState calls and
  * popstate listeners. The timer and listener registration are stored on the stub
- * via Symbol.for keys (window-level state), so each test gets fresh state by
- * deleting the window stub in afterEach — no module reset needed for timer state.
+ * via Symbol.for keys (window-level state), so deleting the window stub in
+ * afterEach resets timer state. `vi.resetModules()` is still called to clear
+ * the import cache so each test's dynamic `import(...)` gets a fresh module
+ * execution and a clean closure over the window Symbol keys.
  */
 function makeWindowStub(initialHref = "http://localhost:3000/") {
   const location = { href: initialHref };
