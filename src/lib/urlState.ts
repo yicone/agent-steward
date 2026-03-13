@@ -63,7 +63,7 @@ const DEFAULT_FILTER_BITS = FILTER_KEYS.map((k) => (DEFAULT_FILTERS[k] ? "1" : "
  * Antigravity "markdown" and Windsurf "chat" both map to "compact".
  */
 export function viewToUrl(
-  view: string,
+  view: "markdown" | "chat" | "transcript" | "trajectory",
 ): "compact" | "transcript" | "trajectory" {
   if (view === "markdown" || view === "chat") return "compact";
   if (view === "transcript") return "transcript";
@@ -192,10 +192,14 @@ export function buildUrlSearch(state: UrlViewerState): string {
 // ---------------------------------------------------------------------------
 
 let _timer: ReturnType<typeof setTimeout> | null = null;
+let _popstateRegistered = false;
 
-// Cancel any pending URL push when the user navigates back/forward so the
-// debounced replaceState never fights browser navigation.
-if (typeof window !== "undefined") {
+/** Lazily register the popstate listener (safe to call multiple times; only registers once). */
+function ensurePopstateListener(): void {
+  if (typeof window === "undefined" || _popstateRegistered) return;
+  _popstateRegistered = true;
+  // Cancel any pending URL push when the user navigates back/forward so the
+  // debounced replaceState never fights browser navigation.
   window.addEventListener("popstate", () => {
     if (_timer !== null) {
       clearTimeout(_timer);
@@ -207,6 +211,7 @@ if (typeof window !== "undefined") {
 /** Replace the current URL search with the serialised viewer state (debounced). */
 export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
   if (typeof window === "undefined") return;
+  ensurePopstateListener();
   if (_timer !== null) clearTimeout(_timer);
   // Capture the full href at schedule time so a late callback cannot overwrite
   // a different URL (route change or back/forward navigation within the debounce window).
