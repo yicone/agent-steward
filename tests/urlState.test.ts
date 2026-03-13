@@ -335,8 +335,9 @@ describe("round-trip", () => {
 
 /**
  * Helper: creates a minimal window stub that records replaceState calls and
- * popstate listeners. Each test resets modules (fresh _timer/_popstateRegistered)
- * and uses a dynamic import so the stub is attached before module init runs.
+ * popstate listeners. The timer and listener registration are stored on the stub
+ * via Symbol.for keys (window-level state), so each test gets fresh state by
+ * deleting the window stub in afterEach — no module reset needed for timer state.
  */
 function makeWindowStub(initialHref = "http://localhost:3000/") {
   const location = { href: initialHref };

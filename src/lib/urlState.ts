@@ -199,19 +199,42 @@ export function buildUrlSearch(state: UrlViewerState): string {
 // Debounced URL push
 // ---------------------------------------------------------------------------
 
-let _timer: ReturnType<typeof setTimeout> | null = null;
-let _popstateRegistered = false;
+// Use window-level storage via Symbol.for keys so state survives Next.js HMR
+// module re-execution without accumulating duplicate popstate listeners.
+const _WIN_TIMER = Symbol.for("__asm_urlstate_timer__");
+const _WIN_LISTENER = Symbol.for("__asm_urlstate_listener__");
 
-/** Lazily register the popstate listener (safe to call multiple times; only registers once). */
+type AnyWindow = typeof window & Record<symbol, unknown>;
+
+function winTimer(): ReturnType<typeof setTimeout> | null {
+  if (typeof window === "undefined") return null;
+  return ((window as AnyWindow)[_WIN_TIMER] as ReturnType<typeof setTimeout> | null) ?? null;
+}
+
+function setWinTimer(t: ReturnType<typeof setTimeout> | null): void {
+  if (typeof window !== "undefined") {
+    (window as AnyWindow)[_WIN_TIMER] = t;
+  }
+}
+
+/**
+ * Lazily register the popstate listener.
+ * Safe to call multiple times — the registration flag is stored on `window`
+ * via a `Symbol.for` key so it persists across Next.js HMR module re-execution
+ * and never accumulates duplicate listeners.
+ */
 function ensurePopstateListener(): void {
-  if (typeof window === "undefined" || _popstateRegistered) return;
-  _popstateRegistered = true;
+  if (typeof window === "undefined") return;
+  const w = window as AnyWindow;
+  if (w[_WIN_LISTENER]) return;
+  w[_WIN_LISTENER] = true;
   // Cancel any pending URL push when the user navigates back/forward so the
   // debounced replaceState never fights browser navigation.
   window.addEventListener("popstate", () => {
-    if (_timer !== null) {
-      clearTimeout(_timer);
-      _timer = null;
+    const t = winTimer();
+    if (t !== null) {
+      clearTimeout(t);
+      setWinTimer(null);
     }
   });
 }
@@ -220,31 +243,35 @@ function ensurePopstateListener(): void {
 export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
   if (typeof window === "undefined") return;
   ensurePopstateListener();
-  if (_timer !== null) clearTimeout(_timer);
+  const existing = winTimer();
+  if (existing !== null) clearTimeout(existing);
   // Capture the full href at schedule time so a late callback cannot overwrite
   // a different URL (route change or back/forward navigation within the debounce window).
   const scheduledHref = window.location.href;
-  _timer = setTimeout(() => {
-    // If the URL has changed since we scheduled (any navigation, including
-    // back/forward that only changed the query string), bail out.
-    if (window.location.href !== scheduledHref) {
-      _timer = null;
-      return;
-    }
-    const search = buildUrlSearch(state);
-    const urlObj = new URL(scheduledHref);
-    urlObj.search = search;
-    const url = `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
-    // Preserve existing history.state so Next.js App Router metadata is not lost.
-    window.history.replaceState(window.history.state, "", url);
-    _timer = null;
-  }, debounceMs);
+  setWinTimer(
+    setTimeout(() => {
+      // If the URL has changed since we scheduled (any navigation, including
+      // back/forward that only changed the query string), bail out.
+      if (window.location.href !== scheduledHref) {
+        setWinTimer(null);
+        return;
+      }
+      const search = buildUrlSearch(state);
+      const urlObj = new URL(scheduledHref);
+      urlObj.search = search;
+      const url = `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+      // Preserve existing history.state so Next.js App Router metadata is not lost.
+      window.history.replaceState(window.history.state, "", url);
+      setWinTimer(null);
+    }, debounceMs),
+  );
 }
 
 /** Cancel any pending debounced URL push without performing it. */
 export function cancelPendingUrlPush(): void {
-  if (_timer !== null) {
-    clearTimeout(_timer);
-    _timer = null;
+  const t = winTimer();
+  if (t !== null) {
+    clearTimeout(t);
+    setWinTimer(null);
   }
 }
