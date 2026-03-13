@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-03-13` — Multi-root scaling milestone (`refs: #6`)
+  - Per-root health indicators in Settings (missing, unreadable, slow, pb count)
+  - Duplicate session detection across roots with UI affordance in Viewer
+  - Cached directory listing with TTL and mtime-based invalidation for faster scans
+  - New `GET /api/root-health` endpoint
 - `2026-03-11` — Search and filtering milestone completed via GitHub issue `#5` and PR `#22`
   - Added full-text event search
   - Improved conversation filtering flow
