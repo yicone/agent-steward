@@ -193,20 +193,33 @@ export function buildUrlSearch(state: UrlViewerState): string {
 
 let _timer: ReturnType<typeof setTimeout> | null = null;
 
+// Cancel any pending URL push when the user navigates back/forward so the
+// debounced replaceState never fights browser navigation.
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    if (_timer !== null) {
+      clearTimeout(_timer);
+      _timer = null;
+    }
+  });
+}
+
 /** Replace the current URL search with the serialised viewer state (debounced). */
 export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
   if (typeof window === "undefined") return;
   if (_timer !== null) clearTimeout(_timer);
-  // Capture the pathname at schedule time so a late callback cannot overwrite
-  // a different route (e.g. /settings) that the user navigated to.
-  const scheduledPathname = window.location.pathname;
+  // Capture the full href at schedule time so a late callback cannot overwrite
+  // a different URL (route change or back/forward navigation within the debounce window).
+  const scheduledHref = window.location.href;
   _timer = setTimeout(() => {
-    if (window.location.pathname !== scheduledPathname) {
+    // If the URL has changed since we scheduled (any navigation, including
+    // back/forward that only changed the query string), bail out.
+    if (window.location.href !== scheduledHref) {
       _timer = null;
       return;
     }
     const search = buildUrlSearch(state);
-    const url = `${scheduledPathname}${search}`;
+    const url = `${window.location.pathname}${search}`;
     // Preserve existing history.state so Next.js App Router metadata is not lost.
     window.history.replaceState(window.history.state, "", url);
     _timer = null;
