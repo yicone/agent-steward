@@ -34,6 +34,18 @@ Optional: override the config file path via env var (useful for local workspace 
 export AGENT_STORAGE_MANAGER_CONFIG_PATH=./.local/config.json
 ```
 
+### Testing multi-root features
+
+To exercise health indicators, duplicate detection, and multi-root listing without real sessions:
+
+```bash
+node scripts/seed-multi-root.mjs                                        # create fixtures
+AGENT_STORAGE_MANAGER_CONFIG_PATH=.local/seed-config.json pnpm dev      # start with seeded data
+node scripts/seed-multi-root.mjs --clean                                # remove fixtures
+```
+
+See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
+
 ## Project Docs
 
 - `README.md`: current product scope, configuration, and runtime prerequisites
