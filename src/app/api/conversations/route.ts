@@ -17,6 +17,7 @@ const duplicatesCache = new Map<
     expiresAt: number;
   }
 >();
+const MAX_DUPLICATES_CACHE_ENTRIES = 100;
 
 function isSource(value: string | null): value is Source {
   return value === "antigravity" || value === "windsurf";
@@ -50,6 +51,14 @@ export async function GET(req: Request) {
       offset: 0
     });
     duplicates = detectDuplicates(allItems);
+
+    if (duplicatesCache.size >= MAX_DUPLICATES_CACHE_ENTRIES) {
+      const oldestKey = duplicatesCache.keys().next().value as string | undefined;
+      if (oldestKey !== undefined) {
+        duplicatesCache.delete(oldestKey);
+      }
+    }
+
     duplicatesCache.set(cacheKey, {
       value: duplicates,
       expiresAt: now + 10_000 // 10s TTL, aligned with _dirCache behavior
