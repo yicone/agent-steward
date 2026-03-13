@@ -76,6 +76,14 @@ export function viewToUrl(
  */
 export function viewFromUrl(
   urlView: "compact" | "transcript" | "trajectory" | null,
+  source: "antigravity",
+): "markdown" | "transcript" | "trajectory";
+export function viewFromUrl(
+  urlView: "compact" | "transcript" | "trajectory" | null,
+  source: "windsurf",
+): "chat" | "transcript" | "trajectory";
+export function viewFromUrl(
+  urlView: "compact" | "transcript" | "trajectory" | null,
   source: Source,
 ): string {
   if (!urlView || urlView === "compact") {

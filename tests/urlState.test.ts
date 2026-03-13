@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildUrlSearch,
+  cancelPendingUrlPush,
+  DEFAULT_FILTERS,
   parseUrlState,
   viewFromUrl,
   viewToUrl,
@@ -324,5 +326,142 @@ describe("round-trip", () => {
     const search = buildUrlSearch(original);
     const parsed = parseUrlState(search);
     expect(parsed.expandedGroups).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pushUrlState / cancelPendingUrlPush — debounce + href-guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: creates a minimal window stub that records replaceState calls and
+ * popstate listeners. Each test resets modules (fresh _timer/_popstateRegistered)
+ * and uses a dynamic import so the stub is attached before module init runs.
+ */
+function makeWindowStub(initialHref = "http://localhost:3000/") {
+  const location = { href: initialHref };
+  const replaceStateMock = vi.fn();
+  const popstateHandlers: Array<() => void> = [];
+  const stub = {
+    location,
+    history: { state: {} as unknown, replaceState: replaceStateMock },
+    addEventListener: (event: string, handler: () => void) => {
+      if (event === "popstate") popstateHandlers.push(handler);
+    },
+  };
+  return { stub, location, replaceStateMock, popstateHandlers };
+}
+
+function makeUrlViewerState(overrides?: Partial<UrlViewerState>): UrlViewerState {
+  return {
+    source: "antigravity",
+    id: "sess-1",
+    view: null,
+    filters: { ...DEFAULT_FILTERS, stepTypeFilter: "" },
+    expandedGroups: [],
+    selectedRowId: null,
+    inspectorOpen: false,
+    inspectorMode: "event",
+    includeCleared: false,
+    ...overrides
+  };
+}
+
+describe("pushUrlState", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.resetModules();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (globalThis as any).window;
+  });
+
+  it("calls replaceState after the debounce delay", async () => {
+    vi.useFakeTimers();
+    const { stub, replaceStateMock } = makeWindowStub();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).window = stub;
+    const { pushUrlState } = await import("../src/lib/urlState");
+
+    pushUrlState(makeUrlViewerState(), 300);
+
+    expect(replaceStateMock).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(300);
+    expect(replaceStateMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not call replaceState if href changed before the timer fires", async () => {
+    vi.useFakeTimers();
+    const { stub, location, replaceStateMock } = makeWindowStub();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).window = stub;
+    const { pushUrlState } = await import("../src/lib/urlState");
+
+    pushUrlState(makeUrlViewerState(), 300);
+    location.href = "http://localhost:3000/?source=windsurf"; // simulate navigation
+    vi.advanceTimersByTime(300);
+
+    expect(replaceStateMock).not.toHaveBeenCalled();
+  });
+
+  it("cancelPendingUrlPush prevents replaceState from being called", async () => {
+    vi.useFakeTimers();
+    const { stub, replaceStateMock } = makeWindowStub();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).window = stub;
+    const { pushUrlState, cancelPendingUrlPush: cancelPending } = await import("../src/lib/urlState");
+
+    pushUrlState(makeUrlViewerState(), 300);
+    cancelPending();
+    vi.advanceTimersByTime(300);
+
+    expect(replaceStateMock).not.toHaveBeenCalled();
+  });
+
+  it("re-scheduling resets the debounce timer (only one replaceState call)", async () => {
+    vi.useFakeTimers();
+    const { stub, replaceStateMock } = makeWindowStub();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).window = stub;
+    const { pushUrlState } = await import("../src/lib/urlState");
+
+    pushUrlState(makeUrlViewerState(), 300);
+    vi.advanceTimersByTime(150); // not yet fired
+    pushUrlState(makeUrlViewerState(), 300); // reset timer
+    vi.advanceTimersByTime(150); // 300 ms from first call, but timer was reset
+    expect(replaceStateMock).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(150); // now 300 ms from second call
+    expect(replaceStateMock).toHaveBeenCalledOnce();
+  });
+
+  it("popstate event cancels the pending timer", async () => {
+    vi.useFakeTimers();
+    const { stub, replaceStateMock, popstateHandlers } = makeWindowStub();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).window = stub;
+    const { pushUrlState } = await import("../src/lib/urlState");
+
+    pushUrlState(makeUrlViewerState(), 300);
+    expect(popstateHandlers).toHaveLength(1); // listener was registered
+    popstateHandlers[0](); // simulate browser back/forward
+    vi.advanceTimersByTime(300);
+
+    expect(replaceStateMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves hash and pathname from scheduled URL in replaceState call", async () => {
+    vi.useFakeTimers();
+    const { stub, replaceStateMock } = makeWindowStub("http://localhost:3000/app?old=1#section");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (globalThis as any).window = stub;
+    const { pushUrlState } = await import("../src/lib/urlState");
+
+    pushUrlState(makeUrlViewerState({ source: "antigravity", id: "s1" }), 300);
+    vi.advanceTimersByTime(300);
+
+    expect(replaceStateMock).toHaveBeenCalledOnce();
+    const [, , url] = replaceStateMock.mock.calls[0] as [unknown, unknown, string];
+    expect(url).toContain("/app");
+    expect(url).toContain("#section");
+    expect(url).toContain("source=antigravity");
   });
 });
