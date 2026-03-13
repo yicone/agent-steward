@@ -219,7 +219,9 @@ export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
       return;
     }
     const search = buildUrlSearch(state);
-    const url = `${window.location.pathname}${search}`;
+    const urlObj = new URL(scheduledHref);
+    urlObj.search = search;
+    const url = `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
     // Preserve existing history.state so Next.js App Router metadata is not lost.
     window.history.replaceState(window.history.state, "", url);
     _timer = null;
