@@ -229,10 +229,12 @@ export function buildMetaMapFromGlobalStateTrajectorySummariesValue(
 }
 
 async function readVscdbValue(dbPath: string, key: string): Promise<string | null> {
+  const sqlite3 = platformPaths.sqlite3Binary();
+  if (!sqlite3) return null;
   const safeKey = key.replaceAll("'", "''");
   try {
     const { stdout } = await execFileAsync(
-      "/usr/bin/sqlite3",
+      sqlite3,
       [dbPath, `select value from ItemTable where key='${safeKey}';`],
       { maxBuffer: 15 * 1024 * 1024 }
     );

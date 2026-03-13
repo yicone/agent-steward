@@ -161,5 +161,11 @@ describe("createPlatformPaths", () => {
         expect(p.antigravityVscdbPath()).toMatch(/state\.vscdb$/);
       }
     });
+
+    it("sqlite3Binary returns a path on darwin and linux, null on win32", () => {
+      expect(createPlatformPaths("darwin").sqlite3Binary()).toBe("/usr/bin/sqlite3");
+      expect(createPlatformPaths("linux").sqlite3Binary()).toBe("/usr/bin/sqlite3");
+      expect(createPlatformPaths("win32").sqlite3Binary()).toBeNull();
+    });
   });
 });

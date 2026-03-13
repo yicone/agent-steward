@@ -25,6 +25,11 @@ export interface PlatformPaths {
   windsurfLogsRoot(): string;
   /** Default path for Antigravity VS Code global state database. */
   antigravityVscdbPath(): string;
+  /**
+   * Path to the `sqlite3` CLI binary used for reading VS Code global state.
+   * Returns `null` when no known binary location exists for this platform.
+   */
+  sqlite3Binary(): string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,6 +45,7 @@ function darwinPaths(): PlatformPaths {
       path.join(home, "Library", "Application Support", "Windsurf", "logs"),
     antigravityVscdbPath: () =>
       path.join(home, "Library", "Application Support", "Antigravity", "User", "globalStorage", "state.vscdb"),
+    sqlite3Binary: () => "/usr/bin/sqlite3",
   };
 }
 
@@ -59,6 +65,9 @@ function win32Paths(): PlatformPaths {
       path.join(appData, "Windsurf", "logs"),
     antigravityVscdbPath: () =>
       path.join(appData, "Antigravity", "User", "globalStorage", "state.vscdb"),
+    // TODO: Validate — sqlite3 is not typically available on Windows by default.
+    //       Consider bundling or documenting a required install.
+    sqlite3Binary: () => null,
   };
 }
 
@@ -78,6 +87,7 @@ function linuxPaths(): PlatformPaths {
       path.join(configHome, "Windsurf", "logs"),
     antigravityVscdbPath: () =>
       path.join(configHome, "Antigravity", "User", "globalStorage", "state.vscdb"),
+    sqlite3Binary: () => "/usr/bin/sqlite3",
   };
 }
 
@@ -85,7 +95,15 @@ function linuxPaths(): PlatformPaths {
 // Factory
 // ---------------------------------------------------------------------------
 
-/** Build a PlatformPaths instance for the given platform identifier. */
+/**
+ * Build a PlatformPaths instance for the given platform identifier.
+ *
+ * @note The `platform` parameter controls which path **segments** are chosen
+ * (e.g. `Library/Application Support` vs `AppData/Roaming`) but the paths are
+ * always assembled with the host-native `path.join`, so separators match the
+ * machine the code actually runs on. This is intentional: the parameter exists
+ * for unit-test segment verification, not for producing foreign-OS paths.
+ */
 export function createPlatformPaths(platform?: NodeJS.Platform): PlatformPaths {
   const p = platform ?? process.platform;
   switch (p) {
