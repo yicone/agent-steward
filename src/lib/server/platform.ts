@@ -51,7 +51,7 @@ function darwinPaths(): PlatformPaths {
 //       under %APPDATA%\<AppName>.
 
 function win32Paths(): PlatformPaths {
-  const appData = process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming");
+  const appData = process.env.APPDATA?.trim() || path.join(os.homedir(), "AppData", "Roaming");
   return {
     antigravityLogsRoot: () =>
       path.join(appData, "Antigravity", "logs"),
@@ -70,7 +70,7 @@ function win32Paths(): PlatformPaths {
 //       $XDG_CONFIG_HOME (default ~/.config) on Linux.
 
 function linuxPaths(): PlatformPaths {
-  const configHome = process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config");
+  const configHome = process.env.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), ".config");
   return {
     antigravityLogsRoot: () =>
       path.join(configHome, "Antigravity", "logs"),

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import os from "node:os";
 import path from "node:path";
 
@@ -59,6 +59,21 @@ describe("createPlatformPaths", () => {
         else process.env.APPDATA = prev;
       }
     });
+
+    it("treats empty APPDATA as unset", () => {
+      const prev = process.env.APPDATA;
+      try {
+        process.env.APPDATA = "";
+        const home = os.homedir();
+        const p = createPlatformPaths("win32");
+        const expected = path.join(home, "AppData", "Roaming");
+
+        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
+      } finally {
+        if (prev === undefined) delete process.env.APPDATA;
+        else process.env.APPDATA = prev;
+      }
+    });
   });
 
   describe("linux", () => {
@@ -93,6 +108,21 @@ describe("createPlatformPaths", () => {
 
         expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
         expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
+      } finally {
+        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
+        else process.env.XDG_CONFIG_HOME = prev;
+      }
+    });
+
+    it("treats empty XDG_CONFIG_HOME as unset", () => {
+      const prev = process.env.XDG_CONFIG_HOME;
+      try {
+        process.env.XDG_CONFIG_HOME = "";
+        const home = os.homedir();
+        const p = createPlatformPaths("linux");
+        const expected = path.join(home, ".config");
+
+        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
       } finally {
         if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
         else process.env.XDG_CONFIG_HOME = prev;
