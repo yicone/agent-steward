@@ -26,7 +26,8 @@ export async function GET(req: Request) {
   const items = await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
   /* duplicate detection across roots */
-  const duplicates = detectDuplicates(items);
+  const allItems = await listConversationFiles({ roots: config.roots, source: sourceParam });
+  const duplicates = detectDuplicates(allItems);
 
   let metaMap: Record<string, { title?: string; cwd?: string }> = {};
   try {
