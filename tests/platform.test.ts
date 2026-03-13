@@ -24,154 +24,91 @@ describe("createPlatformPaths", () => {
 
   describe("win32", () => {
     it("uses APPDATA when set", () => {
-      const prev = process.env.APPDATA;
-      try {
-        process.env.APPDATA = "/mock/AppData/Roaming";
-        const p = createPlatformPaths("win32");
+      const p = createPlatformPaths("win32", { APPDATA: "/mock/AppData/Roaming" });
 
-        expect(p.antigravityLogsRoot()).toBe(
-          path.join("/mock/AppData/Roaming", "Antigravity", "logs")
-        );
-        expect(p.windsurfLogsRoot()).toBe(
-          path.join("/mock/AppData/Roaming", "Windsurf", "logs")
-        );
-        expect(p.antigravityVscdbPath()).toBe(
-          path.join("/mock/AppData/Roaming", "Antigravity", "User", "globalStorage", "state.vscdb")
-        );
-      } finally {
-        if (prev === undefined) delete process.env.APPDATA;
-        else process.env.APPDATA = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(
+        path.join("/mock/AppData/Roaming", "Antigravity", "logs")
+      );
+      expect(p.windsurfLogsRoot()).toBe(
+        path.join("/mock/AppData/Roaming", "Windsurf", "logs")
+      );
+      expect(p.antigravityVscdbPath()).toBe(
+        path.join("/mock/AppData/Roaming", "Antigravity", "User", "globalStorage", "state.vscdb")
+      );
     });
 
     it("falls back to homedir/AppData/Roaming when APPDATA is unset", () => {
-      const prev = process.env.APPDATA;
-      try {
-        delete process.env.APPDATA;
-        const home = os.homedir();
-        const p = createPlatformPaths("win32");
-        const expected = path.join(home, "AppData", "Roaming");
+      const home = os.homedir();
+      const p = createPlatformPaths("win32", { APPDATA: undefined });
+      const expected = path.join(home, "AppData", "Roaming");
 
-        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
-        expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.APPDATA;
-        else process.env.APPDATA = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
+      expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
     });
 
     it("treats empty APPDATA as unset", () => {
-      const prev = process.env.APPDATA;
-      try {
-        process.env.APPDATA = "";
-        const home = os.homedir();
-        const p = createPlatformPaths("win32");
-        const expected = path.join(home, "AppData", "Roaming");
+      const home = os.homedir();
+      const p = createPlatformPaths("win32", { APPDATA: "" });
+      const expected = path.join(home, "AppData", "Roaming");
 
-        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.APPDATA;
-        else process.env.APPDATA = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
     });
 
     it("treats whitespace-only APPDATA as unset", () => {
-      const prev = process.env.APPDATA;
-      try {
-        process.env.APPDATA = "   ";
-        const home = os.homedir();
-        const p = createPlatformPaths("win32");
-        const expected = path.join(home, "AppData", "Roaming");
+      const home = os.homedir();
+      const p = createPlatformPaths("win32", { APPDATA: "   " });
+      const expected = path.join(home, "AppData", "Roaming");
 
-        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.APPDATA;
-        else process.env.APPDATA = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
     });
   });
 
   describe("linux", () => {
     it("uses XDG_CONFIG_HOME when set", () => {
-      const prev = process.env.XDG_CONFIG_HOME;
-      try {
-        process.env.XDG_CONFIG_HOME = "/mock/.config";
-        const p = createPlatformPaths("linux");
+      const p = createPlatformPaths("linux", { XDG_CONFIG_HOME: "/mock/.config" });
 
-        expect(p.antigravityLogsRoot()).toBe(
-          path.join("/mock/.config", "Antigravity", "logs")
-        );
-        expect(p.windsurfLogsRoot()).toBe(
-          path.join("/mock/.config", "Windsurf", "logs")
-        );
-        expect(p.antigravityVscdbPath()).toBe(
-          path.join("/mock/.config", "Antigravity", "User", "globalStorage", "state.vscdb")
-        );
-      } finally {
-        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
-        else process.env.XDG_CONFIG_HOME = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(
+        path.join("/mock/.config", "Antigravity", "logs")
+      );
+      expect(p.windsurfLogsRoot()).toBe(
+        path.join("/mock/.config", "Windsurf", "logs")
+      );
+      expect(p.antigravityVscdbPath()).toBe(
+        path.join("/mock/.config", "Antigravity", "User", "globalStorage", "state.vscdb")
+      );
     });
 
     it("falls back to homedir/.config when XDG_CONFIG_HOME is unset", () => {
-      const prev = process.env.XDG_CONFIG_HOME;
-      try {
-        delete process.env.XDG_CONFIG_HOME;
-        const home = os.homedir();
-        const p = createPlatformPaths("linux");
-        const expected = path.join(home, ".config");
+      const home = os.homedir();
+      const p = createPlatformPaths("linux", { XDG_CONFIG_HOME: undefined });
+      const expected = path.join(home, ".config");
 
-        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
-        expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
-        else process.env.XDG_CONFIG_HOME = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
+      expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
     });
 
     it("treats empty XDG_CONFIG_HOME as unset", () => {
-      const prev = process.env.XDG_CONFIG_HOME;
-      try {
-        process.env.XDG_CONFIG_HOME = "";
-        const home = os.homedir();
-        const p = createPlatformPaths("linux");
-        const expected = path.join(home, ".config");
+      const home = os.homedir();
+      const p = createPlatformPaths("linux", { XDG_CONFIG_HOME: "" });
+      const expected = path.join(home, ".config");
 
-        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
-        else process.env.XDG_CONFIG_HOME = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
     });
 
     it("treats whitespace-only XDG_CONFIG_HOME as unset", () => {
-      const prev = process.env.XDG_CONFIG_HOME;
-      try {
-        process.env.XDG_CONFIG_HOME = "   ";
-        const home = os.homedir();
-        const p = createPlatformPaths("linux");
-        const expected = path.join(home, ".config");
+      const home = os.homedir();
+      const p = createPlatformPaths("linux", { XDG_CONFIG_HOME: "   " });
+      const expected = path.join(home, ".config");
 
-        expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
-        else process.env.XDG_CONFIG_HOME = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
     });
   });
 
   describe("unsupported platform", () => {
     it("falls back to linux-style paths for unhandled platform values", () => {
-      const prev = process.env.XDG_CONFIG_HOME;
-      try {
-        process.env.XDG_CONFIG_HOME = "/xdg";
-        const p = createPlatformPaths("freebsd" as NodeJS.Platform);
+      const p = createPlatformPaths("freebsd" as NodeJS.Platform, { XDG_CONFIG_HOME: "/xdg" });
 
-        expect(p.antigravityLogsRoot()).toBe(path.join("/xdg", "Antigravity", "logs"));
-      } finally {
-        if (prev === undefined) delete process.env.XDG_CONFIG_HOME;
-        else process.env.XDG_CONFIG_HOME = prev;
-      }
+      expect(p.antigravityLogsRoot()).toBe(path.join("/xdg", "Antigravity", "logs"));
     });
   });
 

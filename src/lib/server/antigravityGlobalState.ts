@@ -11,7 +11,6 @@ import { abbreviateHome, fileUriToPath } from "@/lib/server/trajectoryMeta";
 
 const execFileAsync = promisify(execFile);
 
-const DEFAULT_VSCDB_PATH = platformPaths.antigravityVscdbPath();
 const TRAJECTORY_SUMMARIES_KEYS = [
   "antigravityUnifiedStateSync.trajectorySummaries",
   "unifiedStateSync.trajectorySummaries"
@@ -249,7 +248,7 @@ export async function getAntigravityTrajectoryMetaMapFromVscdb(params?: {
   const sqlite3 = platformPaths.sqlite3Binary();
   if (!sqlite3) return {};
 
-  const vscdbPath = expandHome(params?.vscdbPath ?? DEFAULT_VSCDB_PATH);
+  const vscdbPath = expandHome(params?.vscdbPath ?? platformPaths.antigravityVscdbPath());
   try {
     await fs.stat(vscdbPath);
   } catch {

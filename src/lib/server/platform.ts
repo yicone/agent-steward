@@ -32,6 +32,12 @@ export interface PlatformPaths {
   sqlite3Binary(): string | null;
 }
 
+/** Optional environment overrides for testability (avoids mutating `process.env`). */
+export interface PlatformPathsEnv {
+  APPDATA?: string;
+  XDG_CONFIG_HOME?: string;
+}
+
 // ---------------------------------------------------------------------------
 // macOS (reference / validated)
 // ---------------------------------------------------------------------------
@@ -56,8 +62,8 @@ function darwinPaths(): PlatformPaths {
 //       and Windsurf. Electron-based VS Code forks typically store user data
 //       under %APPDATA%\<AppName>.
 
-function win32Paths(): PlatformPaths {
-  const appData = process.env.APPDATA?.trim() || path.join(os.homedir(), "AppData", "Roaming");
+function win32Paths(env?: PlatformPathsEnv): PlatformPaths {
+  const appData = (env?.APPDATA ?? process.env.APPDATA)?.trim() || path.join(os.homedir(), "AppData", "Roaming");
   return {
     antigravityLogsRoot: () =>
       path.join(appData, "Antigravity", "logs"),
@@ -78,8 +84,8 @@ function win32Paths(): PlatformPaths {
 //       and Windsurf. Electron-based VS Code forks typically honour
 //       $XDG_CONFIG_HOME (default ~/.config) on Linux.
 
-function linuxPaths(): PlatformPaths {
-  const configHome = process.env.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), ".config");
+function linuxPaths(env?: PlatformPathsEnv): PlatformPaths {
+  const configHome = (env?.XDG_CONFIG_HOME ?? process.env.XDG_CONFIG_HOME)?.trim() || path.join(os.homedir(), ".config");
   return {
     antigravityLogsRoot: () =>
       path.join(configHome, "Antigravity", "logs"),
@@ -98,21 +104,25 @@ function linuxPaths(): PlatformPaths {
 /**
  * Build a PlatformPaths instance for the given platform identifier.
  *
+ * @param platform  Target platform (defaults to `process.platform`).
+ * @param env       Optional environment variable overrides — use in tests to
+ *                  avoid mutating the global `process.env`.
+ *
  * @note The `platform` parameter controls which path **segments** are chosen
  * (e.g. `Library/Application Support` vs `AppData/Roaming`) but the paths are
  * always assembled with the host-native `path.join`, so separators match the
  * machine the code actually runs on. This is intentional: the parameter exists
  * for unit-test segment verification, not for producing foreign-OS paths.
  */
-export function createPlatformPaths(platform?: NodeJS.Platform): PlatformPaths {
+export function createPlatformPaths(platform?: NodeJS.Platform, env?: PlatformPathsEnv): PlatformPaths {
   const p = platform ?? process.platform;
   switch (p) {
     case "darwin":
       return darwinPaths();
     case "win32":
-      return win32Paths();
+      return win32Paths(env);
     default:
-      return linuxPaths();
+      return linuxPaths(env);
   }
 }
 
