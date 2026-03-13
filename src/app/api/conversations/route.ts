@@ -8,6 +8,10 @@ import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Cache duplicate detection results per (source, roots) to avoid
+// re-listing all conversation files with `limit: Infinity` on every request.
+const duplicatesCache = new Map<string, ReturnType<typeof detectDuplicates>>();
+
 function isSource(value: string | null): value is Source {
   return value === "antigravity" || value === "windsurf";
 }
@@ -26,8 +30,13 @@ export async function GET(req: Request) {
   const items = await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
   /* duplicate detection across roots */
-  const allItems = await listConversationFiles({ roots: config.roots, source: sourceParam, limit: Infinity, offset: 0 });
-  const duplicates = detectDuplicates(allItems);
+  const cacheKey = JSON.stringify({ source: sourceParam, roots: config.roots });
+  let duplicates = duplicatesCache.get(cacheKey);
+  if (!duplicates) {
+    const allItems = await listConversationFiles({ roots: config.roots, source: sourceParam, limit: Infinity, offset: 0 });
+    duplicates = detectDuplicates(allItems);
+    duplicatesCache.set(cacheKey, duplicates);
+  }
 
   let metaMap: Record<string, { title?: string; cwd?: string }> = {};
   try {
