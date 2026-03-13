@@ -1904,6 +1904,14 @@ export default function HomeClient() {
                   <div className="mt-1 text-xs text-muted">
                     {formatTime(it.mtimeMs)} • {formatBytes(it.sizeBytes)}
                   </div>
+                  {it.duplicateRootIds && it.duplicateRootIds.length > 0 ? (
+                    <div
+                      className="mt-1 truncate text-[10px] text-amber-600 dark:text-amber-400"
+                      title={`Also in roots: ${it.duplicateRootIds.join(", ")}`}
+                    >
+                      ⚠ duplicate in {it.duplicateRootIds.length} other {it.duplicateRootIds.length === 1 ? "root" : "roots"}
+                    </div>
+                  ) : null}
                 </button>
               );
             })}

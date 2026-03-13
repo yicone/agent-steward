@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import type { ConversationListItem, Source } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
-import { listConversationFiles } from "@/lib/server/conversations";
+import { detectDuplicates, listConversationFiles } from "@/lib/server/conversations";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 
 export const runtime = "nodejs";
@@ -25,6 +25,9 @@ export async function GET(req: Request) {
   const { config } = await readConfig();
   const items = await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
+  /* duplicate detection across roots */
+  const duplicates = detectDuplicates(items);
+
   let metaMap: Record<string, { title?: string; cwd?: string }> = {};
   try {
     metaMap = await getTrajectoryMetaMapCached({ source: sourceParam, config });
@@ -34,8 +37,14 @@ export async function GET(req: Request) {
 
   const withMeta: ConversationListItem[] = items.map((it) => {
     const meta = metaMap[it.id] ?? {};
-    return { ...it, ...meta };
+    const dupRoots = duplicates[it.id];
+    const duplicateRootIds = dupRoots ? dupRoots.filter((rid) => rid !== it.rootId) : undefined;
+    return {
+      ...it,
+      ...meta,
+      ...(duplicateRootIds && duplicateRootIds.length > 0 ? { duplicateRootIds } : {})
+    };
   });
 
-  return NextResponse.json({ items: withMeta, limit, offset });
+  return NextResponse.json({ items: withMeta, limit, offset, duplicates });
 }

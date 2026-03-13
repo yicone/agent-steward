@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import type { AppConfig, RootConfig, Source, SourcesStatus } from "@/lib/types";
+import type { AppConfig, RootConfig, RootHealth, Source, SourcesStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type ApiConfigResponse = { path: string; config: AppConfig };
@@ -17,8 +17,35 @@ function cloneConfig(config: AppConfig): AppConfig {
   return JSON.parse(JSON.stringify(config)) as AppConfig;
 }
 
+const healthColors: Record<string, string> = {
+  healthy: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  missing: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  unreadable: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  slow: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+};
+
+function HealthBadge({ health }: { health: RootHealth | undefined }) {
+  if (!health) return null;
+  const color = healthColors[health.status] ?? "";
+  const label =
+    health.status === "healthy"
+      ? `${health.pbCount} pb · ${health.scanMs}ms`
+      : health.status === "slow"
+        ? `${health.pbCount} pb · slow (${health.scanMs}ms)`
+        : health.error ?? health.status;
+  return (
+    <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", color)} title={label}>
+      {health.status === "healthy" || health.status === "slow"
+        ? `${health.pbCount} pb`
+        : health.status}
+      {health.status === "slow" ? ` · ${health.scanMs}ms` : null}
+    </span>
+  );
+}
+
 function RootRow(props: {
   root: RootConfig;
+  health?: RootHealth;
   onToggle(): void;
   onRemove(): void;
 }) {
@@ -32,9 +59,15 @@ function RootRow(props: {
               {props.root.id.slice(0, 8)}
             </Badge>
           </div>
-          <div className="mt-1 text-xs text-muted">
-            source: <span className="font-mono">{props.root.source}</span>
+          <div className="mt-1 flex items-center gap-2 text-xs text-muted">
+            <span>
+              source: <span className="font-mono">{props.root.source}</span>
+            </span>
+            <HealthBadge health={props.health} />
           </div>
+          {props.health?.error ? (
+            <div className="mt-1 text-[10px] text-red-600 dark:text-red-400">{props.health.error}</div>
+          ) : null}
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
           <Button
@@ -57,6 +90,7 @@ export default function SettingsClient() {
   const [configPath, setConfigPath] = useState<string>("");
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
+  const [rootHealthMap, setRootHealthMap] = useState<Record<string, RootHealth>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,8 +112,20 @@ export default function SettingsClient() {
     setConfigPath(cfgJson.path);
     setConfig(cfgJson.config);
 
-    const stRes = await fetch("/api/sources");
+    const [stRes, healthRes] = await Promise.all([
+      fetch("/api/sources"),
+      fetch("/api/root-health")
+    ]);
     setStatus((await stRes.json()) as SourcesStatus);
+
+    try {
+      const healthJson = (await healthRes.json()) as { roots: RootHealth[] };
+      const map: Record<string, RootHealth> = {};
+      for (const h of healthJson.roots) map[h.rootId] = h;
+      setRootHealthMap(map);
+    } catch {
+      /* root-health endpoint may not be available yet */
+    }
   }
 
   async function save(nextConfig: AppConfig) {
@@ -95,8 +141,21 @@ export default function SettingsClient() {
       if (!res.ok) throw new Error((json as any)?.error ?? "Failed to save config");
       setConfigPath(json.path);
       setConfig(json.config);
-      const stRes = await fetch("/api/sources");
+
+      const [stRes, healthRes] = await Promise.all([
+        fetch("/api/sources"),
+        fetch("/api/root-health")
+      ]);
       setStatus((await stRes.json()) as SourcesStatus);
+
+      try {
+        const healthJson = (await healthRes.json()) as { roots: RootHealth[] };
+        const map: Record<string, RootHealth> = {};
+        for (const h of healthJson.roots) map[h.rootId] = h;
+        setRootHealthMap(map);
+      } catch {
+        /* best-effort */
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -216,6 +275,7 @@ export default function SettingsClient() {
               <RootRow
                 key={r.id}
                 root={r}
+                health={rootHealthMap[r.id]}
                 onToggle={() => {
                   if (!config) return;
                   const next = cloneConfig(config);
@@ -242,6 +302,7 @@ export default function SettingsClient() {
               <RootRow
                 key={r.id}
                 root={r}
+                health={rootHealthMap[r.id]}
                 onToggle={() => {
                   if (!config) return;
                   const next = cloneConfig(config);
