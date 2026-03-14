@@ -1774,6 +1774,12 @@ export default function HomeClient() {
     return <StatusPill label="Windsurf: not found" tone="bad" title={status.windsurf.error} />;
   })();
 
+  const codexPill = (() => {
+    if (!status) return <StatusPill label="Codex: ..." tone="warn" />;
+    if (status.codex.sessionsFound) return <StatusPill label="Codex: sessions found" tone="ok" title={status.codex.sessionsDir} />;
+    return <StatusPill label="Codex: not found" tone="bad" title={status.codex.error} />;
+  })();
+
   const toggleExecutionGroup = useCallback((groupId: string) => {
     setCollapsedExecutionGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   }, []);
@@ -1815,6 +1821,7 @@ export default function HomeClient() {
           <div className="text-lg font-semibold">Agent Storage Manager</div>
           {antigravityPill}
           {windsurfPill}
+          {codexPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <GlobalSearch onSelect={handleGlobalSearchSelect} />
@@ -1844,6 +1851,13 @@ export default function HomeClient() {
             onClick={() => setSource("windsurf")}
           >
             Windsurf
+          </Button>
+          <Button
+            variant={source === "codex" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSource("codex")}
+          >
+            Codex
           </Button>
           <div className="flex-1" />
           <div className="w-full sm:w-[360px] sm:max-w-[360px]">
@@ -2356,6 +2370,102 @@ export default function HomeClient() {
                   Load more
                 </Button>
               </div>
+            </div>
+          ) : null}
+
+          {selectedId && content?.kind === "trajectory" && content.source === "codex" ? (
+            <div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>events {content.summary.renderedEvents}</Badge>
+                  <Badge>tools {content.summary.toolCount + content.summary.commandCount}</Badge>
+                  {content.summary.errorCount > 0 ? (
+                    <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
+                      errors {content.summary.errorCount}
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="text-xs text-muted">Codex CLI session (read from .jsonl)</div>
+              </div>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Button
+                  variant={trajectoryFilters.thought ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
+                >
+                  Thoughts
+                </Button>
+                <Button
+                  variant={trajectoryFilters.tool ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
+                >
+                  Tools
+                </Button>
+                <Button
+                  variant={trajectoryFilters.command ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
+                >
+                  Commands
+                </Button>
+                <Button
+                  variant={trajectoryFilters.status ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
+                >
+                  Status
+                </Button>
+                <Button
+                  variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
+                >
+                  Only errors
+                </Button>
+                <Button
+                  variant={trajectoryFilters.hasOutput ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+                >
+                  Has output
+                </Button>
+                <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
+              </div>
+              <div className="mb-2 flex items-center gap-2">
+                <Input
+                  placeholder="Search events…"
+                  value={eventSearch}
+                  onChange={(e) => setEventSearch(e.target.value)}
+                  className="h-7 text-xs"
+                />
+                {eventSearchMatchEvents.length > 0 ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
+                    <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
+                    <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
+                  </>
+                ) : eventSearch.trim() ? (
+                  <span className="shrink-0 text-xs text-muted">0 matches</span>
+                ) : null}
+              </div>
+              {withInspector(
+                <VirtualizedTrajectoryRows
+                  rows={trajectoryRows}
+                  onToggleGroup={toggleExecutionGroup}
+                  onSelectRow={onSelectRow}
+                  selectedRowId={selectedRowId}
+                  highlightedRowId={highlightedRowId}
+                  scrollToRowId={scrollToRowId}
+                  onScrolledToRowId={() => setScrollToRowId(null)}
+                  autoOpenDetailsRowId={autoOpenDetailsRowId}
+                  autoOpenDetailsToken={autoOpenDetailsToken}
+                  onAutoOpenedDetails={(rowId, token) => {
+                    if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
+                  }}
+                  searchQuery={eventSearch}
+                />
+              )}
             </div>
           ) : null}
 

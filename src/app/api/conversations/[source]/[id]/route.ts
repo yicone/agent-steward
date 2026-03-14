@@ -4,6 +4,7 @@ import type { ConversationContent, Source, TrajectoryEvent } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getWindsurfChat, getWindsurfTrajectory } from "@/lib/server/windsurf";
+import { getCodexConversation } from "@/lib/server/codex";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 import { indexSession, isSessionIndexed } from "@/lib/server/searchIndex";
 
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isSource(value: string): value is Source {
-  return value === "antigravity" || value === "windsurf";
+  return value === "antigravity" || value === "windsurf" || value === "codex";
 }
 
 /** Extract cwd from the first event that has one. */
@@ -52,6 +53,30 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
           })
           .catch((err) => {
             console.warn(`[search] Failed to index antigravity session ${id}:`, err instanceof Error ? err.message : err);
+          });
+      });
+      return NextResponse.json(out);
+    }
+
+    if (source === "codex") {
+      const { config } = await readConfig();
+      const codex = await getCodexConversation(id, config);
+      const out: ConversationContent = {
+        kind: "trajectory",
+        source: "codex",
+        events: codex.events,
+        summary: codex.summary
+      };
+      const eventsSnap = codex.events;
+      setImmediate(() => {
+        readConfig()
+          .then(({ config: cfg }) => getTrajectoryMetaMapCached({ source: "codex", config: cfg }))
+          .then((metaMap) => {
+            const meta = metaMap[id] ?? {};
+            indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+          })
+          .catch((err) => {
+            console.warn(`[search] Failed to index codex session ${id}:`, err instanceof Error ? err.message : err);
           });
       });
       return NextResponse.json(out);

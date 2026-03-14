@@ -1,4 +1,4 @@
-export type Source = "antigravity" | "windsurf";
+export type Source = "antigravity" | "windsurf" | "codex";
 
 export type RootConfig = {
   id: string;
@@ -77,6 +77,13 @@ export type SourcesStatus = {
     heartbeatOk?: boolean;
     lastError?: string;
     recommendedAction?: string;
+    error?: string;
+  };
+  codex: {
+    /** True if at least one session file was found in the configured roots. */
+    sessionsFound: boolean;
+    /** First enabled Codex sessions directory that was checked. */
+    sessionsDir?: string;
     error?: string;
   };
 };

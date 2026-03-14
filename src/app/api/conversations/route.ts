@@ -20,14 +20,14 @@ const duplicatesCache = new Map<
 const MAX_DUPLICATES_CACHE_ENTRIES = 100;
 
 function isSource(value: string | null): value is Source {
-  return value === "antigravity" || value === "windsurf";
+  return value === "antigravity" || value === "windsurf" || value === "codex";
 }
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const sourceParam = url.searchParams.get("source");
   if (!isSource(sourceParam)) {
-    return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf" }, { status: 400 });
+    return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf|codex" }, { status: 400 });
   }
 
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "200"), 1), 1000);

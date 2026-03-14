@@ -30,6 +30,12 @@ function defaultRoots(): RootConfig[] {
       source: "windsurf",
       path: "~/.codeium/windsurf/cascade",
       enabled: true
+    },
+    {
+      id: "codex-default",
+      source: "codex",
+      path: "~/.codex/sessions",
+      enabled: true
     }
   ];
 }
@@ -47,7 +53,7 @@ export function defaultConfig(): AppConfig {
 }
 
 function isSource(value: unknown): value is Source {
-  return value === "antigravity" || value === "windsurf";
+  return value === "antigravity" || value === "windsurf" || value === "codex";
 }
 
 function sanitizeRoots(roots: unknown): RootConfig[] {

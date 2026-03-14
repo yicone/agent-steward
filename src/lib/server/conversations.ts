@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { ConversationFile, RootConfig, RootHealth, RootHealthStatus, Source } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
+import { collectJsonlFiles } from "@/lib/server/codex";
 
 /* ---------- helpers ---------- */
 
@@ -47,6 +48,43 @@ function isCacheValid(entry: DirCacheEntry, dirMtimeMs: number): boolean {
   return true;
 }
 
+/* ---------- codex root scan (recursive, .jsonl files) ---------- */
+
+async function scanCodexRoot(root: RootConfig, rootPath: string, rootMtimeMs: number): Promise<ConversationFile[]> {
+  /* TTL-only cache for Codex roots: the root dir mtime doesn't reflect changes
+     inside nested YYYY/MM/DD subdirectories, so we skip the mtime check and
+     rely solely on the 10-second TTL to bound staleness. */
+  const cached = _dirCache.get(root.id);
+  if (cached && cached.rootPath === rootPath && Date.now() - cached.cachedAtMs <= DIR_CACHE_TTL_MS) {
+    return cached.entries;
+  }
+
+  const files = await collectJsonlFiles(rootPath);
+  const entries: ConversationFile[] = files.map((f) => ({
+    id: path.basename(f.path, ".jsonl"),
+    source: "codex" as Source,
+    rootId: root.id,
+    path: f.path,
+    sizeBytes: 0, // size will be populated below
+    mtimeMs: f.mtimeMs
+  }));
+
+  // Populate file sizes
+  for (const entry of entries) {
+    const st = await safeStat(entry.path);
+    if (st) entry.sizeBytes = st.size;
+  }
+
+  _dirCache.set(root.id, {
+    rootPath,
+    dirMtimeMs: rootMtimeMs,
+    entries,
+    cachedAtMs: Date.now()
+  });
+
+  return entries;
+}
+
 /* ---------- single-root scan ---------- */
 
 async function scanRoot(root: RootConfig, source: Source): Promise<ConversationFile[]> {
@@ -54,6 +92,11 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
 
   const rootStat = await safeStat(rootPath);
   if (!rootStat || !rootStat.isDirectory()) return [];
+
+  /* Codex sessions are .jsonl files nested in date subdirectories */
+  if (source === "codex") {
+    return scanCodexRoot(root, rootPath, rootStat.mtimeMs);
+  }
 
   /* check cache */
   const cached = _dirCache.get(root.id);
@@ -170,21 +213,32 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
     };
   }
 
-  let dirents: Array<{ name: string; isFile(): boolean }> = [];
-  try {
-    dirents = await fs.readdir(rootPath, { withFileTypes: true });
-  } catch (err) {
-    return {
-      rootId: root.id,
-      path: rootPath,
-      status: "unreadable",
-      pbCount: 0,
-      scanMs: Date.now() - start,
-      error: err instanceof Error ? err.message : String(err)
-    };
+  // For Codex, count .jsonl files recursively in date subdirectories
+  let pbCount: number;
+  if (root.source === "codex") {
+    try {
+      const files = await collectJsonlFiles(rootPath);
+      pbCount = files.length;
+    } catch {
+      pbCount = 0;
+    }
+  } else {
+    let dirents: Array<{ name: string; isFile(): boolean }> = [];
+    try {
+      dirents = await fs.readdir(rootPath, { withFileTypes: true });
+    } catch (err) {
+      return {
+        rootId: root.id,
+        path: rootPath,
+        status: "unreadable",
+        pbCount: 0,
+        scanMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err)
+      };
+    }
+    pbCount = dirents.filter((d) => d.isFile() && d.name.endsWith(".pb")).length;
   }
 
-  const pbCount = dirents.filter((d) => d.isFile() && d.name.endsWith(".pb")).length;
   const scanMs = Date.now() - start;
   const status: RootHealthStatus = scanMs > SLOW_SCAN_MS ? "slow" : "healthy";
 
