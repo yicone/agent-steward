@@ -85,7 +85,7 @@ export function viewFromUrl(
 export function viewFromUrl(
   urlView: "compact" | "transcript" | "trajectory" | null,
   source: Source,
-): string {
+): "markdown" | "chat" | "transcript" | "trajectory" {
   if (!urlView || urlView === "compact") {
     return source === "antigravity" ? "markdown" : "chat";
   }
@@ -240,7 +240,7 @@ function ensurePopstateListener(): void {
 }
 
 /** Replace the current URL search with the serialised viewer state (debounced). */
-export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
+export function syncUrlState(state: UrlViewerState, debounceMs = 300): void {
   if (typeof window === "undefined") return;
   ensurePopstateListener();
   const existing = winTimer();
@@ -267,8 +267,8 @@ export function pushUrlState(state: UrlViewerState, debounceMs = 300): void {
   );
 }
 
-/** Cancel any pending debounced URL push without performing it. */
-export function cancelPendingUrlPush(): void {
+/** Cancel any pending debounced URL sync without performing it. */
+export function cancelPendingUrlSync(): void {
   const t = winTimer();
   if (t !== null) {
     clearTimeout(t);

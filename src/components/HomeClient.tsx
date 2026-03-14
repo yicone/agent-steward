@@ -16,7 +16,7 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
-import { parseUrlState, viewToUrl, viewFromUrl, pushUrlState } from "@/lib/urlState";
+import { parseUrlState, viewToUrl, viewFromUrl, syncUrlState } from "@/lib/urlState";
 import type { UrlViewerState } from "@/lib/urlState";
 import type {
   AppConfig,
@@ -2012,7 +2012,7 @@ export default function HomeClient() {
       if (!collapsed) expanded.push(gid);
     }
 
-    pushUrlState({
+    syncUrlState({
       source,
       id: selectedId,
       view: viewToUrl(currentView),
