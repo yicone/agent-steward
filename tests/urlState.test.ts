@@ -329,7 +329,7 @@ describe("round-trip", () => {
 });
 
 // ---------------------------------------------------------------------------
-// pushUrlState / cancelPendingUrlPush — debounce + href-guard
+// syncUrlState / cancelPendingUrlSync — debounce + href-guard
 // ---------------------------------------------------------------------------
 
 /**
@@ -369,7 +369,7 @@ function makeUrlViewerState(overrides?: Partial<UrlViewerState>): UrlViewerState
   };
 }
 
-describe("pushUrlState", () => {
+describe("syncUrlState", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.resetModules();
@@ -382,9 +382,9 @@ describe("pushUrlState", () => {
     const { stub, replaceStateMock } = makeWindowStub();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = stub;
-    const { pushUrlState } = await import("../src/lib/urlState");
+    const { syncUrlState } = await import("../src/lib/urlState");
 
-    pushUrlState(makeUrlViewerState(), 300);
+    syncUrlState(makeUrlViewerState(), 300);
 
     expect(replaceStateMock).not.toHaveBeenCalled();
     vi.advanceTimersByTime(300);
@@ -396,23 +396,23 @@ describe("pushUrlState", () => {
     const { stub, location, replaceStateMock } = makeWindowStub();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = stub;
-    const { pushUrlState } = await import("../src/lib/urlState");
+    const { syncUrlState } = await import("../src/lib/urlState");
 
-    pushUrlState(makeUrlViewerState(), 300);
+    syncUrlState(makeUrlViewerState(), 300);
     location.href = "http://localhost:3000/?source=windsurf"; // simulate navigation
     vi.advanceTimersByTime(300);
 
     expect(replaceStateMock).not.toHaveBeenCalled();
   });
 
-  it("cancelPendingUrlPush prevents replaceState from being called", async () => {
+  it("cancelPendingUrlSync prevents replaceState from being called", async () => {
     vi.useFakeTimers();
     const { stub, replaceStateMock } = makeWindowStub();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = stub;
-    const { pushUrlState, cancelPendingUrlPush: cancelPending } = await import("../src/lib/urlState");
+    const { syncUrlState, cancelPendingUrlSync: cancelPending } = await import("../src/lib/urlState");
 
-    pushUrlState(makeUrlViewerState(), 300);
+    syncUrlState(makeUrlViewerState(), 300);
     cancelPending();
     vi.advanceTimersByTime(300);
 
@@ -424,11 +424,11 @@ describe("pushUrlState", () => {
     const { stub, replaceStateMock } = makeWindowStub();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = stub;
-    const { pushUrlState } = await import("../src/lib/urlState");
+    const { syncUrlState } = await import("../src/lib/urlState");
 
-    pushUrlState(makeUrlViewerState(), 300);
+    syncUrlState(makeUrlViewerState(), 300);
     vi.advanceTimersByTime(150); // not yet fired
-    pushUrlState(makeUrlViewerState(), 300); // reset timer
+    syncUrlState(makeUrlViewerState(), 300); // reset timer
     vi.advanceTimersByTime(150); // 300 ms from first call, but timer was reset
     expect(replaceStateMock).not.toHaveBeenCalled();
     vi.advanceTimersByTime(150); // now 300 ms from second call
@@ -440,9 +440,9 @@ describe("pushUrlState", () => {
     const { stub, replaceStateMock, popstateHandlers } = makeWindowStub();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = stub;
-    const { pushUrlState } = await import("../src/lib/urlState");
+    const { syncUrlState } = await import("../src/lib/urlState");
 
-    pushUrlState(makeUrlViewerState(), 300);
+    syncUrlState(makeUrlViewerState(), 300);
     expect(popstateHandlers).toHaveLength(1); // listener was registered
     popstateHandlers[0](); // simulate browser back/forward
     vi.advanceTimersByTime(300);
@@ -455,9 +455,9 @@ describe("pushUrlState", () => {
     const { stub, replaceStateMock } = makeWindowStub("http://localhost:3000/app?old=1#section");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).window = stub;
-    const { pushUrlState } = await import("../src/lib/urlState");
+    const { syncUrlState } = await import("../src/lib/urlState");
 
-    pushUrlState(makeUrlViewerState({ source: "antigravity", id: "s1" }), 300);
+    syncUrlState(makeUrlViewerState({ source: "antigravity", id: "s1" }), 300);
     vi.advanceTimersByTime(300);
 
     expect(replaceStateMock).toHaveBeenCalledOnce();
