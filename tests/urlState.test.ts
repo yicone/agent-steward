@@ -181,12 +181,7 @@ function makeDefaultState(overrides?: Partial<UrlViewerState>): UrlViewerState {
     id: null,
     view: null,
     filters: {
-      thought: true,
-      tool: true,
-      command: true,
-      status: false,
-      errorsOnly: false,
-      hasOutput: false,
+      ...DEFAULT_FILTERS,
       stepTypeFilter: ""
     },
     expandedGroups: [],
