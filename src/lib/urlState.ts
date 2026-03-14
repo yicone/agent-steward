@@ -179,7 +179,7 @@ export function buildUrlSearch(state: UrlViewerState): string {
   // Always include 'expanded' when a conversation is selected, so that an
   // empty list (all groups collapsed) round-trips faithfully and is
   // distinguishable from "no URL constraint on groups" (param absent).
-  if (state.id !== null) {
+  if (state.id) {
     p.set("expanded", state.expandedGroups.join(","));
   }
 
