@@ -115,18 +115,13 @@ export function parseUrlState(search: string): Partial<UrlViewerState> {
     state.view = view;
   }
 
-  // trajectory filters (bitfield)
+  // trajectory filters (bitfield) — derive length and key mapping from FILTER_KEYS
   const ft = p.get("ft");
-  if (ft && /^[01]{6}$/.test(ft)) {
-    state.filters = {
-      thought: ft[0] === "1",
-      tool: ft[1] === "1",
-      command: ft[2] === "1",
-      status: ft[3] === "1",
-      errorsOnly: ft[4] === "1",
-      hasOutput: ft[5] === "1",
-      stepTypeFilter: p.get("stepType") ?? ""
-    };
+  if (ft && ft.length === FILTER_KEYS.length && /^[01]+$/.test(ft)) {
+    const flags = Object.fromEntries(
+      FILTER_KEYS.map((k, i) => [k, ft[i] === "1"])
+    ) as TrajectoryFilterFlags;
+    state.filters = { ...flags, stepTypeFilter: p.get("stepType") ?? "" };
   } else if (p.has("stepType")) {
     state.filters = {
       ...DEFAULT_FILTERS,
