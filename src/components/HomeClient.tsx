@@ -1193,6 +1193,9 @@ export default function HomeClient() {
   // True from when urlInitRef is consumed until the async restore promise
   // settles, so the URL-sync effect stays suppressed for the whole restore.
   const urlRestoringRef = useRef(false);
+  // Tracks whether the first config load has completed, so refreshConfigAndStatus
+  // can skip re-setting source on manual refreshes without closing over `config`.
+  const configInitializedRef = useRef(false);
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
@@ -1625,14 +1628,19 @@ export default function HomeClient() {
   }, [pendingTrajectoryJumpEventId, content, eventsById, trajectoryRows, antigravityView, windsurfView]);
 
   async function refreshConfigAndStatus() {
+    const isFirstLoad = !configInitializedRef.current;
     const cfgRes = await fetch("/api/config");
     const cfgJson = (await cfgRes.json()) as ApiConfigResponse;
     setConfig(cfgJson.config);
+    configInitializedRef.current = true;
 
-    // URL deep-link: prefer source from URL over config default on first load
-    const urlInit = urlInitRef.current;
-    const initSource = urlInit.source ?? cfgJson.config.ui.defaultSource;
-    setSource(initSource);
+    // URL deep-link: only set source on first load.
+    // On manual refresh, preserve the user's current source selection.
+    if (isFirstLoad) {
+      const urlInit = urlInitRef.current;
+      const initSource = urlInit.source ?? cfgJson.config.ui.defaultSource;
+      setSource(initSource);
+    }
 
     const stRes = await fetch("/api/sources");
     setStatus((await stRes.json()) as SourcesStatus);
@@ -2491,7 +2499,7 @@ export default function HomeClient() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadConversation("windsurf", selectedId, 0, "trajectory")}
+                  onClick={() => void loadConversation("windsurf", selectedId, 0, "trajectory")}
                   disabled={loadingContent}
                 >
                   Reload
@@ -2531,7 +2539,7 @@ export default function HomeClient() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => loadConversation("windsurf", selectedId, 0)}
+                  onClick={() => void loadConversation("windsurf", selectedId, 0)}
                   disabled={loadingContent}
                 >
                   Reload
