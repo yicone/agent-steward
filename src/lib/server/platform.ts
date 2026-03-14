@@ -63,7 +63,7 @@ function darwinPaths(): PlatformPaths {
 //       under %APPDATA%\<AppName>.
 
 function win32Paths(env?: PlatformPathsEnv): PlatformPaths {
-  const appData = (env?.APPDATA ?? process.env.APPDATA)?.trim() || path.join(os.homedir(), "AppData", "Roaming");
+  const appData = resolveEnv(env, "APPDATA")?.trim() || path.join(os.homedir(), "AppData", "Roaming");
   return {
     antigravityLogsRoot: () =>
       path.join(appData, "Antigravity", "logs"),
@@ -85,7 +85,7 @@ function win32Paths(env?: PlatformPathsEnv): PlatformPaths {
 //       $XDG_CONFIG_HOME (default ~/.config) on Linux.
 
 function linuxPaths(env?: PlatformPathsEnv): PlatformPaths {
-  const configHome = (env?.XDG_CONFIG_HOME ?? process.env.XDG_CONFIG_HOME)?.trim() || path.join(os.homedir(), ".config");
+  const configHome = resolveEnv(env, "XDG_CONFIG_HOME")?.trim() || path.join(os.homedir(), ".config");
   return {
     antigravityLogsRoot: () =>
       path.join(configHome, "Antigravity", "logs"),
@@ -124,6 +124,17 @@ export function createPlatformPaths(platform?: NodeJS.Platform, env?: PlatformPa
     default:
       return linuxPaths(env);
   }
+}
+
+/**
+ * Resolve an env-var value: if `env` was provided and the key is present
+ * (even as `undefined`), use that value — otherwise read `process.env`.
+ * This lets tests pass `{ APPDATA: undefined }` to explicitly mean "unset"
+ * without leaking the host's real environment into assertions.
+ */
+function resolveEnv(env: PlatformPathsEnv | undefined, key: keyof PlatformPathsEnv): string | undefined {
+  if (env && key in env) return env[key];
+  return process.env[key];
 }
 
 /** Singleton resolved for the current runtime platform. */
