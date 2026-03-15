@@ -65,15 +65,9 @@ async function scanCodexRoot(root: RootConfig, rootPath: string, rootMtimeMs: nu
     source: "codex" as Source,
     rootId: root.id,
     path: f.path,
-    sizeBytes: 0, // size will be populated below
+    sizeBytes: f.sizeBytes,
     mtimeMs: f.mtimeMs
   }));
-
-  // Populate file sizes
-  for (const entry of entries) {
-    const st = await safeStat(entry.path);
-    if (st) entry.sizeBytes = st.size;
-  }
 
   _dirCache.set(root.id, {
     rootPath,
