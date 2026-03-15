@@ -2449,6 +2449,14 @@ export default function HomeClient() {
                   <span className="shrink-0 text-xs text-muted">0 matches</span>
                 ) : null}
               </div>
+              <div className="mb-2 flex items-center gap-2">
+                <Input
+                  placeholder="Filter stepType…"
+                  value={trajectoryFilters.stepTypeFilter}
+                  onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+                  className="h-7 text-xs"
+                />
+              </div>
               {withInspector(
                 <VirtualizedTrajectoryRows
                   rows={trajectoryRows}

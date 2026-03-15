@@ -41,7 +41,8 @@ export type RootHealth = {
   rootId: string;
   path: string;
   status: RootHealthStatus;
-  pbCount: number;
+  /** Source-agnostic count: `.pb` files for antigravity/windsurf, `.jsonl` files for codex. */
+  fileCount: number;
   scanMs: number;
   error?: string;
 };

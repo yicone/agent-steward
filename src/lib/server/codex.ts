@@ -28,27 +28,36 @@ async function safeStat(p: string) {
  * layout is `YYYY/MM/DD/rollout-*.jsonl` (depth 3), so a limit of 5 is
  * generous while guarding against unusual configurations.
  *
+ * When `strict: true`, `readdir` errors (e.g. EPERM) are propagated instead
+ * of silently returning `[]` — callers like `probeRootHealth` rely on this
+ * to detect unreadable directories and return status `"unreadable"`.
+ *
  * Exported for use by the conversations scanner (`conversations.ts`).
  */
-export async function collectJsonlFiles(dir: string, maxDepth = 5): Promise<Array<{ path: string; mtimeMs: number }>> {
+export async function collectJsonlFiles(
+  dir: string,
+  maxDepth = 5,
+  opts?: { strict?: boolean }
+): Promise<Array<{ path: string; mtimeMs: number; sizeBytes: number }>> {
   if (maxDepth <= 0) return [];
 
   let dirents: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
   try {
     dirents = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
+  } catch (err) {
+    if (opts?.strict) throw err;
     return [];
   }
 
-  const results: Array<{ path: string; mtimeMs: number }> = [];
+  const results: Array<{ path: string; mtimeMs: number; sizeBytes: number }> = [];
 
   for (const d of dirents) {
     const fullPath = path.join(dir, d.name);
     if (d.isFile() && d.name.endsWith(".jsonl")) {
       const st = await safeStat(fullPath);
-      if (st) results.push({ path: fullPath, mtimeMs: st.mtimeMs });
+      if (st) results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
     } else if (d.isDirectory()) {
-      const nested = await collectJsonlFiles(fullPath, maxDepth - 1);
+      const nested = await collectJsonlFiles(fullPath, maxDepth - 1, opts);
       results.push(...nested);
     }
   }
@@ -56,17 +65,54 @@ export async function collectJsonlFiles(dir: string, maxDepth = 5): Promise<Arra
   return results;
 }
 
+/* ---------- session id → path cache ---------- */
+
+type SessionPathCacheEntry = {
+  /** map from session id to absolute file path */
+  idToPath: Map<string, string>;
+  /** timestamp when cache was populated */
+  cachedAtMs: number;
+};
+
+/** TTL for the id→path index (ms). Aligned with dir-cache TTL in conversations.ts. */
+const SESSION_PATH_CACHE_TTL_MS = 10_000;
+
+/** Module-level cache, keyed by root id. */
+const _sessionPathCache = new Map<string, SessionPathCacheEntry>();
+
 /**
  * Find the full path for a Codex session file across all enabled Codex roots.
  * The session ID is the filename without `.jsonl`.
+ *
+ * Uses a TTL-based per-root id→path cache so repeated calls (e.g. load
+ * conversation + diagnostic export) avoid a full O(N) traversal each time.
  */
 async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<string | null> {
+  const now = Date.now();
+
   for (const root of roots) {
     if (!root.enabled || root.source !== "codex") continue;
     const rootPath = expandHome(root.path);
+
+    // Try cached index first
+    const cached = _sessionPathCache.get(root.id);
+    if (cached && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
+      const hit = cached.idToPath.get(id);
+      if (hit) return hit;
+      // Not in this root's index — continue to next root without scanning
+      continue;
+    }
+
+    // Cache miss: build id→path index for this root
     const files = await collectJsonlFiles(rootPath);
-    const match = files.find((f) => path.basename(f.path, ".jsonl") === id);
-    if (match) return match.path;
+    const idToPath = new Map<string, string>();
+    for (const f of files) {
+      idToPath.set(path.basename(f.path, ".jsonl"), f.path);
+    }
+    _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now });
+
+    const hit = idToPath.get(id);
+    if (hit) return hit;
   }
   return null;
 }
@@ -76,6 +122,9 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
 /**
  * Get status for the Codex source. Unlike Antigravity/Windsurf, Codex requires
  * no running process — it reads session files directly from disk.
+ *
+ * Checks all enabled roots and reports `sessionsFound: true` if any root
+ * contains at least one `.jsonl` file.
  */
 export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["codex"]> {
   const enabledRoots = config.roots.filter((r) => r.source === "codex" && r.enabled);
@@ -86,32 +135,34 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
     };
   }
 
-  const first = enabledRoots[0]!;
-  const sessionsDir = expandHome(first.path);
-  const st = await safeStat(sessionsDir);
+  // Track the first directory we check for reporting purposes
+  const firstDir = expandHome(enabledRoots[0]!.path);
+  let lastError: string | undefined;
 
-  if (!st) {
-    return {
-      sessionsFound: false,
-      sessionsDir,
-      error: `Codex sessions directory not found: ${sessionsDir}. Install and run Codex CLI to create sessions.`
-    };
-  }
-  if (!st.isDirectory()) {
-    return {
-      sessionsFound: false,
-      sessionsDir,
-      error: `Path exists but is not a directory: ${sessionsDir}`
-    };
+  for (const root of enabledRoots) {
+    const sessionsDir = expandHome(root.path);
+    const st = await safeStat(sessionsDir);
+
+    if (!st) {
+      lastError = `Codex sessions directory not found: ${sessionsDir}. Install and run Codex CLI to create sessions.`;
+      continue;
+    }
+    if (!st.isDirectory()) {
+      lastError = `Path exists but is not a directory: ${sessionsDir}`;
+      continue;
+    }
+
+    const files = await collectJsonlFiles(sessionsDir);
+    if (files.length > 0) {
+      return { sessionsFound: true, sessionsDir };
+    }
+    lastError = `No session files found in ${sessionsDir}. Run Codex CLI to create sessions.`;
   }
 
-  const files = await collectJsonlFiles(sessionsDir);
   return {
-    sessionsFound: files.length > 0,
-    sessionsDir,
-    ...(files.length === 0
-      ? { error: `No session files found in ${sessionsDir}. Run Codex CLI to create sessions.` }
-      : {})
+    sessionsFound: false,
+    sessionsDir: firstDir,
+    error: lastError
   };
 }
 
@@ -172,12 +223,12 @@ export async function getCodexTrajectoryMetaMap(
       const id = path.basename(file.path, ".jsonl");
       if (result[id]) continue; // already seen from a previous root
 
+      let fd: fs.FileHandle | undefined;
       try {
         // Read only the first 8 KB to extract metadata without loading the full file.
-        const fd = await fs.open(file.path, "r");
+        fd = await fs.open(file.path, "r");
         const buf = Buffer.alloc(8192);
         const { bytesRead } = await fd.read(buf, 0, 8192, 0);
-        await fd.close();
         const head = buf.subarray(0, bytesRead).toString("utf-8");
         const rawEvents = parseCodexJsonl(head);
         const meta = extractCodexSessionMeta(rawEvents);
@@ -188,6 +239,8 @@ export async function getCodexTrajectoryMetaMap(
         };
       } catch {
         // Best-effort; skip files that can't be read
+      } finally {
+        await fd?.close().catch(() => {});
       }
     }
   }

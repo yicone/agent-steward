@@ -148,7 +148,7 @@ describe("probeRootHealth", () => {
     const root: RootConfig = { id: "h1", source: "antigravity", path: rootDir, enabled: true };
     const health = await probeRootHealth(root);
     expect(health.status).toBe("healthy");
-    expect(health.pbCount).toBe(2);
+    expect(health.fileCount).toBe(2);
     expect(health.scanMs).toBeGreaterThanOrEqual(0);
     expect(health.error).toBeUndefined();
   });
@@ -157,7 +157,7 @@ describe("probeRootHealth", () => {
     const root: RootConfig = { id: "m1", source: "antigravity", path: "/nonexistent/path/xyz", enabled: true };
     const health = await probeRootHealth(root);
     expect(health.status).toBe("missing");
-    expect(health.pbCount).toBe(0);
+    expect(health.fileCount).toBe(0);
     expect(health.error).toBe("Path does not exist");
   });
 

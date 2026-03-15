@@ -59,6 +59,7 @@ async function scanCodexRoot(root: RootConfig, rootPath: string, rootMtimeMs: nu
     return cached.entries;
   }
 
+  // collectJsonlFiles now returns sizeBytes too — no second stat pass needed.
   const files = await collectJsonlFiles(rootPath);
   const entries: ConversationFile[] = files.map((f) => ({
     id: path.basename(f.path, ".jsonl"),
@@ -190,7 +191,7 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
       rootId: root.id,
       path: rootPath,
       status: "missing",
-      pbCount: 0,
+      fileCount: 0,
       scanMs: Date.now() - start,
       error: "Path does not exist"
     };
@@ -201,20 +202,28 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
       rootId: root.id,
       path: rootPath,
       status: "missing",
-      pbCount: 0,
+      fileCount: 0,
       scanMs: Date.now() - start,
       error: "Path is not a directory"
     };
   }
 
-  // For Codex, count .jsonl files recursively in date subdirectories
-  let pbCount: number;
+  // For Codex, count .jsonl files recursively in date subdirectories.
+  // Use strict mode so readdir permission errors surface as "unreadable".
+  let fileCount: number;
   if (root.source === "codex") {
     try {
-      const files = await collectJsonlFiles(rootPath);
-      pbCount = files.length;
-    } catch {
-      pbCount = 0;
+      const files = await collectJsonlFiles(rootPath, 5, { strict: true });
+      fileCount = files.length;
+    } catch (err) {
+      return {
+        rootId: root.id,
+        path: rootPath,
+        status: "unreadable",
+        fileCount: 0,
+        scanMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err)
+      };
     }
   } else {
     let dirents: Array<{ name: string; isFile(): boolean }> = [];
@@ -225,18 +234,18 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
         rootId: root.id,
         path: rootPath,
         status: "unreadable",
-        pbCount: 0,
+        fileCount: 0,
         scanMs: Date.now() - start,
         error: err instanceof Error ? err.message : String(err)
       };
     }
-    pbCount = dirents.filter((d) => d.isFile() && d.name.endsWith(".pb")).length;
+    fileCount = dirents.filter((d) => d.isFile() && d.name.endsWith(".pb")).length;
   }
 
   const scanMs = Date.now() - start;
   const status: RootHealthStatus = scanMs > SLOW_SCAN_MS ? "slow" : "healthy";
 
-  return { rootId: root.id, path: rootPath, status, pbCount, scanMs };
+  return { rootId: root.id, path: rootPath, status, fileCount, scanMs };
 }
 
 export async function probeAllRootsHealth(roots: RootConfig[]): Promise<RootHealth[]> {

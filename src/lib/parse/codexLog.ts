@@ -38,15 +38,30 @@ function getField(obj: unknown, ...keys: string[]): unknown {
   return undefined;
 }
 
+function truncate(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return `${text.slice(0, maxChars)}\n\n[truncated]`;
+}
+
 function formatToolArgs(args: unknown): string | undefined {
   if (!args) return undefined;
-  if (typeof args === "string") return args;
-  try {
-    return JSON.stringify(args, null, 2);
-  } catch {
-    return String(args);
+  let text: string;
+  if (typeof args === "string") {
+    text = args;
+  } else {
+    try {
+      text = JSON.stringify(args, null, 2);
+    } catch {
+      text = String(args);
+    }
   }
+  return truncate(text, 4000);
 }
+
+/** Max chars for tool/function result text (matches Antigravity adapter). */
+const MAX_TOOL_OUTPUT_CHARS = 16_000;
+/** Max chars for command/exec output (matches Antigravity adapter). */
+const MAX_COMMAND_OUTPUT_CHARS = 10_000;
 
 /* ---------- line parsing ---------- */
 
@@ -216,7 +231,8 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
         const toolName = asNonEmptyString(getField(item, "tool_name", "name") as unknown) ?? "tool";
         const exitCode =
           typeof item.exit_code === "number" ? item.exit_code : typeof item.exitCode === "number" ? item.exitCode : undefined;
-        const resultText = asNonEmptyString(getField(item, "result", "output") as unknown) ?? undefined;
+        const rawResultText = asNonEmptyString(getField(item, "result", "output") as unknown) ?? undefined;
+        const resultText = rawResultText ? truncate(rawResultText, MAX_TOOL_OUTPUT_CHARS) : undefined;
         events.push({
           id: `tool_result_${index}`,
           index,
@@ -254,7 +270,8 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
         const name = asNonEmptyString(getField(item, "name", "function", "tool_name") as unknown) ?? "function";
         const exitCode =
           typeof item.exit_code === "number" ? item.exit_code : typeof item.exitCode === "number" ? item.exitCode : undefined;
-        const resultText = asNonEmptyString(getField(item, "output", "result") as unknown) ?? undefined;
+        const rawResultText = asNonEmptyString(getField(item, "output", "result") as unknown) ?? undefined;
+        const resultText = rawResultText ? truncate(rawResultText, MAX_TOOL_OUTPUT_CHARS) : undefined;
         events.push({
           id: `fn_result_${index}`,
           index,
@@ -276,7 +293,9 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
         const cwd = asNonEmptyString(getField(item, "cwd") as unknown) ?? undefined;
         const exitCode =
           typeof item.exit_code === "number" ? item.exit_code : typeof item.exitCode === "number" ? item.exitCode : undefined;
-        const output = asNonEmptyString(getField(item, "output", "stdout", "result") as unknown) ?? undefined;
+        const rawOutput = asNonEmptyString(getField(item, "output", "stdout", "result") as unknown) ?? undefined;
+        const output = rawOutput ? truncate(rawOutput, MAX_COMMAND_OUTPUT_CHARS) : undefined;
+        const outputTruncated = rawOutput !== undefined && rawOutput !== output ? true : undefined;
         events.push({
           id: `cmd_${index}`,
           index,
@@ -288,6 +307,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           cwd,
           exitCode,
           output,
+          ...(outputTruncated ? { outputTruncated } : {}),
           createdAt: timestamp
         });
         break;

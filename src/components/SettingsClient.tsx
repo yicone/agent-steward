@@ -24,19 +24,20 @@ const healthColors: Record<string, string> = {
   slow: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
 };
 
-function HealthBadge({ health }: { health: RootHealth | undefined }) {
+function HealthBadge({ health, source }: { health: RootHealth | undefined; source: Source }) {
   if (!health) return null;
   const color = healthColors[health.status] ?? "";
+  const fileUnit = source === "codex" ? "jsonl" : "pb";
   const label =
     health.status === "healthy"
-      ? `${health.pbCount} pb · ${health.scanMs}ms`
+      ? `${health.fileCount} ${fileUnit} · ${health.scanMs}ms`
       : health.status === "slow"
-        ? `${health.pbCount} pb · slow (${health.scanMs}ms)`
+        ? `${health.fileCount} ${fileUnit} · slow (${health.scanMs}ms)`
         : health.error ?? health.status;
   return (
     <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", color)} title={label}>
       {health.status === "healthy" || health.status === "slow"
-        ? `${health.pbCount} pb`
+        ? `${health.fileCount} ${fileUnit}`
         : health.status}
       {health.status === "slow" ? ` · ${health.scanMs}ms` : null}
     </span>
@@ -63,7 +64,7 @@ function RootRow(props: {
             <span>
               source: <span className="font-mono">{props.root.source}</span>
             </span>
-            <HealthBadge health={props.health} />
+            <HealthBadge health={props.health} source={props.root.source} />
           </div>
           {props.health?.error ? (
             <div className="mt-1 text-[10px] text-red-600 dark:text-red-400">{props.health.error}</div>
