@@ -42,9 +42,20 @@ async function countJsonlFiles(
     try {
       dirents = await fs.readdir(dir, { withFileTypes: true });
     } catch (err) {
+      // For the root directory in strict mode, preserve existing behavior.
       if (isRoot && strict) {
         throw err;
       }
+
+      // For nested directories, ignore benign/transient errors like ENOENT/ENOTDIR
+      // so they don't incorrectly mark the root as "unreadable".
+      if (!isRoot && err && typeof err === "object" && "code" in err) {
+        const code = (err as { code?: unknown }).code;
+        if (code === "ENOENT" || code === "ENOTDIR") {
+          continue;
+        }
+      }
+
       const msg =
         err instanceof Error ? err.message : String(err);
       partialErrors.push(`${dir}: ${msg}`);
