@@ -1,7 +1,9 @@
 import "server-only";
 
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import path from "node:path";
+import readline from "node:readline";
 
 import type { AppConfig, RootConfig, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
@@ -11,6 +13,8 @@ import {
   normalizeCodexEventsToTrajectoryEvents,
   parseCodexJsonl
 } from "@/lib/parse/codexLog";
+
+const MAX_CODEX_RAW_LINES = 5000;
 
 /* ---------- helpers ---------- */
 
@@ -284,24 +288,60 @@ export async function getCodexConversation(
 
 /**
  * Load the raw JSONL content for a Codex session (used in diagnostic export).
+ * Streams the file and caps the number of returned lines to avoid large responses.
  */
-export async function getCodexRawContent(id: string, config: AppConfig): Promise<{ filePath: string; rawLines: unknown[] }> {
+export async function getCodexRawContent(
+  id: string,
+  config: AppConfig
+): Promise<{
+  filePath: string;
+  rawLines: unknown[];
+  truncated: boolean;
+  totalLines: number;
+  returnedLines: number;
+}> {
   const filePath = await findCodexSessionFile(id, config.roots);
   if (!filePath) {
     throw new Error(`Codex session not found: ${id}`);
   }
-  const content = await fs.readFile(filePath, "utf-8");
-  const rawLines = content
-    .split("\n")
-    .filter((l) => l.trim())
-    .map((l) => {
-      try {
-        return JSON.parse(l);
-      } catch {
-        return l;
+
+  const rawLines: unknown[] = [];
+  let totalLines = 0;
+
+  const stream = createReadStream(filePath, { encoding: "utf-8" });
+  const rl = readline.createInterface({
+    input: stream,
+    crlfDelay: Infinity
+  });
+
+  try {
+    for await (const line of rl) {
+      totalLines += 1;
+
+      // Skip empty/whitespace-only lines for the payload, but still count them.
+      if (!line.trim()) {
+        continue;
       }
-    });
-  return { filePath, rawLines };
+
+      if (rawLines.length >= MAX_CODEX_RAW_LINES) {
+        // We have collected enough lines; continue reading to update totalLines.
+        continue;
+      }
+
+      try {
+        rawLines.push(JSON.parse(line));
+      } catch {
+        rawLines.push(line);
+      }
+    }
+  } finally {
+    rl.close();
+  }
+
+  const returnedLines = rawLines.length;
+  const truncated = returnedLines < totalLines;
+
+  return { filePath, rawLines, truncated, totalLines, returnedLines };
 }
 
 /**
