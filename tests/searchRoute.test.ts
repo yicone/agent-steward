@@ -15,9 +15,9 @@ afterEach(() => {
 describe("GET /api/search", () => {
   it("filters results when source=codex", async () => {
     searchSessionsMock.mockReturnValue([
-      { id: "a", source: "antigravity", title: "A" },
-      { id: "c", source: "codex", title: "C" },
-      { id: "w", source: "windsurf", title: "W" },
+      { sessionId: "a", source: "antigravity", title: "A", cwd: "/antigravity", snippet: "Antigravity session" },
+      { sessionId: "c", source: "codex", title: "C", cwd: "/codex", snippet: "Codex session" },
+      { sessionId: "w", source: "windsurf", title: "W", cwd: "/windsurf", snippet: "Windsurf session" },
     ]);
 
     const req = new Request("http://localhost/api/search?q=session&source=codex");
@@ -25,7 +25,9 @@ describe("GET /api/search", () => {
     const payload = await res.json();
 
     expect(searchSessionsMock).toHaveBeenCalledWith("session", 20);
-    expect(payload.results).toEqual([{ id: "c", source: "codex", title: "C" }]);
+    expect(payload.results).toEqual([
+      { sessionId: "c", source: "codex", title: "C", cwd: "/codex", snippet: "Codex session" },
+    ]);
   });
 
   it("returns empty results when q is blank", async () => {
