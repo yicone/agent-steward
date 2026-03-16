@@ -215,7 +215,9 @@ describe("probeRootHealth", () => {
 
     const root: RootConfig = { id: "cxnp", source: "codex", path: rootDir, enabled: true };
     const health = await probeRootHealth(root);
-    if (process.getuid?.() === 0) {
+    if (process.platform === "win32" || typeof process.getuid !== "function" || process.getuid() === 0) {
+      // On Windows or environments without POSIX getuid/chmod semantics (or when running as root),
+      // the directory may still be readable despite chmod(0o000), so allow either outcome.
       expect(["healthy", "unreadable"]).toContain(health.status);
     } else {
       expect(health.status).toBe("unreadable");
