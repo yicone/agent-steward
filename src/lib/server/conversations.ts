@@ -5,7 +5,6 @@ import path from "node:path";
 
 import type { ConversationFile, RootConfig, RootHealth, RootHealthStatus, Source } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
-import { collectJsonlFiles } from "@/lib/server/codex";
 
 /* ---------- helpers ---------- */
 
@@ -15,6 +14,53 @@ async function safeStat(p: string) {
   } catch {
     return null;
   }
+}
+
+/**
+ * Lightweight recursive counter for `.jsonl` files that avoids per-file `stat` calls.
+ *
+ * - Uses `readdir` with `withFileTypes: true` to traverse directories up to `maxDepth`.
+ * - If the root directory is unreadable and `strict` is true, it throws.
+ * - For nested unreadable directories, it records errors in `partialErrors` and continues.
+ */
+async function countJsonlFiles(
+  rootPath: string,
+  maxDepth: number,
+  opts: { strict: boolean; partialErrors: string[] }
+): Promise<number> {
+  const { strict, partialErrors } = opts;
+  let count = 0;
+
+  type WorkItem = { dir: string; depth: number; isRoot: boolean };
+  const stack: WorkItem[] = [{ dir: rootPath, depth: 0, isRoot: true }];
+
+  while (stack.length > 0) {
+    const { dir, depth, isRoot } = stack.pop() as WorkItem;
+    let dirents;
+
+    try {
+      dirents = await fs.readdir(dir, { withFileTypes: true });
+    } catch (err) {
+      if (isRoot && strict) {
+        throw err;
+      }
+      const msg =
+        err instanceof Error ? err.message : String(err);
+      partialErrors.push(`${dir}: ${msg}`);
+      continue;
+    }
+
+    for (const d of dirents) {
+      if (d.isFile() && d.name.endsWith(".jsonl")) {
+        count += 1;
+      } else if (d.isDirectory() && depth < maxDepth) {
+        const childDir = path.join(dir, d.name);
+        stack.push({ dir: childDir, depth: depth + 1, isRoot: false });
+      }
+    }
+  }
+
+  return count;
 }
 
 /** Threshold (ms) above which a root scan is considered "slow". */
@@ -216,8 +262,7 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
   if (root.source === "codex") {
     const partialErrors: string[] = [];
     try {
-      const files = await collectJsonlFiles(rootPath, 5, { strict: true, partialErrors });
-      fileCount = files.length;
+      fileCount = await countJsonlFiles(rootPath, 5, { strict: true, partialErrors });
     } catch (err) {
       return {
         rootId: root.id,
