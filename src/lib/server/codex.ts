@@ -336,10 +336,10 @@ export async function getCodexRawContent(
       totalNonEmptyLines += 1;
 
       if (rawLines.length >= MAX_CODEX_RAW_LINES) {
-        // We have collected enough lines; mark as truncated and stop collecting,
-        // but continue reading to keep counting totalLines.
+        // We have collected enough lines; mark as truncated and stop reading further
+        // to avoid scanning very large files just for statistics.
         truncated = true;
-        continue;
+        break;
       }
 
       try {
