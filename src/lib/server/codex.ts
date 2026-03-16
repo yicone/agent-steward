@@ -336,6 +336,7 @@ export async function getCodexRawContent(
     }
   } finally {
     rl.close();
+    stream.destroy();
   }
 
   const returnedLines = rawLines.length;
