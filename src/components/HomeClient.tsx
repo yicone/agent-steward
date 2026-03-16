@@ -1224,9 +1224,25 @@ function TrajectoryFilterControls({
         />
         {searchMatchCount > 0 ? (
           <>
-            <Button variant="outline" size="sm" onClick={() => onNavigateMatch(-1)} title="Previous match">←</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateMatch(-1)}
+              title="Previous match"
+              aria-label="Previous match"
+            >
+              ←
+            </Button>
             <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeMatchIndex, 0) + 1} / {searchMatchCount}</span>
-            <Button variant="outline" size="sm" onClick={() => onNavigateMatch(1)} title="Next match">→</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateMatch(1)}
+              title="Next match"
+              aria-label="Next match"
+            >
+              →
+            </Button>
           </>
         ) : eventSearch.trim() ? (
           <span className="shrink-0 text-xs text-muted">0 matches</span>
