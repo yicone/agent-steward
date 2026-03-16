@@ -71,6 +71,33 @@ export async function collectJsonlFiles(
 ): Promise<Array<{ path: string; mtimeMs: number; sizeBytes: number }>> {
   if (maxDepth <= 0) return [];
 
+  // Simple per-call concurrency helper so we can avoid serializing filesystem IO.
+  async function mapWithConcurrency<T, R>(
+    items: T[],
+    limit: number,
+    fn: (item: T, index: number) => Promise<R>
+  ): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let index = 0;
+
+    async function worker() {
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const current = index++;
+        if (current >= items.length) break;
+        results[current] = await fn(items[current], current);
+      }
+    }
+
+    const concurrency = Math.min(limit, items.length || 1);
+    const workers: Array<Promise<void>> = [];
+    for (let i = 0; i < concurrency; i++) {
+      workers.push(worker());
+    }
+    await Promise.all(workers);
+    return results;
+  }
+
   let dirents: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
   try {
     dirents = await fs.readdir(dir, { withFileTypes: true });
@@ -82,13 +109,32 @@ export async function collectJsonlFiles(
   }
 
   const results: Array<{ path: string; mtimeMs: number; sizeBytes: number }> = [];
+  const fileEntries: string[] = [];
+  const dirEntries: string[] = [];
 
   for (const d of dirents) {
     const fullPath = path.join(dir, d.name);
     if (d.isFile() && d.name.endsWith(".jsonl")) {
-      const st = await safeStat(fullPath);
-      if (st) results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
+      fileEntries.push(fullPath);
     } else if (d.isDirectory()) {
+      dirEntries.push(fullPath);
+    }
+  }
+
+  const FILE_STAT_CONCURRENCY = 8;
+  const DIR_TRAVERSE_CONCURRENCY = 4;
+
+  await mapWithConcurrency(fileEntries, FILE_STAT_CONCURRENCY, async (fullPath) => {
+    const st = await safeStat(fullPath);
+    if (st) {
+      results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
+    }
+  });
+
+  const nestedArrays = await mapWithConcurrency(
+    dirEntries,
+    DIR_TRAVERSE_CONCURRENCY,
+    async (fullPath) => {
       // Nested calls are always best-effort (no `strict`), but errors are
       // forwarded to the same `partialErrors` array so the caller can report them.
       const nested = await collectJsonlFiles(
@@ -96,6 +142,12 @@ export async function collectJsonlFiles(
         maxDepth - 1,
         opts?.partialErrors ? { partialErrors: opts.partialErrors } : undefined
       );
+      return nested;
+    }
+  );
+
+  for (const nested of nestedArrays) {
+    if (nested && nested.length) {
       results.push(...nested);
     }
   }
