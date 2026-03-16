@@ -439,7 +439,8 @@ export async function getCodexTrajectoryMetaMap(
 
     for (const file of files) {
       const id = path.basename(file.path, ".jsonl");
-      if (result[id]) continue; // already seen from a previous root
+      const existing = result[id];
+      if (existing && (existing.title || existing.cwd)) continue; // already have metadata from a previous root
 
       let fd: fs.FileHandle | undefined;
       try {
