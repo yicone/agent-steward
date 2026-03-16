@@ -28,16 +28,22 @@ async function safeStat(p: string) {
  * layout is `YYYY/MM/DD/rollout-*.jsonl` (depth 3), so a limit of 5 is
  * generous while guarding against unusual configurations.
  *
- * When `strict: true`, `readdir` errors (e.g. EPERM) are propagated instead
- * of silently returning `[]` — callers like `probeRootHealth` rely on this
- * to detect unreadable directories and return status `"unreadable"`.
+ * When `strict: true`, a `readdir` error on `dir` itself (e.g. EPERM) is
+ * re-thrown — callers like `probeRootHealth` use this to detect an unreadable
+ * root and return `status: "unreadable"`. `strict` is intentionally **not**
+ * propagated to recursive calls; nested subdirectory errors are always
+ * handled best-effort (continue scanning siblings).
+ *
+ * When `partialErrors` is provided, any `readdir` failures on nested
+ * subdirectories are recorded in that array instead of being silently
+ * ignored, letting callers surface partial-permission diagnostics.
  *
  * Exported for use by the conversations scanner (`conversations.ts`).
  */
 export async function collectJsonlFiles(
   dir: string,
   maxDepth = 5,
-  opts?: { strict?: boolean }
+  opts?: { strict?: boolean; partialErrors?: string[] }
 ): Promise<Array<{ path: string; mtimeMs: number; sizeBytes: number }>> {
   if (maxDepth <= 0) return [];
 
@@ -46,6 +52,8 @@ export async function collectJsonlFiles(
     dirents = await fs.readdir(dir, { withFileTypes: true });
   } catch (err) {
     if (opts?.strict) throw err;
+    // Not strict: record the error if a collector was provided, then skip.
+    opts?.partialErrors?.push(`${dir}: ${err instanceof Error ? err.message : String(err)}`);
     return [];
   }
 
@@ -57,7 +65,13 @@ export async function collectJsonlFiles(
       const st = await safeStat(fullPath);
       if (st) results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
     } else if (d.isDirectory()) {
-      const nested = await collectJsonlFiles(fullPath, maxDepth - 1, opts);
+      // Nested calls are always best-effort (no `strict`), but errors are
+      // forwarded to the same `partialErrors` array so the caller can report them.
+      const nested = await collectJsonlFiles(
+        fullPath,
+        maxDepth - 1,
+        opts?.partialErrors ? { partialErrors: opts.partialErrors } : undefined
+      );
       results.push(...nested);
     }
   }
@@ -109,14 +123,13 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
     }
 
     // Cache miss (or stale / root path changed): build id→path index for this root.
-    // Use strict mode to detect EPERM/EACCES; on error, record it and continue so
-    // a single unreadable root doesn't prevent finding the session in another root.
-    let files: Array<{ path: string }>;
-    try {
-      files = await collectJsonlFiles(rootPath, 5, { strict: true });
-    } catch (err) {
-      scanErrors.push(`${rootPath}: ${err instanceof Error ? err.message : String(err)}`);
-      continue;
+    // Best-effort traversal: a single unreadable nested subdirectory must not
+    // abort indexing for the whole root. Errors are collected and only surfaced
+    // in the final "session not found" message when no path was found at all.
+    const rootErrors: string[] = [];
+    const files = await collectJsonlFiles(rootPath, 5, { partialErrors: rootErrors });
+    if (rootErrors.length > 0) {
+      scanErrors.push(...rootErrors);
     }
     const idToPath = new Map<string, string>();
     for (const f of files) {
@@ -177,15 +190,16 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
       continue;
     }
 
-    // Use strict mode so EPERM/EACCES surfaces as an actionable error instead
-    // of being silently misreported as "No session files found".
-    try {
-      const files = await collectJsonlFiles(sessionsDir, 5, { strict: true });
-      if (files.length > 0) {
-        return { sessionsFound: true, sessionsDir };
-      }
-    } catch (err) {
-      lastError = `Cannot read Codex sessions directory ${sessionsDir}: ${err instanceof Error ? err.message : String(err)}`;
+    // Best-effort traversal: a single unreadable nested subdirectory must not
+    // hide sessions that exist in other readable subdirectories.
+    // Errors from inaccessible paths are collected for diagnostics.
+    const partialErrors: string[] = [];
+    const files = await collectJsonlFiles(sessionsDir, 5, { partialErrors });
+    if (files.length > 0) {
+      return { sessionsFound: true, sessionsDir };
+    }
+    if (partialErrors.length > 0) {
+      lastError = `Cannot read some subdirectories in ${sessionsDir}: ${partialErrors.join("; ")}`;
       continue;
     }
     lastError = `No session files found in ${sessionsDir}. Run Codex CLI to create sessions.`;

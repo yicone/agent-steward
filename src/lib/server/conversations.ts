@@ -209,11 +209,14 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
   }
 
   // For Codex, count .jsonl files recursively in date subdirectories.
-  // Use strict mode so readdir permission errors surface as "unreadable".
+  // strict: true throws if the root directory itself is unreadable (EACCES/EPERM).
+  // partialErrors collects errors from unreadable nested subdirectories so
+  // they are surfaced as "unreadable" rather than silently producing a low count.
   let fileCount: number;
   if (root.source === "codex") {
+    const partialErrors: string[] = [];
     try {
-      const files = await collectJsonlFiles(rootPath, 5, { strict: true });
+      const files = await collectJsonlFiles(rootPath, 5, { strict: true, partialErrors });
       fileCount = files.length;
     } catch (err) {
       return {
@@ -223,6 +226,16 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
         fileCount: 0,
         scanMs: Date.now() - start,
         error: err instanceof Error ? err.message : String(err)
+      };
+    }
+    if (partialErrors.length > 0) {
+      return {
+        rootId: root.id,
+        path: rootPath,
+        status: "unreadable",
+        fileCount,
+        scanMs: Date.now() - start,
+        error: `Cannot read some subdirectories: ${partialErrors.join("; ")}`
       };
     }
   } else {
