@@ -14,12 +14,31 @@ import {
 
 /* ---------- helpers ---------- */
 
-async function safeStat(p: string) {
+/**
+ * Stat a path and return a discriminated result so callers can distinguish
+ * "path does not exist / is not a directory" (ENOENT, ENOTDIR) from
+ * "permission denied" (EACCES, EPERM).
+ *
+ * - `stat` is non-null on success.
+ * - `errorCode` carries the Node.js `errno` code string on failure (e.g.
+ *   `"ENOENT"`, `"EACCES"`).  Callers that only care about existence can
+ *   ignore `errorCode`; callers that need to emit a diagnostic for permission
+ *   failures should check whether `errorCode` is `"EACCES"` or `"EPERM"`.
+ */
+async function statPath(p: string): Promise<{ stat: Awaited<ReturnType<typeof fs.stat>> | null; errorCode?: string }> {
   try {
-    return await fs.stat(p);
-  } catch {
-    return null;
+    return { stat: await fs.stat(p) };
+  } catch (err) {
+    const code =
+      err != null && typeof err === "object" && "code" in err ? String((err as NodeJS.ErrnoException).code) : undefined;
+    return { stat: null, errorCode: code };
   }
+}
+
+/** Silently return null for any stat error (used for per-file stat inside collectJsonlFiles). */
+async function safeStat(p: string) {
+  const { stat } = await statPath(p);
+  return stat;
 }
 
 /**
@@ -123,14 +142,15 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
     }
 
     // Cache miss (or stale / root path changed): build id→path index for this root.
-    // First verify the root exists and is a directory. If it doesn't exist or
-    // points to a file (ENOENT/ENOTDIR), silently skip — the root is simply
-    // misconfigured or has been deleted, and there is no session to find here.
-    // Only permission errors (EPERM/EACCES) are recorded for diagnostics, since
-    // those indicate a session might exist but can't be read.
-    const rootStat = await safeStat(rootPath);
+    // First verify the root exists and is a directory:
+    //   - ENOENT / ENOTDIR → root is missing or misconfigured; silently skip.
+    //   - EACCES / EPERM  → root exists but can't be read; record for diagnostics.
+    const { stat: rootStat, errorCode: statError } = await statPath(rootPath);
     if (!rootStat) {
-      // Missing or inaccessible via stat — skip silently (ENOENT / ENOTDIR)
+      if (statError === "EACCES" || statError === "EPERM") {
+        scanErrors.push(`${rootPath}: Permission denied (${statError})`);
+      }
+      // ENOENT / ENOTDIR / other → silently skip (misconfigured or deleted root)
       continue;
     }
     if (!rootStat.isDirectory()) {
@@ -194,10 +214,13 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
 
   for (const root of enabledRoots) {
     const sessionsDir = expandHome(root.path);
-    const st = await safeStat(sessionsDir);
+    const { stat: st, errorCode: statError } = await statPath(sessionsDir);
 
     if (!st) {
-      lastError = `Codex sessions directory not found: ${sessionsDir}. Install and run Codex CLI to create sessions.`;
+      lastError =
+        statError === "EACCES" || statError === "EPERM"
+          ? `Permission denied reading Codex sessions directory: ${sessionsDir}`
+          : `Codex sessions directory not found: ${sessionsDir}. Install and run Codex CLI to create sessions.`;
       continue;
     }
     if (!st.isDirectory()) {
