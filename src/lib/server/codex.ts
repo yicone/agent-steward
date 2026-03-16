@@ -260,6 +260,53 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
  * Checks all enabled roots and reports `sessionsFound: true` if any root
  * contains at least one `.jsonl` file.
  */
+async function hasAnyJsonlFile(
+  dir: string,
+  maxDepth: number,
+  opts: { partialErrors?: string[]; strict?: boolean } = {}
+): Promise<boolean> {
+  const { partialErrors, strict } = opts;
+
+  async function walk(currentDir: string, depth: number): Promise<boolean> {
+    let handle: fs.Dir | undefined;
+    try {
+      handle = await fs.opendir(currentDir);
+    } catch (err: unknown) {
+      const e = err as NodeJS.ErrnoException;
+      const message = e && e.message ? e.message : String(err);
+      if (strict && depth === 0) {
+        // Surface failures to read the root directory when in strict mode.
+        throw err;
+      }
+      if (partialErrors) {
+        partialErrors.push(`Error reading ${currentDir}: ${message}`);
+      }
+      return false;
+    }
+
+    try {
+      for await (const dirent of handle) {
+        if (dirent.isFile()) {
+          if (path.extname(dirent.name) === ".jsonl") {
+            return true;
+          }
+        } else if (dirent.isDirectory() && depth < maxDepth) {
+          const childDir = path.join(currentDir, dirent.name);
+          if (await walk(childDir, depth + 1)) {
+            return true;
+          }
+        }
+      }
+    } finally {
+      await handle.close();
+    }
+
+    return false;
+  }
+
+  return walk(dir, 0);
+}
+
 export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["codex"]> {
   const codexRoots = config.roots.filter((r) => r.source === "codex");
   const enabledRoots = codexRoots.filter((r) => r.enabled);
@@ -297,12 +344,12 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
     // hide sessions that exist in other readable subdirectories.
     // Errors from inaccessible paths are collected for diagnostics.
     const partialErrors: string[] = [];
-    let files: Awaited<ReturnType<typeof collectJsonlFiles>> = [];
+    let hasSessions = false;
     try {
       // Use strict mode for the top-level scan so that failures to read the
       // root sessions directory itself are surfaced as root-level errors,
       // while still collecting nested permission errors via `partialErrors`.
-      files = await collectJsonlFiles(sessionsDir, 5, { partialErrors, strict: true });
+      hasSessions = await hasAnyJsonlFile(sessionsDir, 5, { partialErrors, strict: true });
     } catch (err: unknown) {
       const e = err as NodeJS.ErrnoException;
       if (e && (e.code === "EACCES" || e.code === "EPERM")) {
@@ -313,7 +360,7 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
       }
       continue;
     }
-    if (files.length > 0) {
+    if (hasSessions) {
       return { sessionsFound: true, sessionsDir };
     }
     if (partialErrors.length > 0) {
