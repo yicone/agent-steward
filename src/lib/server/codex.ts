@@ -387,17 +387,18 @@ export async function getCodexRawContent(
 
       totalNonEmptyLines += 1;
 
-      if (rawLines.length >= MAX_CODEX_RAW_LINES) {
-        // We have collected enough lines; mark as truncated and stop reading further
-        // to avoid scanning very large files just for statistics.
+      if (rawLines.length < MAX_CODEX_RAW_LINES) {
+        // We have not yet hit the cap; parse and store this line.
+        try {
+          rawLines.push(JSON.parse(line));
+        } catch {
+          rawLines.push(line);
+        }
+      } else {
+        // We've reached the cap of lines to return. Mark as truncated but keep reading
+        // to compute accurate total line counts without storing additional payload.
         truncated = true;
-        break;
-      }
-
-      try {
-        rawLines.push(JSON.parse(line));
-      } catch {
-        rawLines.push(line);
+        // Do not store further lines.
       }
     }
   } finally {
