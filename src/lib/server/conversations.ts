@@ -65,7 +65,7 @@ async function countJsonlFiles(
     for (const d of dirents) {
       if (d.isFile() && d.name.endsWith(".jsonl")) {
         count += 1;
-      } else if (d.isDirectory() && depth < maxDepth) {
+      } else if (d.isDirectory() && depth < maxDepth - 1) {
         const childDir = path.join(dir, d.name);
         stack.push({ dir: childDir, depth: depth + 1, isRoot: false });
       }
