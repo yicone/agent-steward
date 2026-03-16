@@ -15,6 +15,7 @@ import {
 } from "@/lib/parse/codexLog";
 
 const MAX_CODEX_RAW_LINES = 5000;
+const MAX_CODEX_SESSION_BYTES = 5 * 1024 * 1024; // 5 MiB cap for UI conversation loading
 
 /* ---------- helpers ---------- */
 
@@ -279,6 +280,13 @@ export async function getCodexConversation(
   const filePath = await findCodexSessionFile(id, config.roots);
   if (!filePath) {
     throw new Error(`Codex session not found: ${id}. The file may have been deleted or is not in any configured root.`);
+  }
+
+  const stats = await fs.stat(filePath);
+  if (stats.size > MAX_CODEX_SESSION_BYTES) {
+    throw new Error(
+      `Codex session file is too large to load in the UI (size: ${stats.size} bytes, limit: ${MAX_CODEX_SESSION_BYTES} bytes).`
+    );
   }
 
   const content = await fs.readFile(filePath, "utf-8");
