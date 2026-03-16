@@ -37,7 +37,7 @@ async function countJsonlFiles(
 
   while (stack.length > 0) {
     const { dir, depth, isRoot } = stack.pop() as WorkItem;
-    let dirents;
+    let dirents: Awaited<ReturnType<typeof fs.readdir>>;
 
     try {
       dirents = await fs.readdir(dir, { withFileTypes: true });
