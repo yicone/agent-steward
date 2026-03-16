@@ -167,7 +167,8 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     expect(result?.kind).toBe("tool");
     expect(result?.stepType).toBe("tool_result");
     expect(result?.exitCode).toBe(0);
-    expect(result?.text).toBe("File written");
+    expect(result?.output).toBe("File written");
+    expect(result?.text).toBeUndefined();
   });
 
   it("summary counts are correct", () => {
