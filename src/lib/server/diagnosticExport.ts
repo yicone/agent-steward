@@ -30,9 +30,6 @@ export type DiagnosticExport = {
 
 export async function buildDiagnosticExport(params: {
   source: Source;
-
-export async function buildDiagnosticExport(params: {
-  source: Source;
   cascadeId: string;
   config: AppConfig;
   windsurf?: {
