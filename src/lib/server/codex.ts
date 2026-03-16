@@ -72,6 +72,8 @@ type SessionPathCacheEntry = {
   idToPath: Map<string, string>;
   /** timestamp when cache was populated */
   cachedAtMs: number;
+  /** expanded root path this index was built from; used to detect path changes */
+  rootPath: string;
 };
 
 /** TTL for the id→path index (ms). Aligned with dir-cache TTL in conversations.ts. */
@@ -94,22 +96,30 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
     if (!root.enabled || root.source !== "codex") continue;
     const rootPath = expandHome(root.path);
 
-    // Try cached index first
+    // Try cached index first (only if root path hasn't changed)
     const cached = _sessionPathCache.get(root.id);
-    if (cached && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
+    if (cached && cached.rootPath === rootPath && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
       const hit = cached.idToPath.get(id);
       if (hit) return hit;
       // Not in this root's index — continue to next root without scanning
       continue;
     }
 
-    // Cache miss: build id→path index for this root
-    const files = await collectJsonlFiles(rootPath);
+    // Cache miss (or stale / root path changed): build id→path index for this root.
+    // Use strict mode so EPERM/EACCES surfaces as a clear error instead of "not found".
+    let files: Array<{ path: string }>;
+    try {
+      files = await collectJsonlFiles(rootPath, 5, { strict: true });
+    } catch (err) {
+      throw new Error(
+        `Cannot read Codex root ${rootPath}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
     const idToPath = new Map<string, string>();
     for (const f of files) {
       idToPath.set(path.basename(f.path, ".jsonl"), f.path);
     }
-    _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now });
+    _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now, rootPath });
 
     const hit = idToPath.get(id);
     if (hit) return hit;
@@ -152,9 +162,16 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
       continue;
     }
 
-    const files = await collectJsonlFiles(sessionsDir);
-    if (files.length > 0) {
-      return { sessionsFound: true, sessionsDir };
+    // Use strict mode so EPERM/EACCES surfaces as an actionable error instead
+    // of being silently misreported as "No session files found".
+    try {
+      const files = await collectJsonlFiles(sessionsDir, 5, { strict: true });
+      if (files.length > 0) {
+        return { sessionsFound: true, sessionsDir };
+      }
+    } catch (err) {
+      lastError = `Cannot read Codex sessions directory ${sessionsDir}: ${err instanceof Error ? err.message : String(err)}`;
+      continue;
     }
     lastError = `No session files found in ${sessionsDir}. Run Codex CLI to create sessions.`;
   }

@@ -191,6 +191,39 @@ describe("probeRootHealth", () => {
     // Restore permissions for cleanup
     await fs.chmod(rootDir, 0o755);
   });
+
+  it("Codex: counts .jsonl files in nested date subdirectories", async () => {
+    const rootDir = path.join(tmpDir, "codex-nested");
+    await fs.mkdir(path.join(rootDir, "2025", "03", "14"), { recursive: true });
+    await fs.writeFile(path.join(rootDir, "2025", "03", "14", "rollout-abc.jsonl"), "{}");
+    await fs.writeFile(path.join(rootDir, "2025", "03", "14", "rollout-def.jsonl"), "{}");
+    await fs.writeFile(path.join(rootDir, "2025", "03", "14", "notes.txt"), "note"); // non-.jsonl
+
+    const root: RootConfig = { id: "cx1", source: "codex", path: rootDir, enabled: true };
+    const health = await probeRootHealth(root);
+    expect(health.status).toBe("healthy");
+    expect(health.fileCount).toBe(2);
+    expect(health.error).toBeUndefined();
+  });
+
+  it("Codex: reports unreadable when a nested subdirectory has no read permission", async () => {
+    const rootDir = path.join(tmpDir, "codex-noperm");
+    const subDir = path.join(rootDir, "2025");
+    await fs.mkdir(subDir, { recursive: true });
+    await fs.writeFile(path.join(subDir, "session.jsonl"), "{}");
+    await fs.chmod(subDir, 0o000);
+
+    const root: RootConfig = { id: "cxnp", source: "codex", path: rootDir, enabled: true };
+    const health = await probeRootHealth(root);
+    if (process.getuid?.() === 0) {
+      expect(["healthy", "unreadable"]).toContain(health.status);
+    } else {
+      expect(health.status).toBe("unreadable");
+      expect(health.error).toBeDefined();
+    }
+
+    await fs.chmod(subDir, 0o755);
+  });
 });
 
 /* ---------- probeAllRootsHealth ---------- */
