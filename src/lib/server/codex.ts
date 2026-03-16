@@ -232,7 +232,22 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
     // hide sessions that exist in other readable subdirectories.
     // Errors from inaccessible paths are collected for diagnostics.
     const partialErrors: string[] = [];
-    const files = await collectJsonlFiles(sessionsDir, 5, { partialErrors });
+    let files: string[] = [];
+    try {
+      // Use strict mode for the top-level scan so that failures to read the
+      // root sessions directory itself are surfaced as root-level errors,
+      // while still collecting nested permission errors via `partialErrors`.
+      files = await collectJsonlFiles(sessionsDir, 5, { partialErrors, strict: true });
+    } catch (err: unknown) {
+      const e = err as NodeJS.ErrnoException;
+      if (e && (e.code === "EACCES" || e.code === "EPERM")) {
+        lastError = `Permission denied reading Codex sessions directory: ${sessionsDir}`;
+      } else {
+        const message = e && e.message ? e.message : String(err);
+        lastError = `Error reading Codex sessions directory ${sessionsDir}: ${message}`;
+      }
+      continue;
+    }
     if (files.length > 0) {
       return { sessionsFound: true, sessionsDir };
     }
