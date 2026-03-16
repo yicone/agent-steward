@@ -2379,7 +2379,8 @@ export default function HomeClient() {
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge>events {content.summary.renderedEvents}</Badge>
-                  <Badge>tools {content.summary.toolCount + content.summary.commandCount}</Badge>
+                  <Badge>tools {content.summary.toolCount}</Badge>
+                  <Badge>commands {content.summary.commandCount}</Badge>
                   {content.summary.errorCount > 0 ? (
                     <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
                       errors {content.summary.errorCount}
