@@ -167,8 +167,25 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     expect(result?.kind).toBe("tool");
     expect(result?.stepType).toBe("tool_result");
     expect(result?.exitCode).toBe(0);
-    expect(result?.text).toBe("File written");
+    expect(result?.output).toBe("File written");
+    expect(result?.outputTruncated).toBeUndefined();
   });
+
+  it("tool/function results set outputTruncated when clipped", () => {
+    const long = "x".repeat(17000);
+    const raw = parseCodexJsonl(
+      [
+        JSON.stringify({ type: "tool_result", item: { tool_name: "read_file", result: long } }),
+        JSON.stringify({ type: "function_result", item: { name: "read", output: long } })
+      ].join("\n")
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+    expect(events[0]?.output?.length).toBe(16013);
+    expect(events[0]?.outputTruncated).toBe(true);
+    expect(events[1]?.output?.length).toBe(16013);
+    expect(events[1]?.outputTruncated).toBe(true);
+  });
+
 
   it("summary counts are correct", () => {
     const raw = parseCodexJsonl(sampleJsonl);

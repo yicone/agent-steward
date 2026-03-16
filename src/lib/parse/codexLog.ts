@@ -233,6 +233,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           typeof item.exit_code === "number" ? item.exit_code : typeof item.exitCode === "number" ? item.exitCode : undefined;
         const rawResultText = asNonEmptyString(getField(item, "result", "output") as unknown) ?? undefined;
         const resultText = rawResultText ? truncate(rawResultText, MAX_TOOL_OUTPUT_CHARS) : undefined;
+        const outputTruncated = rawResultText !== undefined && rawResultText !== resultText ? true : undefined;
         events.push({
           id: `tool_result_${index}`,
           index,
@@ -240,7 +241,8 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           kind: "tool",
           stepType: "tool_result",
           title: `${toolName} result`,
-          text: resultText,
+          output: resultText,
+          ...(outputTruncated ? { outputTruncated } : {}),
           exitCode,
           createdAt: timestamp
         });
@@ -272,6 +274,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           typeof item.exit_code === "number" ? item.exit_code : typeof item.exitCode === "number" ? item.exitCode : undefined;
         const rawResultText = asNonEmptyString(getField(item, "output", "result") as unknown) ?? undefined;
         const resultText = rawResultText ? truncate(rawResultText, MAX_TOOL_OUTPUT_CHARS) : undefined;
+        const outputTruncated = rawResultText !== undefined && rawResultText !== resultText ? true : undefined;
         events.push({
           id: `fn_result_${index}`,
           index,
@@ -279,7 +282,8 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           kind: "tool",
           stepType: raw.type,
           title: `${name} result`,
-          text: resultText,
+          output: resultText,
+          ...(outputTruncated ? { outputTruncated } : {}),
           exitCode,
           createdAt: timestamp
         });

@@ -27,6 +27,7 @@ async function safeStat(p: string) {
  * Depth-limited to avoid runaway traversal. The expected Codex directory
  * layout is `YYYY/MM/DD/rollout-*.jsonl` (depth 3), so a limit of 5 is
  * generous while guarding against unusual configurations.
+ * `maxDepth=0` scans only the current directory (no recursion).
  *
  * When `strict: true`, `readdir` errors (e.g. EPERM) are propagated instead
  * of silently returning `[]` — callers like `probeRootHealth` rely on this
@@ -37,9 +38,9 @@ async function safeStat(p: string) {
 export async function collectJsonlFiles(
   dir: string,
   maxDepth = 5,
-  opts?: { strict?: boolean }
-): Promise<Array<{ path: string; mtimeMs: number; sizeBytes: number }>> {
-  if (maxDepth <= 0) return [];
+  opts?: { strict?: boolean; includeStats?: boolean; stopAfter?: number }
+): Promise<Array<{ path: string; mtimeMs?: number; sizeBytes?: number }>> {
+  if (maxDepth < 0) return [];
 
   let dirents: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
   try {
@@ -49,20 +50,37 @@ export async function collectJsonlFiles(
     return [];
   }
 
-  const results: Array<{ path: string; mtimeMs: number; sizeBytes: number }> = [];
+  const includeStats = opts?.includeStats ?? true;
+  const collected = await Promise.all(
+    dirents.map(async (d) => {
+      const fullPath = path.join(dir, d.name);
+      if (d.isFile() && d.name.endsWith(".jsonl")) {
+        if (!includeStats) return [{ path: fullPath }];
+        const st = await safeStat(fullPath);
+        return st ? [{ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size }] : [];
+      }
+      if (d.isDirectory() && maxDepth > 0) {
+        return collectJsonlFiles(fullPath, maxDepth - 1, opts);
+      }
+      return [];
+    })
+  );
 
-  for (const d of dirents) {
-    const fullPath = path.join(dir, d.name);
-    if (d.isFile() && d.name.endsWith(".jsonl")) {
-      const st = await safeStat(fullPath);
-      if (st) results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
-    } else if (d.isDirectory()) {
-      const nested = await collectJsonlFiles(fullPath, maxDepth - 1, opts);
-      results.push(...nested);
-    }
+  const results = collected.flat();
+  if (opts?.stopAfter && opts.stopAfter > 0 && results.length > opts.stopAfter) {
+    return results.slice(0, opts.stopAfter);
   }
-
   return results;
+}
+
+export async function hasJsonlFile(dir: string, maxDepth = 5, opts?: { strict?: boolean }): Promise<boolean> {
+  const files = await collectJsonlFiles(dir, maxDepth, { ...opts, includeStats: false, stopAfter: 1 });
+  return files.length > 0;
+}
+
+export async function countJsonlFiles(dir: string, maxDepth = 5, opts?: { strict?: boolean }): Promise<number> {
+  const files = await collectJsonlFiles(dir, maxDepth, { ...opts, includeStats: false });
+  return files.length;
 }
 
 /* ---------- session id → path cache ---------- */
@@ -70,6 +88,8 @@ export async function collectJsonlFiles(
 type SessionPathCacheEntry = {
   /** map from session id to absolute file path */
   idToPath: Map<string, string>;
+  /** resolved root path used to build this cache entry */
+  rootPath: string;
   /** timestamp when cache was populated */
   cachedAtMs: number;
 };
@@ -96,7 +116,7 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
 
     // Try cached index first
     const cached = _sessionPathCache.get(root.id);
-    if (cached && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
+    if (cached && cached.rootPath === rootPath && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
       const hit = cached.idToPath.get(id);
       if (hit) return hit;
       // Not in this root's index — continue to next root without scanning
@@ -104,12 +124,12 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
     }
 
     // Cache miss: build id→path index for this root
-    const files = await collectJsonlFiles(rootPath);
+    const files = await collectJsonlFiles(rootPath, 5, { strict: true, includeStats: false });
     const idToPath = new Map<string, string>();
     for (const f of files) {
       idToPath.set(path.basename(f.path, ".jsonl"), f.path);
     }
-    _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now });
+    _sessionPathCache.set(root.id, { idToPath, rootPath, cachedAtMs: now });
 
     const hit = idToPath.get(id);
     if (hit) return hit;
@@ -152,11 +172,16 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
       continue;
     }
 
-    const files = await collectJsonlFiles(sessionsDir);
-    if (files.length > 0) {
-      return { sessionsFound: true, sessionsDir };
+    try {
+      const found = await hasJsonlFile(sessionsDir, 5, { strict: true });
+      if (found) {
+        return { sessionsFound: true, sessionsDir };
+      }
+      lastError = `No session files found in ${sessionsDir}. Run Codex CLI to create sessions.`;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      lastError = `Codex sessions directory unreadable: ${sessionsDir}. ${msg}`;
     }
-    lastError = `No session files found in ${sessionsDir}. Run Codex CLI to create sessions.`;
   }
 
   return {
@@ -217,7 +242,7 @@ export async function getCodexTrajectoryMetaMap(
 
   for (const root of enabledRoots) {
     const rootPath = expandHome(root.path);
-    const files = await collectJsonlFiles(rootPath);
+    const files = await collectJsonlFiles(rootPath, 5, { includeStats: false });
 
     for (const file of files) {
       const id = path.basename(file.path, ".jsonl");
@@ -240,7 +265,7 @@ export async function getCodexTrajectoryMetaMap(
       } catch {
         // Best-effort; skip files that can't be read
       } finally {
-        await fd?.close().catch(() => {});
+        if (fd) await fd.close().catch(() => {});
       }
     }
   }

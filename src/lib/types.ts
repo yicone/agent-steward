@@ -83,7 +83,7 @@ export type SourcesStatus = {
   codex: {
     /** True if at least one session file was found in the configured roots. */
     sessionsFound: boolean;
-    /** First enabled Codex sessions directory that was checked. */
+    /** Directory where sessions were found, or first checked enabled root when none were found. */
     sessionsDir?: string;
     error?: string;
   };

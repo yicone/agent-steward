@@ -5,7 +5,7 @@ import path from "node:path";
 
 import type { ConversationFile, RootConfig, RootHealth, RootHealthStatus, Source } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
-import { collectJsonlFiles } from "@/lib/server/codex";
+import { collectJsonlFiles, countJsonlFiles } from "@/lib/server/codex";
 
 /* ---------- helpers ---------- */
 
@@ -63,11 +63,11 @@ async function scanCodexRoot(root: RootConfig, rootPath: string, rootMtimeMs: nu
   const files = await collectJsonlFiles(rootPath);
   const entries: ConversationFile[] = files.map((f) => ({
     id: path.basename(f.path, ".jsonl"),
-    source: "codex" as Source,
+    source: "codex",
     rootId: root.id,
     path: f.path,
-    sizeBytes: f.sizeBytes,
-    mtimeMs: f.mtimeMs
+    sizeBytes: f.sizeBytes ?? 0,
+    mtimeMs: f.mtimeMs ?? 0
   }));
 
   _dirCache.set(root.id, {
@@ -213,8 +213,7 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
   let fileCount: number;
   if (root.source === "codex") {
     try {
-      const files = await collectJsonlFiles(rootPath, 5, { strict: true });
-      fileCount = files.length;
+      fileCount = await countJsonlFiles(rootPath, 5, { strict: true });
     } catch (err) {
       return {
         rootId: root.id,
