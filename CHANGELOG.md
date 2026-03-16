@@ -23,7 +23,7 @@ This file records shipped, merged changes for Agent Storage Manager.
   - Diagnostic export includes raw JSONL events
   - Codex roots section in Settings; default root: `~/.codex/sessions`
 - `2026-03-13` — Multi-root scaling milestone (`refs: #6`)
-  - Per-root health indicators in Settings (missing, unreadable, slow, pb count)
+  - Per-root health indicators in Settings (missing, unreadable, slow, file count)
   - Duplicate session detection across roots with UI affordance in Viewer
   - Cached directory listing with TTL and mtime-based invalidation for faster scans
   - New `GET /api/root-health` endpoint

@@ -30,6 +30,16 @@ import type {
 type ApiConfigResponse = { path: string; config: AppConfig };
 type ApiConversationListResponse = { items: ConversationListItem[]; limit: number; offset: number };
 
+type TrajectoryFilters = {
+  thought: boolean;
+  tool: boolean;
+  command: boolean;
+  status: boolean;
+  errorsOnly: boolean;
+  hasOutput: boolean;
+  stepTypeFilter: string;
+};
+
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
@@ -1139,6 +1149,101 @@ function InspectorPanel(props: {
   );
 }
 
+function TrajectoryFilterControls({
+  filters,
+  onFiltersChange,
+  groupCount,
+  eventSearch,
+  onEventSearchChange,
+  searchMatchCount,
+  activeMatchIndex,
+  onNavigateMatch,
+}: {
+  filters: TrajectoryFilters;
+  onFiltersChange: (updater: (prev: TrajectoryFilters) => TrajectoryFilters) => void;
+  groupCount: number;
+  eventSearch: string;
+  onEventSearchChange: (value: string) => void;
+  searchMatchCount: number;
+  activeMatchIndex: number;
+  onNavigateMatch: (offset: number) => void;
+}) {
+  return (
+    <>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Button
+          variant={filters.thought ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
+        >
+          Thoughts
+        </Button>
+        <Button
+          variant={filters.tool ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
+        >
+          Tools
+        </Button>
+        <Button
+          variant={filters.command ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
+        >
+          Commands
+        </Button>
+        <Button
+          variant={filters.status ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
+        >
+          Status
+        </Button>
+        <Button
+          variant={filters.errorsOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
+        >
+          Only errors
+        </Button>
+        <Button
+          variant={filters.hasOutput ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+        >
+          Has output
+        </Button>
+        <span className="text-xs text-muted">Groups: {groupCount}</span>
+      </div>
+      <div className="mb-2 flex items-center gap-2">
+        <Input
+          placeholder="Search events…"
+          value={eventSearch}
+          onChange={(e) => onEventSearchChange(e.target.value)}
+          className="h-7 text-xs"
+        />
+        {searchMatchCount > 0 ? (
+          <>
+            <Button variant="outline" size="sm" onClick={() => onNavigateMatch(-1)} title="Previous match">←</Button>
+            <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeMatchIndex, 0) + 1} / {searchMatchCount}</span>
+            <Button variant="outline" size="sm" onClick={() => onNavigateMatch(1)} title="Next match">→</Button>
+          </>
+        ) : eventSearch.trim() ? (
+          <span className="shrink-0 text-xs text-muted">0 matches</span>
+        ) : null}
+      </div>
+      <div className="mb-2 flex items-center gap-2">
+        <Input
+          placeholder="Filter stepType…"
+          value={filters.stepTypeFilter}
+          onChange={(e) => onFiltersChange((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+          className="h-7 text-xs"
+        />
+      </div>
+    </>
+  );
+}
+
 export default function HomeClient() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -1155,7 +1260,7 @@ export default function HomeClient() {
   const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("markdown");
   const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("chat");
   const [windsurfIncludeCleared, setWindsurfIncludeCleared] = useState(false);
-  const [trajectoryFilters, setTrajectoryFilters] = useState({
+  const [trajectoryFilters, setTrajectoryFilters] = useState<TrajectoryFilters>({
     thought: true,
     tool: true,
     command: true,
@@ -2103,76 +2208,16 @@ export default function HomeClient() {
 
               {antigravityView === "trajectory" ? (
                 <div>
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant={trajectoryFilters.thought ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
-                    >
-                      Thoughts
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.tool ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
-                    >
-                      Tools
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.command ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
-                    >
-                      Commands
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.status ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
-                    >
-                      Status
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
-                    >
-                      Only errors
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
-                    >
-                      Has output
-                    </Button>
-                    <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Search events…"
-                      value={eventSearch}
-                      onChange={(e) => setEventSearch(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                    {eventSearchMatchEvents.length > 0 ? (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
-                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
-                      </>
-                    ) : eventSearch.trim() ? (
-                      <span className="shrink-0 text-xs text-muted">0 matches</span>
-                    ) : null}
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Filter stepType…"
-                      value={trajectoryFilters.stepTypeFilter}
-                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
-                      className="h-7 text-xs"
-                    />
-                  </div>
+                  <TrajectoryFilterControls
+                    filters={trajectoryFilters}
+                    onFiltersChange={setTrajectoryFilters}
+                    groupCount={executionGroups.length}
+                    eventSearch={eventSearch}
+                    onEventSearchChange={setEventSearch}
+                    searchMatchCount={eventSearchMatchEvents.length}
+                    activeMatchIndex={activeSearchMatchIndex}
+                    onNavigateMatch={navigateSearchMatchByOffset}
+                  />
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2244,76 +2289,16 @@ export default function HomeClient() {
 
               {windsurfView === "trajectory" ? (
                 <div>
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant={trajectoryFilters.thought ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
-                    >
-                      Thoughts
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.tool ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
-                    >
-                      Tools
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.command ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
-                    >
-                      Commands
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.status ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
-                    >
-                      Status
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
-                    >
-                      Only errors
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
-                    >
-                      Has output
-                    </Button>
-                    <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Search events…"
-                      value={eventSearch}
-                      onChange={(e) => setEventSearch(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                    {eventSearchMatchEvents.length > 0 ? (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
-                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
-                      </>
-                    ) : eventSearch.trim() ? (
-                      <span className="shrink-0 text-xs text-muted">0 matches</span>
-                    ) : null}
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Filter stepType…"
-                      value={trajectoryFilters.stepTypeFilter}
-                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
-                      className="h-7 text-xs"
-                    />
-                  </div>
+                  <TrajectoryFilterControls
+                    filters={trajectoryFilters}
+                    onFiltersChange={setTrajectoryFilters}
+                    groupCount={executionGroups.length}
+                    eventSearch={eventSearch}
+                    onEventSearchChange={setEventSearch}
+                    searchMatchCount={eventSearchMatchEvents.length}
+                    activeMatchIndex={activeSearchMatchIndex}
+                    onNavigateMatch={navigateSearchMatchByOffset}
+                  />
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2387,76 +2372,16 @@ export default function HomeClient() {
                 </div>
                 <div className="text-xs text-muted">Codex CLI session (read from .jsonl)</div>
               </div>
-              <div className="mb-2 flex flex-wrap items-center gap-2">
-                <Button
-                  variant={trajectoryFilters.thought ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
-                >
-                  Thoughts
-                </Button>
-                <Button
-                  variant={trajectoryFilters.tool ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
-                >
-                  Tools
-                </Button>
-                <Button
-                  variant={trajectoryFilters.command ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
-                >
-                  Commands
-                </Button>
-                <Button
-                  variant={trajectoryFilters.status ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
-                >
-                  Status
-                </Button>
-                <Button
-                  variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
-                >
-                  Only errors
-                </Button>
-                <Button
-                  variant={trajectoryFilters.hasOutput ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
-                >
-                  Has output
-                </Button>
-                <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
-              </div>
-              <div className="mb-2 flex items-center gap-2">
-                <Input
-                  placeholder="Search events…"
-                  value={eventSearch}
-                  onChange={(e) => setEventSearch(e.target.value)}
-                  className="h-7 text-xs"
-                />
-                {eventSearchMatchEvents.length > 0 ? (
-                  <>
-                    <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
-                    <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
-                    <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
-                  </>
-                ) : eventSearch.trim() ? (
-                  <span className="shrink-0 text-xs text-muted">0 matches</span>
-                ) : null}
-              </div>
-              <div className="mb-2 flex items-center gap-2">
-                <Input
-                  placeholder="Filter stepType…"
-                  value={trajectoryFilters.stepTypeFilter}
-                  onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
-                  className="h-7 text-xs"
-                />
-              </div>
+              <TrajectoryFilterControls
+                filters={trajectoryFilters}
+                onFiltersChange={setTrajectoryFilters}
+                groupCount={executionGroups.length}
+                eventSearch={eventSearch}
+                onEventSearchChange={setEventSearch}
+                searchMatchCount={eventSearchMatchEvents.length}
+                activeMatchIndex={activeSearchMatchIndex}
+                onNavigateMatch={navigateSearchMatchByOffset}
+              />
               {withInspector(
                 <VirtualizedTrajectoryRows
                   rows={trajectoryRows}
