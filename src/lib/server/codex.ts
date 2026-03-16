@@ -34,9 +34,14 @@ async function statPath(p: string): Promise<{ stat: Awaited<ReturnType<typeof fs
   try {
     return { stat: await fs.stat(p) };
   } catch (err) {
-    const code =
-      err != null && typeof err === "object" && "code" in err ? String((err as NodeJS.ErrnoException).code) : undefined;
-    return { stat: null, errorCode: code };
+    let errorCode: string | undefined;
+    if (err != null && typeof err === "object" && "code" in err) {
+      const codeRaw = (err as NodeJS.ErrnoException).code;
+      if (typeof codeRaw === "string") {
+        errorCode = codeRaw;
+      }
+    }
+    return { stat: null, errorCode };
   }
 }
 
