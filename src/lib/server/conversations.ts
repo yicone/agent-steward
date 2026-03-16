@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { ConversationFile, RootConfig, RootHealth, RootHealthStatus, Source } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
+import { collectJsonlFiles } from "@/lib/server/codex";
 
 /* ---------- helpers ---------- */
 
