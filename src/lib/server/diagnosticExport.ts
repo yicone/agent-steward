@@ -25,11 +25,11 @@ export type DiagnosticExport = {
     markdown: string;
   };
   windsurf?: Awaited<ReturnType<typeof getWindsurfDiagnosticBundle>>;
-  codex?: {
-    filePath: string;
-    rawLines: unknown[];
-  };
+  codex?: Awaited<ReturnType<typeof getCodexRawContent>>;
 };
+
+export async function buildDiagnosticExport(params: {
+  source: Source;
 
 export async function buildDiagnosticExport(params: {
   source: Source;
