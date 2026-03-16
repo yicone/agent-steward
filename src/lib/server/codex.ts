@@ -236,7 +236,7 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
     // hide sessions that exist in other readable subdirectories.
     // Errors from inaccessible paths are collected for diagnostics.
     const partialErrors: string[] = [];
-    let files: string[] = [];
+    let files: Awaited<ReturnType<typeof collectJsonlFiles>> = [];
     try {
       // Use strict mode for the top-level scan so that failures to read the
       // root sessions directory itself are surfaced as root-level errors,
