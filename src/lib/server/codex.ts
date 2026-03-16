@@ -123,9 +123,24 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
     }
 
     // Cache miss (or stale / root path changed): build id→path index for this root.
+    // First verify the root exists and is a directory. If it doesn't exist or
+    // points to a file (ENOENT/ENOTDIR), silently skip — the root is simply
+    // misconfigured or has been deleted, and there is no session to find here.
+    // Only permission errors (EPERM/EACCES) are recorded for diagnostics, since
+    // those indicate a session might exist but can't be read.
+    const rootStat = await safeStat(rootPath);
+    if (!rootStat) {
+      // Missing or inaccessible via stat — skip silently (ENOENT / ENOTDIR)
+      continue;
+    }
+    if (!rootStat.isDirectory()) {
+      // Path exists but is not a directory — skip silently
+      continue;
+    }
+
     // Best-effort traversal: a single unreadable nested subdirectory must not
-    // abort indexing for the whole root. Errors are collected and only surfaced
-    // in the final "session not found" message when no path was found at all.
+    // abort indexing for the whole root. EPERM/EACCES errors are collected and
+    // only surfaced in the final "session not found" message.
     const rootErrors: string[] = [];
     const files = await collectJsonlFiles(rootPath, 5, { partialErrors: rootErrors });
     if (rootErrors.length > 0) {
