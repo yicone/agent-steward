@@ -315,6 +315,7 @@ export async function getCodexRawContent(
 
   const rawLines: unknown[] = [];
   let totalLines = 0;
+  let totalNonEmptyLines = 0;
   let truncated = false;
 
   const stream = createReadStream(filePath, { encoding: "utf-8" });
@@ -331,6 +332,8 @@ export async function getCodexRawContent(
       if (!line.trim()) {
         continue;
       }
+
+      totalNonEmptyLines += 1;
 
       if (rawLines.length >= MAX_CODEX_RAW_LINES) {
         // We have collected enough lines; mark as truncated and stop reading.
@@ -352,7 +355,7 @@ export async function getCodexRawContent(
   const returnedLines = rawLines.length;
   if (!truncated) {
     // Fallback: detect truncation based on counts if we never hit the hard cap in the loop.
-    truncated = returnedLines < totalLines;
+    truncated = returnedLines < totalNonEmptyLines;
   }
 
   return { filePath, rawLines, truncated, totalLines, returnedLines };
