@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const searchSessionsMock = vi.fn();
+const searchSessionsMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/server/searchIndex", () => ({
   searchSessions: (...args: unknown[]) => searchSessionsMock(...args),
