@@ -392,4 +392,5 @@ node scripts/seed-multi-root.mjs --clean
 - 2026-03-03：确认 Antigravity 在部分版本中会使用 random ports 且可能不更新 `~/.gemini/antigravity/daemon/ls_*.json`；因此将 Antigravity 的 LS 发现逻辑升级为“优先从 `Antigravity.log` attach，并以 Heartbeat 成功作为选择依据”。
 - 2026-03-13：补充「多 root 配置与测试」章节——说明 macOS 上每个产品的默认存储路径、手动添加 root 的方法、seed 脚本构造测试条件的完整流程，以及自动化测试的覆盖范围。
 - 2026-03-11：修正 Windsurf token 提取策略记录：此前项目实现依赖从进程启动参数读取 live CSRF token；排查过程中曾尝试把 `state.vscdb` 中的 auth UUID 当作 fallback，但实测始终无效。确认在 Windsurf `1.9577.24` / Extension `1.48.2` 中，当前有效来源是运行中 LS 进程环境变量 `WINDSURF_CSRF_TOKEN`，因此项目实现改为优先读取 `ps eww` 输出。
+- 2026-03-13：引入平台抽象层 `src/lib/server/platform.ts`，将 Antigravity / Windsurf 的 macOS 路径（logs root、state.vscdb）统一收敛到 platform helper；新增 Windows / Linux 路径占位（待验证），并在本文档增加"跨平台路径参考"表。
 - 2026-03-14：新增 Codex CLI 会话支持 — 会话文件为 `.jsonl` 格式，存储在 `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`。与 Antigravity/Windsurf 不同，Codex 不需要连接正在运行的进程，而是直接从磁盘读取文件。解析器将 `session_meta`、`user_message`、`assistant_message`、`tool_call`、`tool_result`、`exec`、`reasoning` 等事件归一化为统一的 trajectory 模型；`title/cwd` 从 `session_meta` 及首条用户消息头部提取。

@@ -91,6 +91,9 @@ const _sessionPathCache = new Map<string, SessionPathCacheEntry>();
  */
 async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<string | null> {
   const now = Date.now();
+  // Collect per-root scan errors to surface when the session isn't found.
+  // A single unreadable root must not block other valid roots.
+  const scanErrors: string[] = [];
 
   for (const root of roots) {
     if (!root.enabled || root.source !== "codex") continue;
@@ -106,14 +109,14 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
     }
 
     // Cache miss (or stale / root path changed): build id→path index for this root.
-    // Use strict mode so EPERM/EACCES surfaces as a clear error instead of "not found".
+    // Use strict mode to detect EPERM/EACCES; on error, record it and continue so
+    // a single unreadable root doesn't prevent finding the session in another root.
     let files: Array<{ path: string }>;
     try {
       files = await collectJsonlFiles(rootPath, 5, { strict: true });
     } catch (err) {
-      throw new Error(
-        `Cannot read Codex root ${rootPath}: ${err instanceof Error ? err.message : String(err)}`
-      );
+      scanErrors.push(`${rootPath}: ${err instanceof Error ? err.message : String(err)}`);
+      continue;
     }
     const idToPath = new Map<string, string>();
     for (const f of files) {
@@ -123,6 +126,14 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
 
     const hit = idToPath.get(id);
     if (hit) return hit;
+  }
+
+  // Session not found; if some roots were unreadable, surface those errors so
+  // callers can distinguish "missing file" from "permission denied".
+  if (scanErrors.length > 0) {
+    throw new Error(
+      `Codex session '${id}' not found. The following roots could not be read:\n${scanErrors.join("\n")}`
+    );
   }
   return null;
 }
@@ -137,11 +148,15 @@ async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<st
  * contains at least one `.jsonl` file.
  */
 export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["codex"]> {
-  const enabledRoots = config.roots.filter((r) => r.source === "codex" && r.enabled);
+  const codexRoots = config.roots.filter((r) => r.source === "codex");
+  const enabledRoots = codexRoots.filter((r) => r.enabled);
   if (enabledRoots.length === 0) {
     return {
       sessionsFound: false,
-      error: "No Codex roots configured. Add a root pointing to ~/.codex/sessions in Settings."
+      error:
+        codexRoots.length === 0
+          ? "No Codex roots configured. Add a root pointing to ~/.codex/sessions in Settings."
+          : "No Codex roots are enabled. Enable a Codex root in Settings."
     };
   }
 
