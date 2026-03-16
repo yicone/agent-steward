@@ -103,8 +103,11 @@ export async function collectJsonlFiles(
     dirents = await fs.readdir(dir, { withFileTypes: true });
   } catch (err) {
     if (opts?.strict) throw err;
-    // Not strict: record the error if a collector was provided, then skip.
-    opts?.partialErrors?.push(`${dir}: ${err instanceof Error ? err.message : String(err)}`);
+    // Not strict: record only actionable, non-transient errors if a collector was provided, then skip.
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code !== "ENOENT" && code !== "ENOTDIR") {
+      opts?.partialErrors?.push(`${dir}: ${err instanceof Error ? err.message : String(err)}`);
+    }
     return [];
   }
 
