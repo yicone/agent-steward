@@ -290,7 +290,7 @@ async function hasAnyJsonlFile(
           if (path.extname(dirent.name) === ".jsonl") {
             return true;
           }
-        } else if (dirent.isDirectory() && depth < maxDepth) {
+        } else if (dirent.isDirectory() && depth < maxDepth - 1) {
           const childDir = path.join(currentDir, dirent.name);
           if (await walk(childDir, depth + 1)) {
             return true;
