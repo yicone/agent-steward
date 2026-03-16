@@ -82,7 +82,7 @@ export async function collectJsonlFiles(
     limit: number,
     fn: (item: T, index: number) => Promise<R>
   ): Promise<R[]> {
-    const results: R[] = new Array(items.length);
+    const results: R[] = [];
     let index = 0;
 
     async function worker() {
