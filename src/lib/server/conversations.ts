@@ -95,26 +95,68 @@ type DirCacheEntry = {
 /** TTL for cached directory listings (milliseconds). */
 const DIR_CACHE_TTL_MS = 10_000;
 
-async function forEachWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
-  if (items.length === 0) return;
+/* ---------- concurrency helpers ---------- */
 
+/** Total concurrent stat() calls allowed across all roots. */
+const STAT_CONCURRENCY = 16;
+
+/** Simple counting semaphore to cap cross-root stat() concurrency. */
+class Semaphore {
+  private readonly _waiters: Array<() => void> = [];
+  private _available: number;
+
+  constructor(limit: number) {
+    this._available = limit;
+  }
+
+  acquire(): Promise<() => void> {
+    if (this._available > 0) {
+      this._available--;
+      return Promise.resolve(() => this._release());
+    }
+    return new Promise((resolve) => {
+      this._waiters.push(() => resolve(() => this._release()));
+    });
+  }
+
+  private _release(): void {
+    if (this._waiters.length > 0) {
+      this._waiters.shift()!();
+    } else {
+      this._available++;
+    }
+  }
+}
+
+/** Shared semaphore: limits total concurrent stat() calls across all root scans. */
+const statSemaphore = new Semaphore(STAT_CONCURRENCY);
+
+/**
+ * Applies `worker` to every item with at most `concurrency` simultaneous
+ * workers and returns results in the **same order** as `items`.
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>
+): Promise<Array<R>> {
+  if (items.length === 0) return [];
+
+  const results: Array<R> = new Array(items.length);
   const workerCount = Math.min(Math.max(1, concurrency), items.length);
   let nextIndex = 0;
 
   await Promise.all(
     Array.from({ length: workerCount }, async () => {
       while (true) {
-        const currentIndex = nextIndex;
-        nextIndex += 1;
-
-        if (currentIndex >= items.length) {
-          return;
-        }
-
-        await worker(items[currentIndex]);
+        const i = nextIndex++;
+        if (i >= items.length) return;
+        results[i] = await worker(items[i]);
       }
     })
   );
+
+  return results;
 }
 
 /**
@@ -187,23 +229,32 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
     return [];
   }
 
-  const entries: ConversationFile[] = [];
   const pbFiles = dirents.filter((dirent) => dirent.isFile() && dirent.name.endsWith(".pb"));
 
-  await forEachWithConcurrency(pbFiles, 16, async (dirent) => {
-    const fullPath = path.join(rootPath, dirent.name);
-    const st = await safeStat(fullPath);
-    if (!st) return;
+  const results = await mapWithConcurrency<(typeof pbFiles)[number], ConversationFile | null>(
+    pbFiles,
+    pbFiles.length,
+    async (dirent) => {
+      const fullPath = path.join(rootPath, dirent.name);
+      const release = await statSemaphore.acquire();
+      try {
+        const st = await safeStat(fullPath);
+        if (!st) return null;
+        return {
+          id: dirent.name.slice(0, -3),
+          source,
+          rootId: root.id,
+          path: fullPath,
+          sizeBytes: st.size,
+          mtimeMs: st.mtimeMs
+        } satisfies ConversationFile;
+      } finally {
+        release();
+      }
+    }
+  );
 
-    entries.push({
-      id: dirent.name.slice(0, -3),
-      source,
-      rootId: root.id,
-      path: fullPath,
-      sizeBytes: st.size,
-      mtimeMs: st.mtimeMs
-    });
-  });
+  const entries = results.filter((e): e is ConversationFile => e !== null);
 
   _dirCache.set(root.id, {
     rootPath,
