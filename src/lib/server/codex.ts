@@ -467,10 +467,10 @@ export async function getCodexRawContent(
           rawLines.push(line);
         }
       } else {
-        // We've reached the cap of lines to return. Mark as truncated but keep reading
-        // to compute accurate total line counts without storing additional payload.
+        // We've reached the cap of lines to return. Mark as truncated and stop reading
+        // further lines so that I/O remains bounded for very large sessions.
         truncated = true;
-        // Do not store further lines.
+        break;
       }
     }
   } finally {
