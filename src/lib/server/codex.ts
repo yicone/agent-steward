@@ -2,6 +2,7 @@ import "server-only";
 
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
+import type { Dir } from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 
@@ -103,6 +104,17 @@ export async function collectJsonlFiles(
     return results;
   }
 
+  async function forEachWithConcurrency<T>(
+    items: T[],
+    limit: number,
+    fn: (item: T, index: number) => Promise<void>
+  ): Promise<void> {
+    await mapWithConcurrency(items, limit, async (item, index) => {
+      await fn(item, index);
+      return 0;
+    });
+  }
+
   let dirents: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }> = [];
   try {
     dirents = await fs.readdir(dir, { withFileTypes: true });
@@ -132,7 +144,7 @@ export async function collectJsonlFiles(
   const FILE_STAT_CONCURRENCY = 8;
   const DIR_TRAVERSE_CONCURRENCY = 4;
 
-  await mapWithConcurrency(fileEntries, FILE_STAT_CONCURRENCY, async (fullPath) => {
+  await forEachWithConcurrency(fileEntries, FILE_STAT_CONCURRENCY, async (fullPath) => {
     const st = await safeStat(fullPath);
     if (st) {
       results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
@@ -268,7 +280,7 @@ async function hasAnyJsonlFile(
   const { partialErrors, strict } = opts;
 
   async function walk(currentDir: string, depth: number): Promise<boolean> {
-    let handle: fs.Dir | undefined;
+    let handle: Dir | null = null;
     try {
       handle = await fs.opendir(currentDir);
     } catch (err: unknown) {
@@ -298,7 +310,9 @@ async function hasAnyJsonlFile(
         }
       }
     } finally {
-      await handle.close();
+      if (handle) {
+        await handle.close().catch(() => {});
+      }
     }
 
     return false;
