@@ -95,6 +95,28 @@ type DirCacheEntry = {
 /** TTL for cached directory listings (milliseconds). */
 const DIR_CACHE_TTL_MS = 10_000;
 
+async function forEachWithConcurrency<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  if (items.length === 0) return;
+
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        if (currentIndex >= items.length) {
+          return;
+        }
+
+        await worker(items[currentIndex]);
+      }
+    })
+  );
+}
+
 /**
  * In-memory cache keyed by root id.
  * Exported only for tests; production code should use {@link scanRoot}.
@@ -166,12 +188,12 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
   }
 
   const entries: ConversationFile[] = [];
-  for (const dirent of dirents) {
-    if (!dirent.isFile()) continue;
-    if (!dirent.name.endsWith(".pb")) continue;
+  const pbFiles = dirents.filter((dirent) => dirent.isFile() && dirent.name.endsWith(".pb"));
+
+  await forEachWithConcurrency(pbFiles, 16, async (dirent) => {
     const fullPath = path.join(rootPath, dirent.name);
     const st = await safeStat(fullPath);
-    if (!st) continue;
+    if (!st) return;
 
     entries.push({
       id: dirent.name.slice(0, -3),
@@ -181,7 +203,7 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
       sizeBytes: st.size,
       mtimeMs: st.mtimeMs
     });
-  }
+  });
 
   _dirCache.set(root.id, {
     rootPath,
