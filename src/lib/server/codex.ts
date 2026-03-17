@@ -285,12 +285,15 @@ async function hasAnyJsonlFile(
       handle = await fs.opendir(currentDir);
     } catch (err: unknown) {
       const e = err as NodeJS.ErrnoException;
+      const code = e?.code;
       const message = e && e.message ? e.message : String(err);
       if (strict && depth === 0) {
         // Surface failures to read the root directory when in strict mode.
         throw err;
       }
-      if (partialErrors) {
+      // Ignore transient nested ENOENT/ENOTDIR while preserving actionable
+      // permission/readability failures.
+      if (partialErrors && !(depth > 0 && (code === "ENOENT" || code === "ENOTDIR"))) {
         partialErrors.push(`Error reading ${currentDir}: ${message}`);
       }
       return false;
@@ -501,7 +504,7 @@ export async function getCodexTrajectoryMetaMap(
     for (const file of files) {
       const id = path.basename(file.path, ".jsonl");
       const existing = result[id];
-      if (existing && (existing.title || existing.cwd)) continue; // already have metadata from a previous root
+      if (existing?.title && existing?.cwd) continue; // already complete from a previous root
 
       let fd: fs.FileHandle | undefined;
       try {
@@ -514,13 +517,16 @@ export async function getCodexTrajectoryMetaMap(
         const meta = extractCodexSessionMeta(rawEvents);
         const title = extractCodexTitle(rawEvents);
         result[id] = {
-          ...(title ? { title } : {}),
-          ...(meta.cwd ? { cwd: meta.cwd } : {})
+          ...(existing ?? {}),
+          ...(!existing?.title && title ? { title } : {}),
+          ...(!existing?.cwd && meta.cwd ? { cwd: meta.cwd } : {})
         };
       } catch {
         // Best-effort; skip files that can't be read
       } finally {
-        await fd?.close().catch(() => {});
+        if (fd) {
+          await fd.close().catch(() => {});
+        }
       }
     }
   }

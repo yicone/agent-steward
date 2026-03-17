@@ -1946,10 +1946,13 @@ export default function HomeClient() {
       const restoredView = viewFromUrl(view ?? null, "antigravity");
       setAntigravityView(restoredView);
       apiView = undefined;
-    } else {
+    } else if (effectiveSource === "windsurf") {
       const restoredView = viewFromUrl(view ?? null, "windsurf");
       setWindsurfView(restoredView);
       apiView = restoredView !== "chat" ? "trajectory" : "chat";
+    } else {
+      // Codex only supports trajectory mode regardless of URL `view`.
+      apiView = "trajectory";
     }
 
     if (filters) setTrajectoryFilters(filters);
@@ -2012,7 +2015,12 @@ export default function HomeClient() {
     // or while the async restore is still in progress, so replaceState never overwrites
     // the URL before restoration (including row/expanded state) is fully applied.
     if (urlInitRef.current.id || urlRestoringRef.current) return;
-    const currentView = source === "antigravity" ? antigravityView : windsurfView;
+    const currentView =
+      source === "antigravity"
+        ? antigravityView
+        : source === "windsurf"
+          ? windsurfView
+          : "trajectory";
 
     // Derive expanded groups from collapsedExecutionGroups (inverse mapping)
     const expanded: string[] = [];
