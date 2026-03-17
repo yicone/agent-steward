@@ -17,7 +17,7 @@ import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSear
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
 import { parseUrlState, viewToUrl, viewFromUrl, syncUrlState } from "@/lib/urlState";
-import type { UrlViewerState } from "@/lib/urlState";
+import type { UrlViewerState, TrajectoryFilterFlags } from "@/lib/urlState";
 import type {
   AppConfig,
   ChatMessage,
@@ -32,15 +32,7 @@ import type {
 type ApiConfigResponse = { path: string; config: AppConfig };
 type ApiConversationListResponse = { items: ConversationListItem[]; limit: number; offset: number };
 
-type TrajectoryFilters = {
-  thought: boolean;
-  tool: boolean;
-  command: boolean;
-  status: boolean;
-  errorsOnly: boolean;
-  hasOutput: boolean;
-  stepTypeFilter: string;
-};
+type TrajectoryFilters = TrajectoryFilterFlags & Pick<UrlViewerState, "stepTypeFilter">;
 
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
