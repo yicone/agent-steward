@@ -42,7 +42,9 @@ const STAT_CONCURRENCY = 16;
 
 /** Simple counting semaphore to cap cross-root stat() concurrency. */
 class Semaphore {
+  /** FIFO waiter queue stored as a plain array with a head pointer to avoid O(n) shift(). */
   private readonly _waiters: Array<() => void> = [];
+  private _head = 0;
   private _available: number;
 
   constructor(limit: number) {
@@ -60,8 +62,14 @@ class Semaphore {
   }
 
   private _release(): void {
-    if (this._waiters.length > 0) {
-      this._waiters.shift()!();
+    if (this._head < this._waiters.length) {
+      const waiter = this._waiters[this._head++];
+      /* compact the array once all pending waiters have been consumed */
+      if (this._head === this._waiters.length) {
+        this._waiters.length = 0;
+        this._head = 0;
+      }
+      waiter();
     } else {
       this._available++;
     }
@@ -136,7 +144,7 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
 
   const results = await mapWithConcurrency<(typeof pbFiles)[number], ConversationFile | null>(
     pbFiles,
-    pbFiles.length,
+    STAT_CONCURRENCY,
     async (dirent) => {
       const fullPath = path.join(rootPath, dirent.name);
       const release = await statSemaphore.acquire();
