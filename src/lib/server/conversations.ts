@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -37,7 +38,7 @@ async function countJsonlFiles(
 
   while (stack.length > 0) {
     const { dir, depth, isRoot } = stack.pop() as WorkItem;
-    let dirents: Awaited<ReturnType<typeof fs.readdir>>;
+    let dirents: Dirent[] = [];
 
     try {
       dirents = await fs.readdir(dir, { withFileTypes: true });
@@ -321,4 +322,3 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
 export async function probeAllRootsHealth(roots: RootConfig[]): Promise<RootHealth[]> {
   return Promise.all(roots.map((r) => probeRootHealth(r)));
 }
-
