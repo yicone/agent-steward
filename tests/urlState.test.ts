@@ -64,6 +64,7 @@ describe("parseUrlState", () => {
   it("parses source", () => {
     expect(parseUrlState("?source=antigravity").source).toBe("antigravity");
     expect(parseUrlState("?source=windsurf").source).toBe("windsurf");
+    expect(parseUrlState("?source=codex").source).toBe("codex");
   });
 
   it("ignores invalid source", () => {
@@ -147,10 +148,10 @@ describe("parseUrlState", () => {
 
   it("parses a full realistic URL", () => {
     const search =
-      "?source=windsurf&id=session-42&view=trajectory&ft=110010&stepType=CMD&expanded=eg-1,eg-3&row=event:99&inspector=event&includeCleared=1";
+      "?source=codex&id=session-42&view=trajectory&ft=110010&stepType=CMD&expanded=eg-1,eg-3&row=event:99&inspector=event&includeCleared=1";
     const result = parseUrlState(search);
     expect(result).toEqual({
-      source: "windsurf",
+      source: "codex",
       id: "session-42",
       view: "trajectory",
       filters: {
