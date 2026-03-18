@@ -208,7 +208,7 @@ async function scanCodexRoot(root: RootConfig, rootPath: string, rootMtimeMs: nu
   const files = await collectJsonlFiles(rootPath);
   const entries: ConversationFile[] = files.map((f) => ({
     id: path.basename(f.path, ".jsonl"),
-    source: "codex" as Source,
+    source: "codex",
     rootId: root.id,
     path: f.path,
     sizeBytes: f.sizeBytes,
