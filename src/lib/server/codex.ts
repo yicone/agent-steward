@@ -172,6 +172,15 @@ export async function collectJsonlFiles(
     }
   }
 
+  // Ensure deterministic ordering regardless of concurrent traversal timing.
+  // Primary sort: modification time (newest first). Tiebreaker: path.
+  results.sort((a, b) => {
+    if (a.mtimeMs !== b.mtimeMs) {
+      return b.mtimeMs - a.mtimeMs;
+    }
+    return a.path.localeCompare(b.path);
+  });
+
   return results;
 }
 
