@@ -429,7 +429,7 @@ export async function getCodexRawContent(
   filePath: string;
   rawLines: unknown[];
   truncated: boolean;
-  totalLines: number;
+  totalLines?: number;
   returnedLines: number;
 }> {
   const filePath = await findCodexSessionFile(id, config.roots);
@@ -484,7 +484,13 @@ export async function getCodexRawContent(
     truncated = returnedLines < totalNonEmptyLines;
   }
 
-  return { filePath, rawLines, truncated, totalLines, returnedLines };
+  return {
+    filePath,
+    rawLines,
+    truncated,
+    ...(truncated ? {} : { totalLines }),
+    returnedLines
+  };
 }
 
 /**
