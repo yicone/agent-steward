@@ -32,7 +32,7 @@ import type {
 type ApiConfigResponse = { path: string; config: AppConfig };
 type ApiConversationListResponse = { items: ConversationListItem[]; limit: number; offset: number };
 
-type TrajectoryFilters = TrajectoryFilterFlags & Pick<UrlViewerState, "stepTypeFilter">;
+type TrajectoryFilters = TrajectoryFilterFlags & Pick<UrlViewerState["filters"], "stepTypeFilter">;
 
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
