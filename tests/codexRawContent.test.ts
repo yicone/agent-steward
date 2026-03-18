@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { getCodexRawContent } from "../src/lib/server/codex";
+import { getCodexConversation, getCodexRawContent } from "../src/lib/server/codex";
 import type { AppConfig, RootConfig } from "../src/lib/types";
 
 let tmpDir: string;
@@ -26,6 +26,33 @@ function makeConfig(roots: RootConfig[]): AppConfig {
 }
 
 describe("getCodexRawContent", () => {
+  it("prefers the selected Codex root when duplicate session ids exist", async () => {
+    const rootA = path.join(tmpDir, "sessions-a");
+    const rootB = path.join(tmpDir, "sessions-b");
+    await fs.mkdir(rootA, { recursive: true });
+    await fs.mkdir(rootB, { recursive: true });
+    await fs.writeFile(
+      path.join(rootA, "shared.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "from-a" } })}\n`
+    );
+    await fs.writeFile(
+      path.join(rootB, "shared.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "from-b" } })}\n`
+    );
+
+    const config = makeConfig([
+      { id: "r1", source: "codex", path: rootA, enabled: true },
+      { id: "r2", source: "codex", path: rootB, enabled: true }
+    ]);
+
+    const raw = await getCodexRawContent("shared", config, { preferredRootId: "r2" });
+    const conversation = await getCodexConversation("shared", config, { preferredRootId: "r2" });
+
+    expect(raw.filePath).toBe(path.join(rootB, "shared.jsonl"));
+    expect(raw.rawLines).toEqual([{ type: "user_message", item: { content: "from-b" } }]);
+    expect(conversation.events[0]?.text).toContain("from-b");
+  });
+
   it("returns exact totalLines for non-truncated files", async () => {
     const rootDir = path.join(tmpDir, "sessions");
     await fs.mkdir(rootDir, { recursive: true });

@@ -30,6 +30,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   }
 
   const url = new URL(req.url);
+  const rootId = url.searchParams.get("rootId") ?? undefined;
 
   try {
     if (source === "antigravity") {
@@ -60,7 +61,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
 
     if (source === "codex") {
       const { config } = await readConfig();
-      const codex = await getCodexConversation(id, config);
+      const codex = await getCodexConversation(id, config, { preferredRootId: rootId });
       const out: ConversationContent = {
         kind: "trajectory",
         source: "codex",

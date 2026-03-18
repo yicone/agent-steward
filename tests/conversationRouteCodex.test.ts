@@ -99,6 +99,7 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
     })
     expect(isSessionIndexedMock).not.toHaveBeenCalled()
     expect(getTrajectoryMetaMapCachedMock).toHaveBeenCalledWith({ source: "codex", config })
+    expect(getCodexConversationMock).toHaveBeenCalledWith("session-1", config, { preferredRootId: undefined })
     expect(indexSessionMock).toHaveBeenCalledWith(
       "session-1",
       "codex",
@@ -106,5 +107,36 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
       "/workspace/project",
       events,
     )
+  })
+
+  it("passes the selected rootId through to Codex conversation loading", async () => {
+    const config = {
+      schemaVersion: 1,
+      roots: [],
+      windsurf: {},
+      ui: { defaultSource: "codex", sortOrder: "mtime_desc" },
+    }
+    readConfigMock.mockResolvedValue({ config })
+    getCodexConversationMock.mockResolvedValue({
+      events: [],
+      summary: {
+        turnCount: 0,
+        toolCount: 0,
+        commandCount: 0,
+      },
+    })
+    getTrajectoryMetaMapCachedMock.mockResolvedValue({})
+    vi.spyOn(globalThis, "setImmediate").mockImplementation((fn: (...args: never[]) => void) => {
+      fn()
+      return 0 as never
+    })
+
+    const response = await GET(new Request("http://localhost/api/conversations/codex/session-1?rootId=root-2"), {
+      params: { source: "codex", id: "session-1" },
+    })
+
+    await Promise.resolve()
+    expect(response.status).toBe(200)
+    expect(getCodexConversationMock).toHaveBeenCalledWith("session-1", config, { preferredRootId: "root-2" })
   })
 })

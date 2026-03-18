@@ -1627,7 +1627,7 @@ export default function HomeClient() {
     id: string,
     stepOffset?: number,
     view?: "chat" | "trajectory",
-    opts?: { includeCleared?: boolean }
+    opts?: { includeCleared?: boolean; rootId?: string }
   ): Promise<ConversationContent | null> => {
     setLoadingContent(true);
     setError(null);
@@ -1639,6 +1639,10 @@ export default function HomeClient() {
         if (view === "trajectory") sp.set("view", "trajectory");
         const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
         if (includeCleared) sp.set("includeCleared", "1");
+        qp = `?${sp.toString()}`;
+      } else if (nextSource === "codex" && opts?.rootId) {
+        const sp = new URLSearchParams();
+        sp.set("rootId", opts.rootId);
         qp = `?${sp.toString()}`;
       }
       const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
@@ -1681,7 +1685,9 @@ export default function HomeClient() {
       setAntigravityView("markdown");
       setWindsurfView("chat");
       setCollapsedExecutionGroups({});
-      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined).catch(
+      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined, {
+        rootId: match?.rootId
+      }).catch(
         (e) => setError(e instanceof Error ? e.message : String(e))
       );
     },
@@ -1963,7 +1969,10 @@ export default function HomeClient() {
     setSelectedKey(key);
     setSelectedId(id!);
 
-    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then((loaded) => {
+    loadConversation(effectiveSource, id!, 0, apiView, {
+      includeCleared: urlCleared === true,
+      rootId: match?.rootId
+    }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
       if (!loaded) { urlRestoringRef.current = false; return; }
       // Guard against the user navigating away before this async callback fires.
@@ -2179,7 +2188,9 @@ export default function HomeClient() {
                     setAntigravityView("markdown");
                     setWindsurfView("chat");
                     setCollapsedExecutionGroups({});
-                    loadConversation(source, it.id, 0, source === "windsurf" ? "chat" : undefined).catch(() => {});
+                    loadConversation(source, it.id, 0, source === "windsurf" ? "chat" : undefined, {
+                      rootId: it.rootId
+                    }).catch(() => {});
                   }}
                   title={it.path}
                 >
@@ -2246,7 +2257,11 @@ export default function HomeClient() {
             <div className="mb-2 flex justify-end">
               <Button asChild variant="outline" size="sm">
                 <a
-                  href={`/api/conversations/${source}/${selectedId}/diagnostic`}
+                  href={
+                    source === "codex" && selectedItem?.rootId
+                      ? `/api/conversations/${source}/${selectedId}/diagnostic?rootId=${encodeURIComponent(selectedItem.rootId)}`
+                      : `/api/conversations/${source}/${selectedId}/diagnostic`
+                  }
                   title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)"
                 >
                   Diagnostic JSON

@@ -31,6 +31,7 @@ export type DiagnosticExport = {
 export async function buildDiagnosticExport(params: {
   source: Source;
   cascadeId: string;
+  rootId?: string;
   config: AppConfig;
   windsurf?: {
     allSteps?: boolean;
@@ -112,7 +113,7 @@ export async function buildDiagnosticExport(params: {
   }
 
   if (source === "codex") {
-    const codex = await getCodexRawContent(cascadeId, config);
+    const codex = await getCodexRawContent(cascadeId, config, { preferredRootId: params.rootId });
     return {
       schemaVersion: 1,
       generatedAt,

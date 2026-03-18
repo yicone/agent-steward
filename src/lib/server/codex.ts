@@ -199,13 +199,25 @@ const _sessionPathCache = new Map<string, SessionPathCacheEntry>();
  * Uses a TTL-based per-root id→path cache so repeated calls (e.g. load
  * conversation + diagnostic export) avoid a full O(N) traversal each time.
  */
-async function findCodexSessionFile(id: string, roots: RootConfig[]): Promise<string | null> {
+async function findCodexSessionFile(
+  id: string,
+  roots: RootConfig[],
+  preferredRootId?: string
+): Promise<string | null> {
   const now = Date.now();
   // Collect per-root scan errors to surface when the session isn't found.
   // A single unreadable root must not block other valid roots.
   const scanErrors: string[] = [];
 
-  for (const root of roots) {
+  const orderedRoots =
+    preferredRootId == null
+      ? roots
+      : [
+          ...roots.filter((root) => root.id === preferredRootId),
+          ...roots.filter((root) => root.id !== preferredRootId)
+        ];
+
+  for (const root of orderedRoots) {
     if (!root.enabled || root.source !== "codex") continue;
     const rootPath = expandHome(root.path);
 
@@ -399,9 +411,10 @@ export async function getCodexStatus(config: AppConfig): Promise<SourcesStatus["
  */
 export async function getCodexConversation(
   id: string,
-  config: AppConfig
+  config: AppConfig,
+  opts?: { preferredRootId?: string }
 ): Promise<{ events: TrajectoryEvent[]; summary: TrajectorySummary }> {
-  const filePath = await findCodexSessionFile(id, config.roots);
+  const filePath = await findCodexSessionFile(id, config.roots, opts?.preferredRootId);
   if (!filePath) {
     throw new Error(`Codex session not found: ${id}. The file may have been deleted or is not in any configured root.`);
   }
@@ -424,7 +437,8 @@ export async function getCodexConversation(
  */
 export async function getCodexRawContent(
   id: string,
-  config: AppConfig
+  config: AppConfig,
+  opts?: { preferredRootId?: string }
 ): Promise<{
   filePath: string;
   rawLines: unknown[];
@@ -432,7 +446,7 @@ export async function getCodexRawContent(
   totalLines?: number;
   returnedLines: number;
 }> {
-  const filePath = await findCodexSessionFile(id, config.roots);
+  const filePath = await findCodexSessionFile(id, config.roots, opts?.preferredRootId);
   if (!filePath) {
     throw new Error(`Codex session not found: ${id}`);
   }
