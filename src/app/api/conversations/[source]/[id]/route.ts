@@ -69,14 +69,23 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       };
       const eventsSnap = codex.events;
       setImmediate(() => {
-        readConfig()
-          .then(({ config: cfg }) => getTrajectoryMetaMapCached({ source: "codex", config: cfg }))
-          .then((metaMap) => {
-            const meta = metaMap[id] ?? {};
-            indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+        isSessionIndexed(id, "codex")
+          .then((indexed) => {
+            if (indexed) {
+              return;
+            }
+            return readConfig()
+              .then(({ config: cfg }) => getTrajectoryMetaMapCached({ source: "codex", config: cfg }))
+              .then((metaMap) => {
+                const meta = metaMap[id] ?? {};
+                indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+              });
           })
           .catch((err) => {
-            console.warn(`[search] Failed to index codex session ${id}:`, err instanceof Error ? err.message : err);
+            console.warn(
+              `[search] Failed to index codex session ${id}:`,
+              err instanceof Error ? err.message : err
+            );
           });
       });
       return NextResponse.json(out);
