@@ -1964,14 +1964,22 @@ export default function HomeClient() {
     }
 
     // Select the conversation
-    const match = items.find((it) => it.id === id);
-    const key = match ? `${match.rootId}:${match.id}` : `unknown:${id}`;
+    const match = items.find((it) => {
+      if (id == null) return false;
+      // When a rootId is present in the URL state, use it to disambiguate
+      if (typeof rootId !== "undefined" && rootId !== null) {
+        return it.id === id && it.rootId === rootId;
+      }
+      return it.id === id;
+    });
+    const effectiveRootId = match?.rootId ?? rootId;
+    const key = effectiveRootId ? `${effectiveRootId}:${id}` : `unknown:${id}`;
     setSelectedKey(key);
     setSelectedId(id!);
 
     loadConversation(effectiveSource, id!, 0, apiView, {
       includeCleared: urlCleared === true,
-      rootId: match?.rootId
+      rootId: effectiveRootId
     }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
       if (!loaded) { urlRestoringRef.current = false; return; }
