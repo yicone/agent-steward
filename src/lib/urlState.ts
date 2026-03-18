@@ -87,7 +87,15 @@ export function viewFromUrl(
   source: Source,
 ): "markdown" | "chat" | "transcript" | "trajectory" {
   if (!urlView || urlView === "compact") {
-    return source === "antigravity" ? "markdown" : "chat";
+    if (source === "antigravity") {
+      return "markdown";
+    }
+    if (source === "windsurf") {
+      return "chat";
+    }
+    // Codex and any other sources do not have a chat/compact view;
+    // default them to the trajectory viewer.
+    return "trajectory";
   }
   return urlView; // "transcript" | "trajectory" are the same internally
 }
