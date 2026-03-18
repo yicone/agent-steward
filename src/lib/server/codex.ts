@@ -17,6 +17,7 @@ import {
 
 const MAX_CODEX_RAW_LINES = 5000;
 const MAX_CODEX_SESSION_BYTES = 5 * 1024 * 1024; // 5 MiB cap for UI conversation loading
+const MAX_CODEX_CONVERSATION_LINES = 5000;
 
 /* ---------- helpers ---------- */
 
@@ -435,7 +436,33 @@ export async function getCodexConversation(
     );
   }
 
-  const content = await fs.readFile(filePath, "utf-8");
+  const lines: string[] = [];
+  const stream = createReadStream(filePath, { encoding: "utf-8" });
+  const rl = readline.createInterface({
+    input: stream,
+    crlfDelay: Infinity
+  });
+
+  try {
+    for await (const line of rl) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      lines.push(line);
+
+      if (lines.length >= MAX_CODEX_CONVERSATION_LINES) {
+        // We've reached the cap of lines to parse for the UI conversation.
+        break;
+      }
+    }
+  } finally {
+    rl.close();
+    stream.destroy();
+  }
+
+  const content = lines.join("\n");
   const rawEvents = parseCodexJsonl(content);
   return normalizeCodexEventsToTrajectoryEvents(rawEvents);
 }
