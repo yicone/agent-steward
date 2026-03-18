@@ -267,7 +267,10 @@ async function findCodexSessionFile(
     }
     const idToPath = new Map<string, string>();
     for (const f of files) {
-      idToPath.set(path.basename(f.path, ".jsonl"), f.path);
+      const sessionId = path.basename(f.path, ".jsonl");
+      if (!idToPath.has(sessionId)) {
+        idToPath.set(sessionId, f.path);
+      }
     }
     _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now, rootPath });
 
