@@ -10,12 +10,26 @@ import { collectJsonlFiles } from "@/lib/server/codex";
 
 /* ---------- helpers ---------- */
 
-async function safeStat(p: string) {
+async function statPath(
+  p: string
+): Promise<{ stat: Awaited<ReturnType<typeof fs.stat>> | null; errorCode?: string }> {
   try {
-    return await fs.stat(p);
-  } catch {
-    return null;
+    return { stat: await fs.stat(p) };
+  } catch (err) {
+    let errorCode: string | undefined;
+    if (err != null && typeof err === "object" && "code" in err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (typeof code === "string") {
+        errorCode = code;
+      }
+    }
+    return { stat: null, errorCode };
   }
+}
+
+async function safeStat(p: string) {
+  const { stat } = await statPath(p);
+  return stat;
 }
 
 /**
@@ -325,15 +339,18 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
   const rootPath = expandHome(root.path);
   const start = Date.now();
 
-  const rootStat = await safeStat(rootPath);
+  const { stat: rootStat, errorCode: rootStatError } = await statPath(rootPath);
   if (!rootStat) {
     return {
       rootId: root.id,
       path: rootPath,
-      status: "missing",
+      status: rootStatError === "EACCES" || rootStatError === "EPERM" ? "unreadable" : "missing",
       fileCount: 0,
       scanMs: Date.now() - start,
-      error: "Path does not exist"
+      error:
+        rootStatError === "EACCES" || rootStatError === "EPERM"
+          ? "Permission denied reading path"
+          : "Path does not exist"
     };
   }
 

@@ -171,6 +171,31 @@ describe("probeRootHealth", () => {
     expect(health.error).toBe("Path is not a directory");
   });
 
+  it("reports unreadable when stat on the root path is permission denied", async () => {
+    const parentDir = path.join(tmpDir, "blocked-parent");
+    const rootDir = path.join(parentDir, "child-root");
+    await fs.mkdir(rootDir, { recursive: true });
+    await fs.writeFile(path.join(rootDir, "a.pb"), "a");
+
+    if (process.platform === "win32" || typeof process.getuid !== "function" || process.getuid() === 0) {
+      const root: RootConfig = { id: "blocked", source: "antigravity", path: rootDir, enabled: true };
+      const health = await probeRootHealth(root);
+      expect(["healthy", "unreadable"]).toContain(health.status);
+      return;
+    }
+
+    await fs.chmod(parentDir, 0o000);
+    try {
+      const root: RootConfig = { id: "blocked", source: "antigravity", path: rootDir, enabled: true };
+      const health = await probeRootHealth(root);
+      expect(health.status).toBe("unreadable");
+      expect(health.fileCount).toBe(0);
+      expect(health.error).toBe("Permission denied reading path");
+    } finally {
+      await fs.chmod(parentDir, 0o755);
+    }
+  });
+
   it("reports unreadable for permission-denied directories", async () => {
     const rootDir = path.join(tmpDir, "noperm");
     await fs.mkdir(rootDir);
