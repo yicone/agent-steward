@@ -35,6 +35,16 @@ describe("parseCodexJsonlLine", () => {
     const result = parseCodexJsonlLine('  {"type":"session_meta","item":{}}  ');
     expect(result?.type).toBe("session_meta");
   });
+
+  it("parses payload-wrapped lines from current Codex CLI sessions", () => {
+    const result = parseCodexJsonlLine(
+      '{"timestamp":"2025-11-16T12:04:49.622Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\\"command\\":\\"pwd\\"}","call_id":"call_123"}}'
+    );
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("response_item");
+    expect(result?.timestamp).toBe("2025-11-16T12:04:49.622Z");
+    expect(result?.payload?.type).toBe("function_call");
+  });
 });
 
 /* ---------- parseCodexJsonl ---------- */
@@ -74,6 +84,17 @@ describe("extractCodexSessionMeta", () => {
     expect(meta.timestamp).toBe("2025-03-14T12:00:00Z");
   });
 
+  it("extracts metadata from payload-wrapped session_meta records", () => {
+    const events = parseCodexJsonl(
+      '{"timestamp":"2025-11-16T12:04:49.622Z","type":"session_meta","payload":{"id":"abc123","session_id":"abc123","cwd":"/home/user/project","model":"gpt-5"}}'
+    );
+    const meta = extractCodexSessionMeta(events);
+    expect(meta.sessionId).toBe("abc123");
+    expect(meta.cwd).toBe("/home/user/project");
+    expect(meta.model).toBe("gpt-5");
+    expect(meta.timestamp).toBe("2025-11-16T12:04:49.622Z");
+  });
+
   it("returns empty object when no session_meta event", () => {
     const events = parseCodexJsonl('{"type":"user_message","item":{"content":"Hi"}}');
     expect(extractCodexSessionMeta(events)).toEqual({});
@@ -102,6 +123,13 @@ describe("extractCodexTitle", () => {
   it("returns undefined when no user message", () => {
     const events = parseCodexJsonl('{"type":"session_meta","item":{}}');
     expect(extractCodexTitle(events)).toBeUndefined();
+  });
+
+  it("extracts title from payload-wrapped response_item user messages", () => {
+    const events = parseCodexJsonl(
+      '{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Investigate flaky tests\\nand summarize root cause"}]}}'
+    );
+    expect(extractCodexTitle(events)).toBe("Investigate flaky tests");
   });
 });
 
@@ -226,5 +254,55 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     for (const event of events) {
       expect(event.source).toBe("codex");
     }
+  });
+
+  it("normalizes payload-wrapped CLI records into metadata, assistant, and tool events", () => {
+    const raw = parseCodexJsonl(
+      [
+        '{"timestamp":"2025-11-16T12:04:49.622Z","type":"session_meta","payload":{"session_id":"s2","cwd":"/workspace/demo","model":"gpt-5"}}',
+        '{"timestamp":"2025-11-16T12:04:49.700Z","type":"event_msg","payload":{"type":"user_message","message":"List files"}}',
+        '{"timestamp":"2025-11-16T12:04:49.800Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\\"command\\":\\"ls\\"}","call_id":"call_1"}}',
+        '{"timestamp":"2025-11-16T12:04:49.900Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"file-a\\nfile-b"}}',
+        '{"timestamp":"2025-11-16T12:04:50.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Here are the files."}]}}'
+      ].join("\n")
+    );
+
+    const { events, summary } = normalizeCodexEventsToTrajectoryEvents(raw);
+
+    expect(events).toHaveLength(5);
+    expect(events[0]).toMatchObject({
+      kind: "status",
+      stepType: "session_meta",
+      cwd: "/workspace/demo",
+      createdAt: "2025-11-16T12:04:49.622Z"
+    });
+    expect(events[1]).toMatchObject({
+      kind: "user",
+      stepType: "user_message",
+      text: "List files"
+    });
+    expect(events[2]).toMatchObject({
+      kind: "tool",
+      stepType: "function_call",
+      title: "shell"
+    });
+    expect(events[2]?.toolCalls?.[0]).toMatchObject({
+      id: "call_1",
+      name: "shell",
+      argumentsJson: '{"command":"ls"}'
+    });
+    expect(events[3]).toMatchObject({
+      kind: "tool",
+      stepType: "function_call_output",
+      output: "file-a\nfile-b"
+    });
+    expect(events[4]).toMatchObject({
+      kind: "assistant",
+      stepType: "assistant_message",
+      text: "Here are the files."
+    });
+    expect(summary.userCount).toBe(1);
+    expect(summary.assistantCount).toBe(1);
+    expect(summary.toolCount).toBe(2);
   });
 });

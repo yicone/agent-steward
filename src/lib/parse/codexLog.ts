@@ -5,15 +5,18 @@ import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 
 /**
  * Raw shape of a single line in a Codex session rollout `.jsonl` file.
- * Each line is a JSON object with a `type` discriminator and an `item` payload.
+ * Each line is a JSON object with a `type` discriminator and either an `item`
+ * or `payload` body depending on the Codex CLI version / emitter.
  */
 export type CodexRawEvent = {
   type: string;
   item?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
   seq?: number;
+  timestamp?: string;
 };
 
-/** Parsed session-level metadata extracted from a `session_meta` event. */
+/** Parsed session-level metadata extracted from a `session_meta` record. */
 export type CodexSessionMeta = {
   sessionId?: string;
   cwd?: string;
@@ -38,6 +41,104 @@ function getField(obj: unknown, ...keys: string[]): unknown {
   return undefined;
 }
 
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function extractMessageText(content: unknown): string | undefined {
+  if (typeof content === "string") {
+    return asNonEmptyString(content) ?? undefined;
+  }
+  if (!Array.isArray(content)) return undefined;
+
+  const parts = content
+    .map((part) => {
+      const record = asRecord(part);
+      if (!record) return null;
+      return asNonEmptyString(getField(record, "text", "content", "message") as unknown);
+    })
+    .filter((part): part is string => Boolean(part));
+
+  if (!parts.length) return undefined;
+  return parts.join("\n");
+}
+
+type NormalizedCodexRawEvent = {
+  type: string;
+  item: Record<string, unknown>;
+  timestamp?: string;
+};
+
+function normalizeRawCodexEvent(raw: CodexRawEvent): NormalizedCodexRawEvent {
+  const item = asRecord(raw.item) ?? asRecord(raw.payload) ?? {};
+  const topLevelTimestamp = asNonEmptyString(raw.timestamp) ?? undefined;
+  const itemTimestamp = asNonEmptyString(getField(item, "timestamp") as unknown) ?? undefined;
+
+  if (raw.type === "event_msg") {
+    const payloadType = asNonEmptyString(getField(item, "type") as unknown);
+    if (payloadType === "user_message") {
+      const content = asNonEmptyString(getField(item, "message", "content") as unknown) ?? extractMessageText(getField(item, "content"));
+      return {
+        type: "user_message",
+        item: {
+          ...item,
+          ...(content ? { content } : {})
+        },
+        timestamp: itemTimestamp ?? topLevelTimestamp
+      };
+    }
+    if (payloadType === "agent_message" || payloadType === "assistant_message") {
+      const message = asNonEmptyString(getField(item, "message", "content") as unknown) ?? extractMessageText(getField(item, "content"));
+      return {
+        type: "assistant_message",
+        item: {
+          ...item,
+          ...(message ? { content: message } : {})
+        },
+        timestamp: itemTimestamp ?? topLevelTimestamp
+      };
+    }
+    if (payloadType === "reasoning" || payloadType === "agent_reasoning") {
+      const content = asNonEmptyString(getField(item, "message", "content") as unknown) ?? extractMessageText(getField(item, "content"));
+      return {
+        type: "reasoning",
+        item: {
+          ...item,
+          ...(content ? { content } : {})
+        },
+        timestamp: itemTimestamp ?? topLevelTimestamp
+      };
+    }
+    if (payloadType) {
+      return { type: payloadType, item, timestamp: itemTimestamp ?? topLevelTimestamp };
+    }
+  }
+
+  if (raw.type === "response_item") {
+    const payloadType = asNonEmptyString(getField(item, "type") as unknown);
+    if (payloadType === "message") {
+      const role = asNonEmptyString(getField(item, "role") as unknown);
+      const content = extractMessageText(getField(item, "content"));
+      if (role === "user" || role === "assistant") {
+        return {
+          type: role === "user" ? "user_message" : "assistant_message",
+          item: {
+            ...item,
+            ...(content ? { content } : {})
+          },
+          timestamp: itemTimestamp ?? topLevelTimestamp
+        };
+      }
+    }
+    if (payloadType) {
+      return { type: payloadType, item, timestamp: itemTimestamp ?? topLevelTimestamp };
+    }
+  }
+
+  return { type: raw.type, item, timestamp: itemTimestamp ?? topLevelTimestamp };
+}
 function truncate(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}\n\n[truncated]`;
@@ -97,14 +198,15 @@ export function parseCodexJsonl(content: string): CodexRawEvent[] {
  * Extract session-level metadata from the first `session_meta` event.
  */
 export function extractCodexSessionMeta(events: CodexRawEvent[]): CodexSessionMeta {
-  const metaEvent = events.find((e) => e.type === "session_meta");
-  if (!metaEvent?.item) return {};
-  const item = metaEvent.item;
+  const metaEvent = events.find((e) => normalizeRawCodexEvent(e).type === "session_meta");
+  if (!metaEvent) return {};
+  const normalized = normalizeRawCodexEvent(metaEvent);
+  const item = normalized.item;
   return {
     sessionId: asNonEmptyString(item.session_id) ?? undefined,
     cwd: asNonEmptyString(item.cwd) ?? undefined,
     model: asNonEmptyString(item.model) ?? undefined,
-    timestamp: asNonEmptyString(item.timestamp) ?? undefined
+    timestamp: asNonEmptyString(item.timestamp) ?? normalized.timestamp
   };
 }
 
@@ -112,9 +214,12 @@ export function extractCodexSessionMeta(events: CodexRawEvent[]): CodexSessionMe
  * Extract a short title from the first user message in the session.
  */
 export function extractCodexTitle(events: CodexRawEvent[]): string | undefined {
-  const userEvent = events.find((e) => e.type === "user_message");
-  if (!userEvent?.item) return undefined;
-  const content = asNonEmptyString(getField(userEvent.item, "content") as unknown) ?? undefined;
+  const userEvent = events.find((e) => normalizeRawCodexEvent(e).type === "user_message");
+  if (!userEvent) return undefined;
+  const normalized = normalizeRawCodexEvent(userEvent);
+  const content =
+    asNonEmptyString(getField(normalized.item, "content") as unknown) ??
+    extractMessageText(getField(normalized.item, "content"));
   if (!content) return undefined;
   // Use first line, truncated to 120 chars
   const firstLine = content.split("\n")[0] ?? content;
@@ -134,10 +239,10 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
   let index = 0;
 
   for (const raw of rawEvents) {
-    const item = raw.item ?? {};
-    const timestamp = asNonEmptyString(getField(item, "timestamp") as unknown) ?? undefined;
+    const normalized = normalizeRawCodexEvent(raw);
+    const { item, timestamp } = normalized;
 
-    switch (raw.type) {
+    switch (normalized.type) {
       case "session_meta": {
         // Session metadata — emit as a status event
         const model = asNonEmptyString(getField(item, "model") as unknown);
@@ -280,7 +385,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           index,
           source: "codex",
           kind: "tool",
-          stepType: raw.type,
+          stepType: normalized.type,
           title: `${name} result`,
           output: resultText,
           ...(fnResultTruncated ? { outputTruncated: fnResultTruncated } : {}),
@@ -292,7 +397,9 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
 
       case "exec":
       case "shell":
-      case "command": {
+      case "command":
+      case "local_shell_call":
+      case "local_shell_call_output": {
         const cmd = asNonEmptyString(getField(item, "command", "cmd") as unknown) ?? "";
         const cwd = asNonEmptyString(getField(item, "cwd") as unknown) ?? undefined;
         const exitCode =
@@ -305,8 +412,8 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
           index,
           source: "codex",
           kind: "command",
-          stepType: raw.type,
-          title: cmd || raw.type,
+          stepType: normalized.type,
+          title: cmd || normalized.type,
           commandLine: cmd || undefined,
           cwd,
           exitCode,
@@ -319,16 +426,16 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
 
       case "error":
       case "system_event": {
-        const msg = asNonEmptyString(getField(item, "message", "content", "error") as unknown) ?? raw.type;
+        const msg = asNonEmptyString(getField(item, "message", "content", "error") as unknown) ?? normalized.type;
         events.push({
-          id: `${raw.type}_${index}`,
+          id: `${normalized.type}_${index}`,
           index,
           source: "codex",
-          kind: raw.type === "error" ? "other" : "status",
-          stepType: raw.type,
-          title: raw.type === "error" ? "Error" : "System",
+          kind: normalized.type === "error" ? "other" : "status",
+          stepType: normalized.type,
+          title: normalized.type === "error" ? "Error" : "System",
           text: msg,
-          status: raw.type === "error" ? "ERROR" : undefined,
+          status: normalized.type === "error" ? "ERROR" : undefined,
           createdAt: timestamp
         });
         break;
@@ -336,14 +443,16 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
 
       default: {
         // Emit unknown event types as "other" so nothing is silently dropped
-        const text = asNonEmptyString(getField(item, "content", "message", "text") as unknown) ?? undefined;
+        const text =
+          asNonEmptyString(getField(item, "content", "message", "text") as unknown) ??
+          extractMessageText(getField(item, "content"));
         events.push({
-          id: `other_${raw.type}_${index}`,
+          id: `other_${normalized.type}_${index}`,
           index,
           source: "codex",
           kind: "other",
-          stepType: raw.type,
-          title: raw.type,
+          stepType: normalized.type,
+          title: normalized.type,
           text,
           createdAt: timestamp
         });
