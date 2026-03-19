@@ -95,6 +95,16 @@ describe("extractCodexSessionMeta", () => {
     expect(meta.timestamp).toBe("2025-11-16T12:04:49.622Z");
   });
 
+  it("falls back to payload id when session_meta omits session_id", () => {
+    const events = parseCodexJsonl(
+      '{"timestamp":"2025-09-28T12:10:53.742Z","type":"session_meta","payload":{"id":"0199903b-abac-75d1-82ea-f87ef76c2ac8","cwd":"/home/user/project","model":"gpt-5-codex"}}'
+    );
+    const meta = extractCodexSessionMeta(events);
+    expect(meta.sessionId).toBe("0199903b-abac-75d1-82ea-f87ef76c2ac8");
+    expect(meta.cwd).toBe("/home/user/project");
+    expect(meta.model).toBe("gpt-5-codex");
+  });
+
   it("returns empty object when no session_meta event", () => {
     const events = parseCodexJsonl('{"type":"user_message","item":{"content":"Hi"}}');
     expect(extractCodexSessionMeta(events)).toEqual({});
@@ -157,6 +167,18 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     expect(meta?.kind).toBe("status");
     expect(meta?.stepType).toBe("session_meta");
     expect(meta?.cwd).toBe("/workspace");
+  });
+
+  it("session_meta status labels fall back to payload id when session_id is absent", () => {
+    const raw = parseCodexJsonl(
+      '{"timestamp":"2025-09-28T12:10:53.742Z","type":"session_meta","payload":{"id":"0199903b-abac-75d1-82ea-f87ef76c2ac8","cwd":"/home/user/project","model":"gpt-5-codex"}}'
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+    expect(events[0]).toMatchObject({
+      kind: "status",
+      stepType: "session_meta",
+      text: "model: gpt-5-codex, id: 0199903b-abac-75d1-82ea-f87ef76c2ac8"
+    });
   });
 
   it("user_message emits a user event", () => {
@@ -229,6 +251,19 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     expect(events[0]?.text).toBe("Let me think...");
   });
 
+  it("normalizes agent_reasoning payload text from current CLI event_msg records", () => {
+    const raw = parseCodexJsonl(
+      '{"timestamp":"2025-09-28T12:10:57.015Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"**Executing simple Python print command**"}}'
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+    expect(events[0]).toMatchObject({
+      kind: "thought",
+      stepType: "reasoning",
+      text: "**Executing simple Python print command**",
+      createdAt: "2025-09-28T12:10:57.015Z"
+    });
+  });
+
   it("command event emits a command kind", () => {
     const raw = parseCodexJsonl(
       '{"type":"exec","item":{"command":"ls -la","cwd":"/workspace","exit_code":0,"output":"total 8"}}'
@@ -274,6 +309,7 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
       kind: "status",
       stepType: "session_meta",
       cwd: "/workspace/demo",
+      text: "model: gpt-5, id: s2",
       createdAt: "2025-11-16T12:04:49.622Z"
     });
     expect(events[1]).toMatchObject({
