@@ -65,6 +65,13 @@ function extractMessageText(content: unknown): string | undefined {
   return parts.join("\n");
 }
 
+function extractInlineText(item: Record<string, unknown>): string | undefined {
+  return (
+    asNonEmptyString(getField(item, "message", "content", "text") as unknown) ??
+    extractMessageText(getField(item, "content"))
+  );
+}
+
 type NormalizedCodexRawEvent = {
   type: string;
   item: Record<string, unknown>;
@@ -79,7 +86,7 @@ function normalizeRawCodexEvent(raw: CodexRawEvent): NormalizedCodexRawEvent {
   if (raw.type === "event_msg") {
     const payloadType = asNonEmptyString(getField(item, "type") as unknown);
     if (payloadType === "user_message") {
-      const content = asNonEmptyString(getField(item, "message", "content") as unknown) ?? extractMessageText(getField(item, "content"));
+      const content = extractInlineText(item);
       return {
         type: "user_message",
         item: {
@@ -90,7 +97,7 @@ function normalizeRawCodexEvent(raw: CodexRawEvent): NormalizedCodexRawEvent {
       };
     }
     if (payloadType === "agent_message" || payloadType === "assistant_message") {
-      const message = asNonEmptyString(getField(item, "message", "content") as unknown) ?? extractMessageText(getField(item, "content"));
+      const message = extractInlineText(item);
       return {
         type: "assistant_message",
         item: {
@@ -101,7 +108,7 @@ function normalizeRawCodexEvent(raw: CodexRawEvent): NormalizedCodexRawEvent {
       };
     }
     if (payloadType === "reasoning" || payloadType === "agent_reasoning") {
-      const content = asNonEmptyString(getField(item, "message", "content") as unknown) ?? extractMessageText(getField(item, "content"));
+      const content = extractInlineText(item);
       return {
         type: "reasoning",
         item: {
@@ -203,7 +210,7 @@ export function extractCodexSessionMeta(events: CodexRawEvent[]): CodexSessionMe
   const normalized = normalizeRawCodexEvent(metaEvent);
   const item = normalized.item;
   return {
-    sessionId: asNonEmptyString(item.session_id) ?? undefined,
+    sessionId: asNonEmptyString(getField(item, "session_id", "id") as unknown) ?? undefined,
     cwd: asNonEmptyString(item.cwd) ?? undefined,
     model: asNonEmptyString(item.model) ?? undefined,
     timestamp: asNonEmptyString(item.timestamp) ?? normalized.timestamp
@@ -247,7 +254,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
         // Session metadata — emit as a status event
         const model = asNonEmptyString(getField(item, "model") as unknown);
         const cwd = asNonEmptyString(getField(item, "cwd") as unknown);
-        const sessionId = asNonEmptyString(getField(item, "session_id") as unknown);
+        const sessionId = asNonEmptyString(getField(item, "session_id", "id") as unknown);
         const label = [model && `model: ${model}`, sessionId && `id: ${sessionId}`].filter(Boolean).join(", ");
         events.push({
           id: `session_meta_${index}`,
@@ -264,7 +271,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
       }
 
       case "user_message": {
-        const content = asNonEmptyString(getField(item, "content") as unknown) ?? "";
+        const content = extractInlineText(item) ?? "";
         events.push({
           id: `user_${index}`,
           index,
@@ -279,7 +286,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
       }
 
       case "assistant_message": {
-        const content = asNonEmptyString(getField(item, "content") as unknown) ?? "";
+        const content = extractInlineText(item) ?? "";
         events.push({
           id: `assistant_${index}`,
           index,
@@ -295,7 +302,7 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
 
       case "reasoning": {
         // Internal reasoning / thinking step
-        const content = asNonEmptyString(getField(item, "content") as unknown) ?? "";
+        const content = extractInlineText(item) ?? "";
         events.push({
           id: `reasoning_${index}`,
           index,
