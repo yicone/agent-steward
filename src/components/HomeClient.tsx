@@ -1931,7 +1931,17 @@ export default function HomeClient() {
     if (urlInit.source && source !== urlInit.source) return;
 
     // Consume the init ref so this runs only once.
-    const { id, view, filters, expandedGroups, selectedRowId: urlRow, inspectorOpen: urlInspector, inspectorMode: urlInspMode, includeCleared: urlCleared } = urlInit;
+    const {
+      id,
+      rootId,
+      view,
+      filters,
+      expandedGroups,
+      selectedRowId: urlRow,
+      inspectorOpen: urlInspector,
+      inspectorMode: urlInspMode,
+      includeCleared: urlCleared
+    } = urlInit;
     urlInitRef.current = {}; // clear so future source switches reset normally
     urlRestoringRef.current = true; // block URL sync until the async restore fully settles
 
@@ -2040,6 +2050,7 @@ export default function HomeClient() {
     syncUrlState({
       source,
       id: selectedId,
+      rootId: selectedItem?.rootId ?? null,
       view: viewToUrl(currentView),
       filters: trajectoryFilters,
       expandedGroups: expanded,
@@ -2050,7 +2061,7 @@ export default function HomeClient() {
       includeCleared: source === "windsurf" ? windsurfIncludeCleared : false,
     });
   }, [
-    config, source, selectedId, antigravityView, windsurfView,
+    config, source, selectedId, selectedItem, antigravityView, windsurfView,
     trajectoryFilters, collapsedExecutionGroups, selectedRowId,
     inspectorOpen, inspectorMode, windsurfIncludeCleared
   ]);

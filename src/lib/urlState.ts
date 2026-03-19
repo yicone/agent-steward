@@ -18,6 +18,7 @@ export interface TrajectoryFilterFlags {
 export interface UrlViewerState {
   source: Source | null;
   id: string | null;
+  rootId?: string | null;
   /** Unified view mode across both sources (compact = markdown/chat). */
   view: "compact" | "transcript" | "trajectory" | null;
   filters: TrajectoryFilterFlags & { stepTypeFilter: string };
@@ -117,6 +118,9 @@ export function parseUrlState(search: string): Partial<UrlViewerState> {
   const id = p.get("id");
   if (id) state.id = id;
 
+  const rootId = p.get("rootId");
+  if (rootId) state.rootId = rootId;
+
   // view
   const view = p.get("view");
   if (view === "compact" || view === "transcript" || view === "trajectory") {
@@ -170,6 +174,7 @@ export function buildUrlSearch(state: UrlViewerState): string {
 
   if (state.source) p.set("source", state.source);
   if (state.id) p.set("id", state.id);
+  if (state.rootId) p.set("rootId", state.rootId);
 
   // Only include view when it is NOT the default "compact"
   if (state.view && state.view !== "compact") p.set("view", state.view);
