@@ -1,0 +1,49 @@
+import { describe, expect, it } from "vitest";
+
+import { resolveRestoredSelection } from "@/components/HomeClient";
+import type { ConversationListItem } from "@/lib/types";
+
+function makeItem(overrides: Partial<ConversationListItem>): ConversationListItem {
+  return {
+    id: "session-1",
+    source: "codex",
+    rootId: "root-a",
+    path: "/tmp/session-1.jsonl",
+    sizeBytes: 128,
+    mtimeMs: 1,
+    ...overrides,
+  };
+}
+
+describe("resolveRestoredSelection", () => {
+  it("uses the matching rootId when the URL root is valid", () => {
+    const items = [
+      makeItem({ rootId: "root-a", path: "/tmp/root-a/session-1.jsonl" }),
+      makeItem({ rootId: "root-b", path: "/tmp/root-b/session-1.jsonl" }),
+    ];
+
+    const result = resolveRestoredSelection(items, "session-1", "root-b");
+
+    expect(result.effectiveRootId).toBe("root-b");
+    expect(result.selectedKey).toBe("root-b:session-1");
+  });
+
+  it("falls back to an id-only match when the URL rootId is stale", () => {
+    const items = [
+      makeItem({ rootId: "root-a", path: "/tmp/root-a/session-1.jsonl" }),
+      makeItem({ rootId: "root-b", path: "/tmp/root-b/session-1.jsonl" }),
+    ];
+
+    const result = resolveRestoredSelection(items, "session-1", "missing-root");
+
+    expect(result.effectiveRootId).toBe("root-a");
+    expect(result.selectedKey).toBe("root-a:session-1");
+  });
+
+  it("does not keep an invalid rootId when no matching item exists", () => {
+    const result = resolveRestoredSelection([], "session-1", "missing-root");
+
+    expect(result.effectiveRootId).toBeUndefined();
+    expect(result.selectedKey).toBe("unknown:session-1");
+  });
+});
