@@ -1661,7 +1661,7 @@ export default function HomeClient() {
   }, [windsurfIncludeCleared]);
 
   const handleGlobalSearchSelect = useCallback(
-    (sessionId: string, sessionSource: Source) => {
+    (sessionId: string, sessionSource: Source, rootId?: string) => {
       // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
       // below does not wipe the selection state we set here.
       if (sessionSource !== source) {
@@ -1673,8 +1673,11 @@ export default function HomeClient() {
       // Best-effort: find the matching list item in the current items list.
       // If we're switching source, items still holds the old source's list, so
       // this may fail. A useEffect below corrects selectedKey once items reloads.
-      const match = items.find((it) => it.id === sessionId);
-      const key = match ? `${match.rootId}:${match.id}` : `unknown:${sessionId}`;
+      const match = items.find((it) => {
+        if (it.id !== sessionId) return false;
+        return rootId ? it.rootId === rootId : true;
+      });
+      const key = match ? `${match.rootId}:${match.id}` : rootId ? `${rootId}:${sessionId}` : `unknown:${sessionId}`;
       setSelectedKey(key);
       setSelectedId(sessionId);
       setContent(null);
@@ -1686,7 +1689,7 @@ export default function HomeClient() {
       setWindsurfView("chat");
       setCollapsedExecutionGroups({});
       loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined, {
-        rootId: match?.rootId
+        rootId: match?.rootId ?? rootId
       }).catch(
         (e) => setError(e instanceof Error ? e.message : String(e))
       );
@@ -1890,11 +1893,16 @@ export default function HomeClient() {
   // handleGlobalSearchSelect when the target session was in a different source.
   useEffect(() => {
     if (!selectedId) return;
-    const match = items.find((it) => it.id === selectedId);
+    const selectedRootIdRaw = selectedKey?.includes(":") ? selectedKey.split(":")[0] : undefined;
+    const selectedRootId = selectedRootIdRaw === "unknown" ? undefined : selectedRootIdRaw;
+    const match = items.find((it) => {
+      if (it.id !== selectedId) return false;
+      return selectedRootId ? it.rootId === selectedRootId : true;
+    });
     if (!match) return;
     const expectedKey = `${match.rootId}:${match.id}`;
     setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
-  }, [items, selectedId]);
+  }, [items, selectedId, selectedKey]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;

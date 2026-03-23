@@ -4,21 +4,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Source } from "@/lib/types";
+import type { SearchResult, Source } from "@/lib/types";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-type SearchResult = {
-  sessionId: string;
-  source: Source;
-  title: string;
-  cwd: string;
-  snippet: string;
-};
 
 type ApiResponse = {
   results?: SearchResult[];
@@ -61,7 +53,7 @@ function SnippetHtml({ html }: { html: string }) {
 
 export type GlobalSearchProps = {
   /** Called when the user selects a session from results. */
-  onSelect(sessionId: string, source: Source): void;
+  onSelect(sessionId: string, source: Source, rootId?: string): void;
 };
 
 export function GlobalSearch({ onSelect }: GlobalSearchProps) {
@@ -162,7 +154,7 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
         if (results.length > 0) setActiveIndex((i) => Math.max(i - 1, 0));
       } else if (e.key === "Enter" && results[activeIndex]) {
         const r = results[activeIndex]!;
-        onSelect(r.sessionId, r.source);
+        onSelect(r.sessionId, r.source, r.rootId);
         closePanel();
       } else if (e.key === "Escape") {
         closePanel();
@@ -247,7 +239,7 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
             <ul role="listbox">
               {results.map((r, i) => (
                 <li
-                  key={`${r.source}:${r.sessionId}`}
+                  key={`${r.source}:${r.rootId ?? ""}:${r.sessionId}`}
                   role="option"
                   aria-selected={i === activeIndex}
                   className={cn(
@@ -256,7 +248,7 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
                   )}
                   onMouseEnter={() => setActiveIndex(i)}
                   onClick={() => {
-                    onSelect(r.sessionId, r.source);
+                    onSelect(r.sessionId, r.source, r.rootId);
                     closePanel();
                   }}
                 >
@@ -268,6 +260,9 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
                   </div>
                   {r.cwd ? (
                     <div className="mt-0.5 truncate font-mono text-xs text-muted">{r.cwd}</div>
+                  ) : null}
+                  {r.rootId ? (
+                    <div className="mt-0.5 text-[10px] text-muted/80">Root: {r.rootId}</div>
                   ) : null}
                   {r.snippet ? (
                     <div className="mt-1 line-clamp-2 text-xs text-muted/80">

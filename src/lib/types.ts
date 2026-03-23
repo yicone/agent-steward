@@ -185,3 +185,12 @@ export type ConversationMeta = {
   title?: string;
   cwd?: string;
 };
+
+export type SearchResult = {
+  sessionId: string;
+  source: Source;
+  title: string;
+  cwd: string;
+  snippet: string;
+  rootId?: string;
+};

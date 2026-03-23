@@ -89,4 +89,29 @@ describe("getCodexRawContent", () => {
     expect(result.totalLines).toBeUndefined();
     expect(result.rawLines).toHaveLength(5000);
   });
+
+  it("rebuilds a stale session-path cache entry when the selected file has moved", async () => {
+    const rootDir = path.join(tmpDir, "sessions");
+    const firstDir = path.join(rootDir, "2026", "03", "19");
+    const secondDir = path.join(rootDir, "2026", "03", "20");
+    await fs.mkdir(firstDir, { recursive: true });
+    await fs.writeFile(
+      path.join(firstDir, "moving.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "first" } })}\n`
+    );
+
+    const config = makeConfig([{ id: "r1", source: "codex", path: rootDir, enabled: true }]);
+    const first = await getCodexConversation("moving", config);
+    expect(first.events[0]?.text).toContain("first");
+
+    await fs.rm(firstDir, { recursive: true, force: true });
+    await fs.mkdir(secondDir, { recursive: true });
+    await fs.writeFile(
+      path.join(secondDir, "moving.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "second" } })}\n`
+    );
+
+    const second = await getCodexConversation("moving", config);
+    expect(second.events[0]?.text).toContain("second");
+  });
 });

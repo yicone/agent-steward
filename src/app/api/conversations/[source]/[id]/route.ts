@@ -77,7 +77,9 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
           .then(() => getTrajectoryMetaMapCached({ source: "codex", config }))
           .then((metaMap) => {
             const meta = metaMap[id] ?? {};
-            indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+            indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap, {
+              rootId
+            });
           })
           .catch((err) => {
             console.warn(
