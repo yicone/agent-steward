@@ -34,6 +34,12 @@ type ApiConversationListResponse = { items: ConversationListItem[]; limit: numbe
 
 type TrajectoryFilters = TrajectoryFilterFlags & Pick<UrlViewerState["filters"], "stepTypeFilter">;
 
+type RestoredSelection = {
+  match?: ConversationListItem;
+  effectiveRootId?: string;
+  selectedKey: string;
+};
+
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
@@ -60,6 +66,24 @@ function formatIsoTime(value?: string) {
   } catch {
     return value;
   }
+}
+
+export function resolveRestoredSelection(
+  items: ConversationListItem[],
+  id: string,
+  rootId?: string | null,
+): RestoredSelection {
+  const exactMatch = rootId
+    ? items.find((it) => it.id === id && it.rootId === rootId)
+    : undefined;
+  const match = exactMatch ?? items.find((it) => it.id === id);
+  const effectiveRootId = match?.rootId;
+
+  return {
+    match,
+    effectiveRootId,
+    selectedKey: effectiveRootId ? `${effectiveRootId}:${id}` : `unknown:${id}`,
+  };
 }
 
 type ExecutionGroup = {
@@ -2017,7 +2041,7 @@ export default function HomeClient() {
 
     loadConversation(effectiveSource, id!, 0, apiView, {
       includeCleared: urlCleared === true,
-      rootId: effectiveRootId
+      rootId: effectiveRootId ?? undefined
     }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
       if (!loaded) { urlRestoringRef.current = false; return; }
