@@ -1914,10 +1914,11 @@ export default function HomeClient() {
   useEffect(() => {
     if (!selectedId) return;
     const selectedRootId = fromSelectionKey(selectedKey)?.rootId;
-    const match = items.find((it) => {
+    const exactMatch = items.find((it) => {
       if (it.id !== selectedId) return false;
       return selectedRootId ? it.rootId === selectedRootId : true;
     });
+    const match = exactMatch ?? items.find((it) => it.id === selectedId);
     if (!match) return;
     const expectedKey = toSelectionKey(match.rootId, match.id);
     setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));

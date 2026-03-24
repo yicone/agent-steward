@@ -202,19 +202,28 @@ const SESSION_PATH_CACHE_TTL_MS = 10_000;
 /** Module-level cache, keyed by root id. */
 const _sessionPathCache = new Map<string, SessionPathCacheEntry>();
 
-function invalidateCachedSessionId(sessionId: string): void {
-  for (const entry of _sessionPathCache.values()) {
-    entry.idToPath.delete(sessionId);
+function invalidateCachedSessionId(rootId: string | undefined, sessionId: string): void {
+  if (!rootId) {
+    for (const entry of _sessionPathCache.values()) {
+      entry.idToPath.delete(sessionId);
+    }
+    return;
   }
+  const entry = _sessionPathCache.get(rootId);
+  entry?.idToPath.delete(sessionId);
 }
 
-async function ensureCodexSessionFileExists(sessionId: string, filePath: string): Promise<"ok" | "missing"> {
+async function ensureCodexSessionFileExists(
+  rootId: string | undefined,
+  sessionId: string,
+  filePath: string
+): Promise<"ok" | "missing"> {
   const { stat, errorCode } = await statPath(filePath);
   if (stat?.isFile()) {
     return "ok";
   }
   if (errorCode === "ENOENT" || errorCode === "ENOTDIR" || stat?.isFile() === false || (!errorCode && stat == null)) {
-    invalidateCachedSessionId(sessionId);
+    invalidateCachedSessionId(rootId, sessionId);
     return "missing";
   }
   const err = new Error(`Cannot read Codex session file ${filePath}: ${errorCode ?? "unknown error"}`) as
@@ -230,16 +239,16 @@ async function resolveCodexSessionFile(
 ): Promise<{ filePath: string; rootId?: string } | null> {
   const first = await findCodexSessionFile(id, roots, preferredRootId);
   if (!first) return null;
-  if ((await ensureCodexSessionFileExists(id, first.filePath)) === "ok") {
+  if ((await ensureCodexSessionFileExists(first.rootId, id, first.filePath)) === "ok") {
     return first;
   }
   return findCodexSessionFile(id, roots, preferredRootId);
 }
 
-function toCodexSessionReadError(err: unknown, id: string): Error {
+function toCodexSessionReadError(err: unknown, id: string, rootId?: string): Error {
   const e = err as NodeJS.ErrnoException;
   if (e?.code === "ENOENT" || e?.code === "ENOTDIR") {
-    invalidateCachedSessionId(id);
+    invalidateCachedSessionId(rootId, id);
     return new Error(`Codex session not found: ${id}. The file may have been deleted or moved.`);
   }
   if (e?.code === "EACCES" || e?.code === "EPERM") {
@@ -282,7 +291,7 @@ async function findCodexSessionFile(
     if (cached && cached.rootPath === rootPath && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
       const hit = cached.idToPath.get(id);
       if (hit) {
-        if ((await ensureCodexSessionFileExists(id, hit)) === "ok") {
+        if ((await ensureCodexSessionFileExists(root.id, id, hit)) === "ok") {
           return { filePath: hit, rootId: root.id };
         }
         _sessionPathCache.delete(root.id);
@@ -328,7 +337,7 @@ async function findCodexSessionFile(
 
     const hit = idToPath.get(id);
     if (hit) {
-      if ((await ensureCodexSessionFileExists(id, hit)) === "ok") {
+      if ((await ensureCodexSessionFileExists(root.id, id, hit)) === "ok") {
         return { filePath: hit, rootId: root.id };
       }
       _sessionPathCache.delete(root.id);
@@ -488,7 +497,7 @@ export async function getCodexConversation(
   try {
     resolved = await resolveCodexSessionFile(id, config.roots, opts?.preferredRootId);
   } catch (err) {
-    throw toCodexSessionReadError(err, id);
+    throw toCodexSessionReadError(err, id, opts?.preferredRootId);
   }
   if (!resolved) {
     throw new Error(`Codex session not found: ${id}. The file may have been deleted or is not in any configured root.`);
@@ -499,7 +508,7 @@ export async function getCodexConversation(
   try {
     stats = await fs.stat(filePath);
   } catch (err) {
-    throw toCodexSessionReadError(err, id);
+    throw toCodexSessionReadError(err, id, rootId);
   }
   if (stats.size > MAX_CODEX_SESSION_BYTES) {
     throw new Error(
@@ -529,7 +538,7 @@ export async function getCodexConversation(
       }
     }
   } catch (err) {
-    throw toCodexSessionReadError(err, id);
+    throw toCodexSessionReadError(err, id, rootId);
   } finally {
     rl.close();
     stream.destroy();
@@ -562,7 +571,7 @@ export async function getCodexRawContent(
   try {
     resolved = await resolveCodexSessionFile(id, config.roots, opts?.preferredRootId);
   } catch (err) {
-    throw toCodexSessionReadError(err, id);
+    throw toCodexSessionReadError(err, id, opts?.preferredRootId);
   }
   if (!resolved) {
     throw new Error(`Codex session not found: ${id}`);
@@ -606,7 +615,7 @@ export async function getCodexRawContent(
       }
     }
   } catch (err) {
-    throw toCodexSessionReadError(err, id);
+    throw toCodexSessionReadError(err, id, resolved.rootId);
   } finally {
     rl.close();
     stream.destroy();

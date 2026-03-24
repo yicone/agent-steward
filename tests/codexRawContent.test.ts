@@ -172,4 +172,37 @@ describe("getCodexRawContent", () => {
     const second = await getCodexConversation("session", config);
     expect(second.events[0]?.text).toContain("second-location");
   });
+
+  it("keeps other roots cached when invalidating a stale duplicate-id entry", async () => {
+    const rootA = path.join(tmpDir, "sessions-a");
+    const rootB = path.join(tmpDir, "sessions-b");
+    await fs.mkdir(rootA, { recursive: true });
+    await fs.mkdir(rootB, { recursive: true });
+
+    await fs.writeFile(
+      path.join(rootA, "shared.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "from-a" } })}\n`
+    );
+    await fs.writeFile(
+      path.join(rootB, "shared.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "from-b" } })}\n`
+    );
+
+    const config = makeConfig([
+      { id: "r1", source: "codex", path: rootA, enabled: true },
+      { id: "r2", source: "codex", path: rootB, enabled: true }
+    ]);
+
+    // Warm per-root caches for the same session ID.
+    await getCodexConversation("shared", config, { preferredRootId: "r1" });
+    await getCodexConversation("shared", config, { preferredRootId: "r2" });
+
+    // Stale only root A's cached hit.
+    await fs.rm(path.join(rootA, "shared.jsonl"));
+
+    // Should still resolve from root B without requiring a full rescan.
+    const result = await getCodexConversation("shared", config, { preferredRootId: "r1" });
+    expect(result.events[0]?.text).toContain("from-b");
+    expect(result.rootId).toBe("r2");
+  });
 });
