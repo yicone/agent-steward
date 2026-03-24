@@ -80,6 +80,14 @@ describe("searchIndex", () => {
       const ids = getIndexedSessionIds();
       expect(ids).toHaveLength(2);
     });
+
+    it("keeps duplicate Codex session ids separate when they come from different roots", () => {
+      indexSession("sess-dup", "codex", "Root one", "/a", [makeEvent({ source: "codex" })], { rootId: "root-1" });
+      indexSession("sess-dup", "codex", "Root two", "/b", [makeEvent({ source: "codex" })], { rootId: "root-2" });
+      const ids = getIndexedSessionIds().filter((id) => id.sessionId === "sess-dup" && id.source === "codex");
+      expect(ids).toHaveLength(2);
+      expect(ids.map((id) => id.rootId).sort()).toEqual(["root-1", "root-2"]);
+    });
   });
 
   describe("removeSession", () => {
@@ -112,6 +120,29 @@ describe("searchIndex", () => {
       expect(results[0]!.sessionId).toBe("sess-hello");
     });
 
+    it("returns rootId for Codex search hits so duplicate roots remain distinguishable", () => {
+      indexSession(
+        "sess-codex",
+        "codex",
+        "Codex duplicate",
+        "/codex/root-a",
+        [makeEvent({ source: "codex", text: "shared body" })],
+        { rootId: "root-a" }
+      );
+      indexSession(
+        "sess-codex",
+        "codex",
+        "Codex duplicate",
+        "/codex/root-b",
+        [makeEvent({ source: "codex", text: "shared body" })],
+        { rootId: "root-b" }
+      );
+
+      const results = searchSessions("shared body").filter((result) => result.sessionId === "sess-codex");
+      expect(results).toHaveLength(2);
+      expect(results.map((result) => result.rootId).sort()).toEqual(["root-a", "root-b"]);
+    });
+
     it("finds a session by event text content", () => {
       const results = searchSessions("greeting");
       expect(results.length).toBeGreaterThan(0);
@@ -128,6 +159,7 @@ describe("searchIndex", () => {
       const results = searchSessions("databases");
       expect(results).toHaveLength(1);
       expect(results[0]!.snippet).toBeTruthy();
+      expect(results[0]!.snippet.toLowerCase()).toContain("databases");
     });
 
     it("returns no results for unknown query", () => {

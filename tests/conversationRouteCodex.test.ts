@@ -73,7 +73,6 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
     getTrajectoryMetaMapCachedMock.mockResolvedValue({
       "session-1": { title: "Fresh Codex Session", cwd: "/workspace/project" },
     })
-    isSessionIndexedMock.mockReturnValue(true)
     vi.spyOn(globalThis, "setImmediate").mockImplementation((fn: (...args: never[]) => void) => {
       fn()
       return 0 as never
@@ -106,6 +105,7 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
       "Fresh Codex Session",
       "/workspace/project",
       events,
+      { rootId: undefined },
     )
   })
 
@@ -119,6 +119,7 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
     readConfigMock.mockResolvedValue({ config })
     getCodexConversationMock.mockResolvedValue({
       events: [],
+      rootId: "resolved-root",
       summary: {
         turnCount: 0,
         toolCount: 0,
@@ -136,7 +137,19 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
     })
 
     await Promise.resolve()
+    await Promise.resolve()
     expect(response.status).toBe(200)
     expect(getCodexConversationMock).toHaveBeenCalledWith("session-1", config, { preferredRootId: "root-2" })
+    await vi.waitFor(() => {
+      expect(indexSessionMock).toHaveBeenCalledTimes(1)
+    })
+    expect(indexSessionMock).toHaveBeenCalledWith(
+      "session-1",
+      "codex",
+      "session-1",
+      "",
+      [],
+      { rootId: "resolved-root" },
+    )
   })
 })

@@ -1278,6 +1278,24 @@ function TrajectoryFilterControls({
   );
 }
 
+function toSelectionKey(rootId: string | undefined, id: string): string {
+  return JSON.stringify({ rootId: rootId ?? null, id });
+}
+
+function fromSelectionKey(key: string | null): { rootId?: string; id: string } | null {
+  if (!key) return null;
+  try {
+    const parsed = JSON.parse(key) as { rootId?: unknown; id?: unknown };
+    if (typeof parsed?.id !== "string") return null;
+    return {
+      id: parsed.id,
+      ...(typeof parsed.rootId === "string" && parsed.rootId.length > 0 ? { rootId: parsed.rootId } : {})
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function HomeClient() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -1336,7 +1354,9 @@ export default function HomeClient() {
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
-    return items.find((it) => `${it.rootId}:${it.id}` === selectedKey) ?? null;
+    const parsed = fromSelectionKey(selectedKey);
+    if (!parsed) return null;
+    return items.find((it) => it.id === parsed.id && it.rootId === parsed.rootId) ?? null;
   }, [items, selectedKey]);
 
   const filteredItems = useMemo(() => {
@@ -1685,7 +1705,7 @@ export default function HomeClient() {
   }, [windsurfIncludeCleared]);
 
   const handleGlobalSearchSelect = useCallback(
-    (sessionId: string, sessionSource: Source) => {
+    (sessionId: string, sessionSource: Source, rootId?: string) => {
       // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
       // below does not wipe the selection state we set here.
       if (sessionSource !== source) {
@@ -1697,8 +1717,11 @@ export default function HomeClient() {
       // Best-effort: find the matching list item in the current items list.
       // If we're switching source, items still holds the old source's list, so
       // this may fail. A useEffect below corrects selectedKey once items reloads.
-      const match = items.find((it) => it.id === sessionId);
-      const key = match ? `${match.rootId}:${match.id}` : `unknown:${sessionId}`;
+      const match = items.find((it) => {
+        if (it.id !== sessionId) return false;
+        return rootId ? it.rootId === rootId : true;
+      });
+      const key = toSelectionKey(match?.rootId ?? rootId, sessionId);
       setSelectedKey(key);
       setSelectedId(sessionId);
       setContent(null);
@@ -1710,7 +1733,7 @@ export default function HomeClient() {
       setWindsurfView("chat");
       setCollapsedExecutionGroups({});
       loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined, {
-        rootId: match?.rootId
+        rootId: match?.rootId ?? rootId
       }).catch(
         (e) => setError(e instanceof Error ? e.message : String(e))
       );
@@ -1910,15 +1933,20 @@ export default function HomeClient() {
 
   // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
   // re-derive selectedKey from selectedId so the conversation list highlights
-  // the correct item. This corrects the `unknown:id` placeholder set in
+  // the correct item. This corrects the provisional key set in
   // handleGlobalSearchSelect when the target session was in a different source.
   useEffect(() => {
     if (!selectedId) return;
-    const match = items.find((it) => it.id === selectedId);
+    const selectedRootId = fromSelectionKey(selectedKey)?.rootId;
+    const exactMatch = items.find((it) => {
+      if (it.id !== selectedId) return false;
+      return selectedRootId ? it.rootId === selectedRootId : true;
+    });
+    const match = exactMatch ?? items.find((it) => it.id === selectedId);
     if (!match) return;
-    const expectedKey = `${match.rootId}:${match.id}`;
+    const expectedKey = toSelectionKey(match.rootId, match.id);
     setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
-  }, [items, selectedId]);
+  }, [items, selectedId, selectedKey]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;
@@ -1998,8 +2026,17 @@ export default function HomeClient() {
     }
 
     // Select the conversation
-    const { effectiveRootId, selectedKey } = resolveRestoredSelection(items, id!, rootId);
-    setSelectedKey(selectedKey);
+    const match = items.find((it) => {
+      if (id == null) return false;
+      // When a rootId is present in the URL state, use it to disambiguate
+      if (typeof rootId !== "undefined" && rootId !== null) {
+        return it.id === id && it.rootId === rootId;
+      }
+      return it.id === id;
+    });
+    const effectiveRootId = match?.rootId ?? rootId;
+    const key = toSelectionKey(effectiveRootId, id!);
+    setSelectedKey(key);
     setSelectedId(id!);
 
     loadConversation(effectiveSource, id!, 0, apiView, {
@@ -2201,7 +2238,7 @@ export default function HomeClient() {
           </div>
           <div className="max-h-[calc(100vh-240px)] overflow-auto border-t border-border/80">
             {filteredItems.map((it) => {
-              const key = `${it.rootId}:${it.id}`;
+              const key = toSelectionKey(it.rootId, it.id);
               const selected = selectedKey === key;
               return (
                 <button

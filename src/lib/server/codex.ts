@@ -202,6 +202,61 @@ const SESSION_PATH_CACHE_TTL_MS = 10_000;
 /** Module-level cache, keyed by root id. */
 const _sessionPathCache = new Map<string, SessionPathCacheEntry>();
 
+function invalidateCachedSessionId(rootId: string | undefined, sessionId: string): void {
+  if (!rootId) {
+    for (const entry of _sessionPathCache.values()) {
+      entry.idToPath.delete(sessionId);
+    }
+    return;
+  }
+  const entry = _sessionPathCache.get(rootId);
+  entry?.idToPath.delete(sessionId);
+}
+
+async function ensureCodexSessionFileExists(
+  rootId: string | undefined,
+  sessionId: string,
+  filePath: string
+): Promise<"ok" | "missing"> {
+  const { stat, errorCode } = await statPath(filePath);
+  if (stat?.isFile()) {
+    return "ok";
+  }
+  if (errorCode === "ENOENT" || errorCode === "ENOTDIR" || stat?.isFile() === false || (!errorCode && stat == null)) {
+    invalidateCachedSessionId(rootId, sessionId);
+    return "missing";
+  }
+  const err = new Error(`Cannot read Codex session file ${filePath}: ${errorCode ?? "unknown error"}`) as
+    Error & { code?: string };
+  err.code = errorCode;
+  throw err;
+}
+
+async function resolveCodexSessionFile(
+  id: string,
+  roots: RootConfig[],
+  preferredRootId?: string
+): Promise<{ filePath: string; rootId?: string } | null> {
+  const first = await findCodexSessionFile(id, roots, preferredRootId);
+  if (!first) return null;
+  if ((await ensureCodexSessionFileExists(first.rootId, id, first.filePath)) === "ok") {
+    return first;
+  }
+  return findCodexSessionFile(id, roots, preferredRootId);
+}
+
+function toCodexSessionReadError(err: unknown, id: string, rootId?: string): Error {
+  const e = err as NodeJS.ErrnoException;
+  if (e?.code === "ENOENT" || e?.code === "ENOTDIR") {
+    invalidateCachedSessionId(rootId, id);
+    return new Error(`Codex session not found: ${id}. The file may have been deleted or moved.`);
+  }
+  if (e?.code === "EACCES" || e?.code === "EPERM") {
+    return new Error(`Permission denied reading Codex session: ${id}. Check filesystem permissions for the selected root.`);
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
+
 /**
  * Find the full path for a Codex session file across all enabled Codex roots.
  * The session ID is the filename without `.jsonl`.
@@ -213,7 +268,7 @@ async function findCodexSessionFile(
   id: string,
   roots: RootConfig[],
   preferredRootId?: string
-): Promise<string | null> {
+): Promise<{ filePath: string; rootId?: string } | null> {
   const now = Date.now();
   // Collect per-root scan errors to surface when the session isn't found.
   // A single unreadable root must not block other valid roots.
@@ -235,9 +290,15 @@ async function findCodexSessionFile(
     const cached = _sessionPathCache.get(root.id);
     if (cached && cached.rootPath === rootPath && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
       const hit = cached.idToPath.get(id);
-      if (hit) return hit;
-      // Not in this root's index — continue to next root without scanning
-      continue;
+      if (hit) {
+        if ((await ensureCodexSessionFileExists(root.id, id, hit)) === "ok") {
+          return { filePath: hit, rootId: root.id };
+        }
+        _sessionPathCache.delete(root.id);
+      } else {
+        // Not in this root's current index — continue to the next root without scanning.
+        continue;
+      }
     }
 
     // Cache miss (or stale / root path changed): build id→path index for this root.
@@ -275,7 +336,12 @@ async function findCodexSessionFile(
     _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now, rootPath });
 
     const hit = idToPath.get(id);
-    if (hit) return hit;
+    if (hit) {
+      if ((await ensureCodexSessionFileExists(root.id, id, hit)) === "ok") {
+        return { filePath: hit, rootId: root.id };
+      }
+      _sessionPathCache.delete(root.id);
+    }
   }
 
   // Session not found; if some roots were unreadable, surface those errors so
@@ -426,13 +492,24 @@ export async function getCodexConversation(
   id: string,
   config: AppConfig,
   opts?: { preferredRootId?: string }
-): Promise<{ events: TrajectoryEvent[]; summary: TrajectorySummary }> {
-  const filePath = await findCodexSessionFile(id, config.roots, opts?.preferredRootId);
-  if (!filePath) {
+): Promise<{ events: TrajectoryEvent[]; summary: TrajectorySummary; rootId?: string }> {
+  let resolved: { filePath: string; rootId?: string } | null;
+  try {
+    resolved = await resolveCodexSessionFile(id, config.roots, opts?.preferredRootId);
+  } catch (err) {
+    throw toCodexSessionReadError(err, id, opts?.preferredRootId);
+  }
+  if (!resolved) {
     throw new Error(`Codex session not found: ${id}. The file may have been deleted or is not in any configured root.`);
   }
+  const { filePath, rootId } = resolved;
 
-  const stats = await fs.stat(filePath);
+  let stats;
+  try {
+    stats = await fs.stat(filePath);
+  } catch (err) {
+    throw toCodexSessionReadError(err, id, rootId);
+  }
   if (stats.size > MAX_CODEX_SESSION_BYTES) {
     throw new Error(
       `Codex session file is too large to load in the UI (size: ${stats.size} bytes, limit: ${MAX_CODEX_SESSION_BYTES} bytes).`
@@ -460,6 +537,8 @@ export async function getCodexConversation(
         break;
       }
     }
+  } catch (err) {
+    throw toCodexSessionReadError(err, id, rootId);
   } finally {
     rl.close();
     stream.destroy();
@@ -467,7 +546,10 @@ export async function getCodexConversation(
 
   const content = lines.join("\n");
   const rawEvents = parseCodexJsonl(content);
-  return normalizeCodexEventsToTrajectoryEvents(rawEvents);
+  return {
+    ...normalizeCodexEventsToTrajectoryEvents(rawEvents),
+    ...(rootId ? { rootId } : {})
+  };
 }
 
 /**
@@ -485,10 +567,16 @@ export async function getCodexRawContent(
   totalLines?: number;
   returnedLines: number;
 }> {
-  const filePath = await findCodexSessionFile(id, config.roots, opts?.preferredRootId);
-  if (!filePath) {
+  let resolved: { filePath: string; rootId?: string } | null;
+  try {
+    resolved = await resolveCodexSessionFile(id, config.roots, opts?.preferredRootId);
+  } catch (err) {
+    throw toCodexSessionReadError(err, id, opts?.preferredRootId);
+  }
+  if (!resolved) {
     throw new Error(`Codex session not found: ${id}`);
   }
+  const { filePath } = resolved;
 
   const rawLines: unknown[] = [];
   let totalLines = 0;
@@ -526,6 +614,8 @@ export async function getCodexRawContent(
         break;
       }
     }
+  } catch (err) {
+    throw toCodexSessionReadError(err, id, resolved.rootId);
   } finally {
     rl.close();
     stream.destroy();
