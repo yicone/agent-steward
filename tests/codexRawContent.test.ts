@@ -146,4 +146,30 @@ describe("getCodexRawContent", () => {
       statSpy.mockRestore();
     }
   });
+
+  it("treats cached non-file paths as stale and re-resolves the session path", async () => {
+    const rootDir = path.join(tmpDir, "sessions");
+    const firstDir = path.join(rootDir, "old");
+    const secondDir = path.join(rootDir, "new");
+    await fs.mkdir(firstDir, { recursive: true });
+    await fs.writeFile(
+      path.join(firstDir, "session.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "first-location" } })}\n`
+    );
+
+    const config = makeConfig([{ id: "r1", source: "codex", path: rootDir, enabled: true }]);
+    const first = await getCodexConversation("session", config);
+    expect(first.events[0]?.text).toContain("first-location");
+
+    await fs.rm(path.join(firstDir, "session.jsonl"));
+    await fs.mkdir(path.join(firstDir, "session.jsonl"), { recursive: true });
+    await fs.mkdir(secondDir, { recursive: true });
+    await fs.writeFile(
+      path.join(secondDir, "session.jsonl"),
+      `${JSON.stringify({ type: "user_message", item: { content: "second-location" } })}\n`
+    );
+
+    const second = await getCodexConversation("session", config);
+    expect(second.events[0]?.text).toContain("second-location");
+  });
 });

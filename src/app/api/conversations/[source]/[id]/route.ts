@@ -69,6 +69,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
         summary: codex.summary
       };
       const eventsSnap = codex.events;
+      const resolvedRootId = codex.rootId ?? rootId;
       // Codex sessions are append-only JSONL files that can keep growing while a
       // user keeps the session open in the CLI. Re-index on every open so the
       // search index stays fresh even after the session was previously indexed.
@@ -78,7 +79,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
           .then((metaMap) => {
             const meta = metaMap[id] ?? {};
             indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap, {
-              rootId
+              rootId: resolvedRootId
             });
           })
           .catch((err) => {

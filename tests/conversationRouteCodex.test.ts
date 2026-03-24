@@ -119,6 +119,7 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
     readConfigMock.mockResolvedValue({ config })
     getCodexConversationMock.mockResolvedValue({
       events: [],
+      rootId: "resolved-root",
       summary: {
         turnCount: 0,
         toolCount: 0,
@@ -139,5 +140,16 @@ describe("GET /api/conversations/[source]/[id] (codex)", () => {
     await Promise.resolve()
     expect(response.status).toBe(200)
     expect(getCodexConversationMock).toHaveBeenCalledWith("session-1", config, { preferredRootId: "root-2" })
+    await vi.waitFor(() => {
+      expect(indexSessionMock).toHaveBeenCalledTimes(1)
+    })
+    expect(indexSessionMock).toHaveBeenCalledWith(
+      "session-1",
+      "codex",
+      "session-1",
+      "",
+      [],
+      { rootId: "resolved-root" },
+    )
   })
 })
