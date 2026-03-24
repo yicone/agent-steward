@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCodexConversation, getCodexRawContent } from "../src/lib/server/codex";
 import type { AppConfig, RootConfig } from "../src/lib/types";
@@ -113,5 +113,37 @@ describe("getCodexRawContent", () => {
 
     const second = await getCodexConversation("moving", config);
     expect(second.events[0]?.text).toContain("second");
+  });
+
+  it("surfaces permission errors while validating a cached session path", async () => {
+    const rootDir = path.join(tmpDir, "sessions");
+    await fs.mkdir(rootDir, { recursive: true });
+    const filePath = path.join(rootDir, "locked.jsonl");
+    await fs.writeFile(
+      filePath,
+      `${JSON.stringify({ type: "user_message", item: { content: "locked" } })}\n`
+    );
+
+    const config = makeConfig([{ id: "r1", source: "codex", path: rootDir, enabled: true }]);
+    const first = await getCodexConversation("locked", config);
+    expect(first.events[0]?.text).toContain("locked");
+
+    const originalStat = fs.stat.bind(fs);
+    const statSpy = vi.spyOn(fs, "stat").mockImplementation(async (targetPath) => {
+      if (targetPath === filePath) {
+        const err = new Error("permission denied") as NodeJS.ErrnoException;
+        err.code = "EACCES";
+        throw err;
+      }
+      return originalStat(targetPath);
+    });
+
+    try {
+      await expect(getCodexConversation("locked", config)).rejects.toThrow(
+        "Permission denied reading Codex session: locked."
+      );
+    } finally {
+      statSpy.mockRestore();
+    }
   });
 });

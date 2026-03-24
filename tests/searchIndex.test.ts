@@ -159,6 +159,7 @@ describe("searchIndex", () => {
       const results = searchSessions("databases");
       expect(results).toHaveLength(1);
       expect(results[0]!.snippet).toBeTruthy();
+      expect(results[0]!.snippet.toLowerCase()).toContain("databases");
     });
 
     it("returns no results for unknown query", () => {

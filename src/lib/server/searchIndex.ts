@@ -234,7 +234,7 @@ export function searchSessions(query: string, limit = 20): SearchResult[] {
     // The user query is escaped to prevent FTS5 syntax errors (e.g. from
     // special characters like quotes, colons, or hyphens).
     // snippet() parameters: (table, column_index, open_tag, close_tag, ellipsis, num_tokens)
-    // column_index 4 = body (0-indexed: session_id=0, source=1, title=2, cwd=3, body=4)
+    // column_index 5 = body (0-indexed: session_id=0, source=1, root_id=2, title=3, cwd=4, body=5)
     type FtsRow = {
       session_id: string;
       source: string;
@@ -251,7 +251,7 @@ export function searchSessions(query: string, limit = 20): SearchResult[] {
           f.root_id,
           s.title,
           s.cwd,
-          snippet(sessions_fts, 4, '<mark>', '</mark>', '…', 12) AS snippet
+          snippet(sessions_fts, 5, '<mark>', '</mark>', '…', 12) AS snippet
         FROM sessions_fts f
         JOIN sessions s ON s.session_id = f.session_id AND s.source = f.source AND s.root_id = f.root_id
         WHERE sessions_fts MATCH ?
