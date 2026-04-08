@@ -17,7 +17,7 @@ import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSear
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
 import { parseUrlState, viewToUrl, viewFromUrl, syncUrlState } from "@/lib/urlState";
-import type { UrlViewerState } from "@/lib/urlState";
+import type { UrlViewerState, TrajectoryFilterFlags } from "@/lib/urlState";
 import type {
   AppConfig,
   ChatMessage,
@@ -31,6 +31,14 @@ import type {
 
 type ApiConfigResponse = { path: string; config: AppConfig };
 type ApiConversationListResponse = { items: ConversationListItem[]; limit: number; offset: number };
+
+type TrajectoryFilters = TrajectoryFilterFlags & Pick<UrlViewerState["filters"], "stepTypeFilter">;
+
+type RestoredSelection = {
+  match?: ConversationListItem;
+  effectiveRootId?: string;
+  selectedKey: string;
+};
 
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
@@ -58,6 +66,24 @@ function formatIsoTime(value?: string) {
   } catch {
     return value;
   }
+}
+
+export function resolveRestoredSelection(
+  items: ConversationListItem[],
+  id: string,
+  rootId?: string | null,
+): RestoredSelection {
+  const exactMatch = rootId
+    ? items.find((it) => it.id === id && it.rootId === rootId)
+    : undefined;
+  const match = exactMatch ?? items.find((it) => it.id === id);
+  const effectiveRootId = match?.rootId;
+
+  return {
+    match,
+    effectiveRootId,
+    selectedKey: effectiveRootId ? `${effectiveRootId}:${id}` : `unknown:${id}`,
+  };
 }
 
 type ExecutionGroup = {
@@ -1141,6 +1167,135 @@ function InspectorPanel(props: {
   );
 }
 
+function TrajectoryFilterControls({
+  filters,
+  onFiltersChange,
+  groupCount,
+  eventSearch,
+  onEventSearchChange,
+  searchMatchCount,
+  activeMatchIndex,
+  onNavigateMatch,
+}: {
+  filters: TrajectoryFilters;
+  onFiltersChange: (updater: (prev: TrajectoryFilters) => TrajectoryFilters) => void;
+  groupCount: number;
+  eventSearch: string;
+  onEventSearchChange: (value: string) => void;
+  searchMatchCount: number;
+  activeMatchIndex: number;
+  onNavigateMatch: (offset: number) => void;
+}) {
+  return (
+    <>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Button
+          variant={filters.thought ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
+        >
+          Thoughts
+        </Button>
+        <Button
+          variant={filters.tool ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
+        >
+          Tools
+        </Button>
+        <Button
+          variant={filters.command ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
+        >
+          Commands
+        </Button>
+        <Button
+          variant={filters.status ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
+        >
+          Status
+        </Button>
+        <Button
+          variant={filters.errorsOnly ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
+        >
+          Only errors
+        </Button>
+        <Button
+          variant={filters.hasOutput ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
+        >
+          Has output
+        </Button>
+        <span className="text-xs text-muted">Groups: {groupCount}</span>
+      </div>
+      <div className="mb-2 flex items-center gap-2">
+        <Input
+          placeholder="Search events…"
+          value={eventSearch}
+          onChange={(e) => onEventSearchChange(e.target.value)}
+          className="h-7 text-xs"
+        />
+        {searchMatchCount > 0 ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateMatch(-1)}
+              title="Previous match"
+              aria-label="Previous match"
+            >
+              ←
+            </Button>
+            <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeMatchIndex, 0) + 1} / {searchMatchCount}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigateMatch(1)}
+              title="Next match"
+              aria-label="Next match"
+            >
+              →
+            </Button>
+          </>
+        ) : eventSearch.trim() ? (
+          <span className="shrink-0 text-xs text-muted">0 matches</span>
+        ) : null}
+      </div>
+      <div className="mb-2 flex items-center gap-2">
+        <Input
+          placeholder="Filter stepType…"
+          value={filters.stepTypeFilter}
+          onChange={(e) => onFiltersChange((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
+          className="h-7 text-xs"
+        />
+      </div>
+    </>
+  );
+}
+
+function toSelectionKey(rootId: string | undefined, id: string): string {
+  return JSON.stringify({ rootId: rootId ?? null, id });
+}
+
+function fromSelectionKey(key: string | null): { rootId?: string; id: string } | null {
+  if (!key) return null;
+  try {
+    const parsed = JSON.parse(key) as { rootId?: unknown; id?: unknown };
+    if (typeof parsed?.id !== "string") return null;
+    return {
+      id: parsed.id,
+      ...(typeof parsed.rootId === "string" && parsed.rootId.length > 0 ? { rootId: parsed.rootId } : {})
+    };
+  } catch {
+    return null;
+  }
+}
+
 export default function HomeClient() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -1157,7 +1312,7 @@ export default function HomeClient() {
   const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("markdown");
   const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("chat");
   const [windsurfIncludeCleared, setWindsurfIncludeCleared] = useState(false);
-  const [trajectoryFilters, setTrajectoryFilters] = useState({
+  const [trajectoryFilters, setTrajectoryFilters] = useState<TrajectoryFilters>({
     thought: true,
     tool: true,
     command: true,
@@ -1199,7 +1354,9 @@ export default function HomeClient() {
 
   const selectedItem = useMemo(() => {
     if (!selectedKey) return null;
-    return items.find((it) => `${it.rootId}:${it.id}` === selectedKey) ?? null;
+    const parsed = fromSelectionKey(selectedKey);
+    if (!parsed) return null;
+    return items.find((it) => it.id === parsed.id && it.rootId === parsed.rootId) ?? null;
   }, [items, selectedKey]);
 
   const filteredItems = useMemo(() => {
@@ -1514,7 +1671,7 @@ export default function HomeClient() {
     id: string,
     stepOffset?: number,
     view?: "chat" | "trajectory",
-    opts?: { includeCleared?: boolean }
+    opts?: { includeCleared?: boolean; rootId?: string }
   ): Promise<ConversationContent | null> => {
     setLoadingContent(true);
     setError(null);
@@ -1526,6 +1683,10 @@ export default function HomeClient() {
         if (view === "trajectory") sp.set("view", "trajectory");
         const includeCleared = opts?.includeCleared ?? windsurfIncludeCleared;
         if (includeCleared) sp.set("includeCleared", "1");
+        qp = `?${sp.toString()}`;
+      } else if (nextSource === "codex" && opts?.rootId) {
+        const sp = new URLSearchParams();
+        sp.set("rootId", opts.rootId);
         qp = `?${sp.toString()}`;
       }
       const res = await fetch(`/api/conversations/${nextSource}/${id}${qp}`);
@@ -1544,7 +1705,7 @@ export default function HomeClient() {
   }, [windsurfIncludeCleared]);
 
   const handleGlobalSearchSelect = useCallback(
-    (sessionId: string, sessionSource: Source) => {
+    (sessionId: string, sessionSource: Source, rootId?: string) => {
       // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
       // below does not wipe the selection state we set here.
       if (sessionSource !== source) {
@@ -1556,8 +1717,11 @@ export default function HomeClient() {
       // Best-effort: find the matching list item in the current items list.
       // If we're switching source, items still holds the old source's list, so
       // this may fail. A useEffect below corrects selectedKey once items reloads.
-      const match = items.find((it) => it.id === sessionId);
-      const key = match ? `${match.rootId}:${match.id}` : `unknown:${sessionId}`;
+      const match = items.find((it) => {
+        if (it.id !== sessionId) return false;
+        return rootId ? it.rootId === rootId : true;
+      });
+      const key = toSelectionKey(match?.rootId ?? rootId, sessionId);
       setSelectedKey(key);
       setSelectedId(sessionId);
       setContent(null);
@@ -1568,7 +1732,9 @@ export default function HomeClient() {
       setAntigravityView("markdown");
       setWindsurfView("chat");
       setCollapsedExecutionGroups({});
-      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined).catch(
+      loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined, {
+        rootId: match?.rootId ?? rootId
+      }).catch(
         (e) => setError(e instanceof Error ? e.message : String(e))
       );
     },
@@ -1767,15 +1933,20 @@ export default function HomeClient() {
 
   // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
   // re-derive selectedKey from selectedId so the conversation list highlights
-  // the correct item. This corrects the `unknown:id` placeholder set in
+  // the correct item. This corrects the provisional key set in
   // handleGlobalSearchSelect when the target session was in a different source.
   useEffect(() => {
     if (!selectedId) return;
-    const match = items.find((it) => it.id === selectedId);
+    const selectedRootId = fromSelectionKey(selectedKey)?.rootId;
+    const exactMatch = items.find((it) => {
+      if (it.id !== selectedId) return false;
+      return selectedRootId ? it.rootId === selectedRootId : true;
+    });
+    const match = exactMatch ?? items.find((it) => it.id === selectedId);
     if (!match) return;
-    const expectedKey = `${match.rootId}:${match.id}`;
+    const expectedKey = toSelectionKey(match.rootId, match.id);
     setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
-  }, [items, selectedId]);
+  }, [items, selectedId, selectedKey]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;
@@ -1812,7 +1983,17 @@ export default function HomeClient() {
     if (urlInit.source && source !== urlInit.source) return;
 
     // Consume the init ref so this runs only once.
-    const { id, view, filters, expandedGroups, selectedRowId: urlRow, inspectorOpen: urlInspector, inspectorMode: urlInspMode, includeCleared: urlCleared } = urlInit;
+    const {
+      id,
+      rootId,
+      view,
+      filters,
+      expandedGroups,
+      selectedRowId: urlRow,
+      inspectorOpen: urlInspector,
+      inspectorMode: urlInspMode,
+      includeCleared: urlCleared
+    } = urlInit;
     urlInitRef.current = {}; // clear so future source switches reset normally
     urlRestoringRef.current = true; // block URL sync until the async restore fully settles
 
@@ -1825,10 +2006,13 @@ export default function HomeClient() {
       const restoredView = viewFromUrl(view ?? null, "antigravity");
       setAntigravityView(restoredView);
       apiView = undefined;
-    } else {
+    } else if (effectiveSource === "windsurf") {
       const restoredView = viewFromUrl(view ?? null, "windsurf");
       setWindsurfView(restoredView);
       apiView = restoredView !== "chat" ? "trajectory" : "chat";
+    } else {
+      // Codex only supports trajectory mode regardless of URL `view`.
+      apiView = "trajectory";
     }
 
     if (filters) setTrajectoryFilters(filters);
@@ -1842,12 +2026,23 @@ export default function HomeClient() {
     }
 
     // Select the conversation
-    const match = items.find((it) => it.id === id);
-    const key = match ? `${match.rootId}:${match.id}` : `unknown:${id}`;
+    const match = items.find((it) => {
+      if (id == null) return false;
+      // When a rootId is present in the URL state, use it to disambiguate
+      if (typeof rootId !== "undefined" && rootId !== null) {
+        return it.id === id && it.rootId === rootId;
+      }
+      return it.id === id;
+    });
+    const effectiveRootId = match?.rootId ?? rootId;
+    const key = toSelectionKey(effectiveRootId, id!);
     setSelectedKey(key);
     setSelectedId(id!);
 
-    loadConversation(effectiveSource, id!, 0, apiView, { includeCleared: urlCleared === true }).then((loaded) => {
+    loadConversation(effectiveSource, id!, 0, apiView, {
+      includeCleared: urlCleared === true,
+      rootId: effectiveRootId ?? undefined
+    }).then((loaded) => {
       // Gate follow-up state on a successful load (loadConversation returns null on failure).
       if (!loaded) { urlRestoringRef.current = false; return; }
       // Guard against the user navigating away before this async callback fires.
@@ -1891,7 +2086,12 @@ export default function HomeClient() {
     // or while the async restore is still in progress, so replaceState never overwrites
     // the URL before restoration (including row/expanded state) is fully applied.
     if (urlInitRef.current.id || urlRestoringRef.current) return;
-    const currentView = source === "antigravity" ? antigravityView : windsurfView;
+    const currentView =
+      source === "antigravity"
+        ? antigravityView
+        : source === "windsurf"
+          ? windsurfView
+          : "trajectory";
 
     // Derive expanded groups from collapsedExecutionGroups (inverse mapping)
     const expanded: string[] = [];
@@ -1902,6 +2102,7 @@ export default function HomeClient() {
     syncUrlState({
       source,
       id: selectedId,
+      rootId: selectedItem?.rootId ?? null,
       view: viewToUrl(currentView),
       filters: trajectoryFilters,
       expandedGroups: expanded,
@@ -1912,7 +2113,7 @@ export default function HomeClient() {
       includeCleared: source === "windsurf" ? windsurfIncludeCleared : false,
     });
   }, [
-    config, source, selectedId, antigravityView, windsurfView,
+    config, source, selectedId, selectedItem, antigravityView, windsurfView,
     trajectoryFilters, collapsedExecutionGroups, selectedRowId,
     inspectorOpen, inspectorMode, windsurfIncludeCleared
   ]);
@@ -1929,6 +2130,12 @@ export default function HomeClient() {
     if (status.windsurf.attached) return <StatusPill label="Windsurf: attached" tone="ok" title={status.windsurf.logPath} />;
     if (status.windsurf.logPath) return <StatusPill label="Windsurf: not attached" tone="warn" title={status.windsurf.error ?? status.windsurf.logPath} />;
     return <StatusPill label="Windsurf: not found" tone="bad" title={status.windsurf.error} />;
+  })();
+
+  const codexPill = (() => {
+    if (!status) return <StatusPill label="Codex: ..." tone="warn" />;
+    if (status.codex.sessionsFound) return <StatusPill label="Codex: sessions found" tone="ok" title={status.codex.sessionsDir} />;
+    return <StatusPill label="Codex: not found" tone="bad" title={status.codex.error} />;
   })();
 
   const toggleExecutionGroup = useCallback((groupId: string) => {
@@ -1972,6 +2179,7 @@ export default function HomeClient() {
           <div className="text-lg font-semibold">Agent Storage Manager</div>
           {antigravityPill}
           {windsurfPill}
+          {codexPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <GlobalSearch onSelect={handleGlobalSearchSelect} />
@@ -2002,6 +2210,13 @@ export default function HomeClient() {
           >
             Windsurf
           </Button>
+          <Button
+            variant={source === "codex" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSource("codex")}
+          >
+            Codex
+          </Button>
           <div className="flex-1" />
           <div className="w-full sm:w-[360px] sm:max-w-[360px]">
             <Input placeholder="Search by id, title or path…" value={filter} onChange={(e) => setFilter(e.target.value)} />
@@ -2023,7 +2238,7 @@ export default function HomeClient() {
           </div>
           <div className="max-h-[calc(100vh-240px)] overflow-auto border-t border-border/80">
             {filteredItems.map((it) => {
-              const key = `${it.rootId}:${it.id}`;
+              const key = toSelectionKey(it.rootId, it.id);
               const selected = selectedKey === key;
               return (
                 <button
@@ -2044,7 +2259,9 @@ export default function HomeClient() {
                     setAntigravityView("markdown");
                     setWindsurfView("chat");
                     setCollapsedExecutionGroups({});
-                    loadConversation(source, it.id, 0, source === "windsurf" ? "chat" : undefined).catch(() => {});
+                    loadConversation(source, it.id, 0, source === "windsurf" ? "chat" : undefined, {
+                      rootId: it.rootId
+                    }).catch(() => {});
                   }}
                   title={it.path}
                 >
@@ -2111,7 +2328,11 @@ export default function HomeClient() {
             <div className="mb-2 flex justify-end">
               <Button asChild variant="outline" size="sm">
                 <a
-                  href={`/api/conversations/${source}/${selectedId}/diagnostic`}
+                  href={
+                    source === "codex" && selectedItem?.rootId
+                      ? `/api/conversations/${source}/${selectedId}/diagnostic?rootId=${encodeURIComponent(selectedItem.rootId)}`
+                      : `/api/conversations/${source}/${selectedId}/diagnostic`
+                  }
                   title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)"
                 >
                   Diagnostic JSON
@@ -2246,76 +2467,16 @@ export default function HomeClient() {
 
               {antigravityView === "trajectory" ? (
                 <div>
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant={trajectoryFilters.thought ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
-                    >
-                      Thoughts
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.tool ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
-                    >
-                      Tools
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.command ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
-                    >
-                      Commands
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.status ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
-                    >
-                      Status
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
-                    >
-                      Only errors
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
-                    >
-                      Has output
-                    </Button>
-                    <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Search events…"
-                      value={eventSearch}
-                      onChange={(e) => setEventSearch(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                    {eventSearchMatchEvents.length > 0 ? (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
-                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
-                      </>
-                    ) : eventSearch.trim() ? (
-                      <span className="shrink-0 text-xs text-muted">0 matches</span>
-                    ) : null}
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Filter stepType…"
-                      value={trajectoryFilters.stepTypeFilter}
-                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
-                      className="h-7 text-xs"
-                    />
-                  </div>
+                  <TrajectoryFilterControls
+                    filters={trajectoryFilters}
+                    onFiltersChange={setTrajectoryFilters}
+                    groupCount={executionGroups.length}
+                    eventSearch={eventSearch}
+                    onEventSearchChange={setEventSearch}
+                    searchMatchCount={eventSearchMatchEvents.length}
+                    activeMatchIndex={activeSearchMatchIndex}
+                    onNavigateMatch={navigateSearchMatchByOffset}
+                  />
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2387,76 +2548,16 @@ export default function HomeClient() {
 
               {windsurfView === "trajectory" ? (
                 <div>
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant={trajectoryFilters.thought ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, thought: !prev.thought, errorsOnly: false }))}
-                    >
-                      Thoughts
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.tool ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, tool: !prev.tool, errorsOnly: false }))}
-                    >
-                      Tools
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.command ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, command: !prev.command, errorsOnly: false }))}
-                    >
-                      Commands
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.status ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, status: !prev.status, errorsOnly: false }))}
-                    >
-                      Status
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.errorsOnly ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
-                    >
-                      Only errors
-                    </Button>
-                    <Button
-                      variant={trajectoryFilters.hasOutput ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setTrajectoryFilters((prev) => ({ ...prev, hasOutput: !prev.hasOutput }))}
-                    >
-                      Has output
-                    </Button>
-                    <span className="text-xs text-muted">Groups: {executionGroups.length}</span>
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Search events…"
-                      value={eventSearch}
-                      onChange={(e) => setEventSearch(e.target.value)}
-                      className="h-7 text-xs"
-                    />
-                    {eventSearchMatchEvents.length > 0 ? (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(-1)} title="Previous match">←</Button>
-                        <span className="shrink-0 whitespace-nowrap text-xs text-muted">{Math.max(activeSearchMatchIndex, 0) + 1} / {eventSearchMatchEvents.length}</span>
-                        <Button variant="outline" size="sm" onClick={() => navigateSearchMatchByOffset(1)} title="Next match">→</Button>
-                      </>
-                    ) : eventSearch.trim() ? (
-                      <span className="shrink-0 text-xs text-muted">0 matches</span>
-                    ) : null}
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <Input
-                      placeholder="Filter stepType…"
-                      value={trajectoryFilters.stepTypeFilter}
-                      onChange={(e) => setTrajectoryFilters((prev) => ({ ...prev, stepTypeFilter: e.target.value }))}
-                      className="h-7 text-xs"
-                    />
-                  </div>
+                  <TrajectoryFilterControls
+                    filters={trajectoryFilters}
+                    onFiltersChange={setTrajectoryFilters}
+                    groupCount={executionGroups.length}
+                    eventSearch={eventSearch}
+                    onEventSearchChange={setEventSearch}
+                    searchMatchCount={eventSearchMatchEvents.length}
+                    activeMatchIndex={activeSearchMatchIndex}
+                    onNavigateMatch={navigateSearchMatchByOffset}
+                  />
                   {withInspector(
                     <VirtualizedTrajectoryRows
                       rows={trajectoryRows}
@@ -2513,6 +2614,51 @@ export default function HomeClient() {
                   Load more
                 </Button>
               </div>
+            </div>
+          ) : null}
+
+          {selectedId && content?.kind === "trajectory" && content.source === "codex" ? (
+            <div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>events {content.summary.renderedEvents}</Badge>
+                  <Badge>tools {content.summary.toolCount}</Badge>
+                  <Badge>commands {content.summary.commandCount}</Badge>
+                  {content.summary.errorCount > 0 ? (
+                    <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
+                      errors {content.summary.errorCount}
+                    </Button>
+                  ) : null}
+                </div>
+                <div className="text-xs text-muted">Codex CLI session (read from .jsonl)</div>
+              </div>
+              <TrajectoryFilterControls
+                filters={trajectoryFilters}
+                onFiltersChange={setTrajectoryFilters}
+                groupCount={executionGroups.length}
+                eventSearch={eventSearch}
+                onEventSearchChange={setEventSearch}
+                searchMatchCount={eventSearchMatchEvents.length}
+                activeMatchIndex={activeSearchMatchIndex}
+                onNavigateMatch={navigateSearchMatchByOffset}
+              />
+              {withInspector(
+                <VirtualizedTrajectoryRows
+                  rows={trajectoryRows}
+                  onToggleGroup={toggleExecutionGroup}
+                  onSelectRow={onSelectRow}
+                  selectedRowId={selectedRowId}
+                  highlightedRowId={highlightedRowId}
+                  scrollToRowId={scrollToRowId}
+                  onScrolledToRowId={() => setScrollToRowId(null)}
+                  autoOpenDetailsRowId={autoOpenDetailsRowId}
+                  autoOpenDetailsToken={autoOpenDetailsToken}
+                  onAutoOpenedDetails={(rowId, token) => {
+                    if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
+                  }}
+                  searchQuery={eventSearch}
+                />
+              )}
             </div>
           ) : null}
 

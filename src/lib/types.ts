@@ -1,4 +1,4 @@
-export type Source = "antigravity" | "windsurf";
+export type Source = "antigravity" | "windsurf" | "codex";
 
 export type RootConfig = {
   id: string;
@@ -41,7 +41,8 @@ export type RootHealth = {
   rootId: string;
   path: string;
   status: RootHealthStatus;
-  pbCount: number;
+  /** Source-agnostic count: `.pb` files for antigravity/windsurf, `.jsonl` files for codex. */
+  fileCount: number;
   scanMs: number;
   error?: string;
 };
@@ -77,6 +78,16 @@ export type SourcesStatus = {
     heartbeatOk?: boolean;
     lastError?: string;
     recommendedAction?: string;
+    error?: string;
+  };
+  codex: {
+    /** True if at least one session file was found in the configured roots. */
+    sessionsFound: boolean;
+    /**
+     * The sessions directory of the root where sessions were found.
+     * Falls back to the first checked directory when no sessions are found.
+     */
+    sessionsDir?: string;
     error?: string;
   };
 };
@@ -173,4 +184,13 @@ export type ConversationContent =
 export type ConversationMeta = {
   title?: string;
   cwd?: string;
+};
+
+export type SearchResult = {
+  sessionId: string;
+  source: Source;
+  title: string;
+  cwd: string;
+  snippet: string;
+  rootId?: string;
 };

@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isSource(value: string): value is Source {
-  return value === "antigravity" || value === "windsurf";
+  return value === "antigravity" || value === "windsurf" || value === "codex";
 }
 
 function safeFilename(value: string): string {
@@ -25,6 +25,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   }
 
   const url = new URL(req.url);
+  const rootId = url.searchParams.get("rootId") ?? undefined;
   const allSteps = url.searchParams.get("allSteps");
   const maxStepsParam = url.searchParams.get("maxSteps");
   const maxSteps = maxStepsParam ? Number(maxStepsParam) : undefined;
@@ -34,6 +35,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
     const payload = await buildDiagnosticExport({
       source,
       cascadeId: id,
+      rootId,
       config,
       windsurf: {
         allSteps: allSteps === null ? undefined : allSteps !== "0" && allSteps !== "false",
@@ -57,4 +59,3 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
-

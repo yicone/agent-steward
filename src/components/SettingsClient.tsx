@@ -24,19 +24,20 @@ const healthColors: Record<string, string> = {
   slow: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
 };
 
-function HealthBadge({ health }: { health: RootHealth | undefined }) {
+function HealthBadge({ health, source }: { health: RootHealth | undefined; source: Source }) {
   if (!health) return null;
   const color = healthColors[health.status] ?? "";
+  const fileUnit = source === "codex" ? "jsonl" : "pb";
   const label =
     health.status === "healthy"
-      ? `${health.pbCount} pb · ${health.scanMs}ms`
+      ? `${health.fileCount} ${fileUnit} · ${health.scanMs}ms`
       : health.status === "slow"
-        ? `${health.pbCount} pb · slow (${health.scanMs}ms)`
+        ? `${health.fileCount} ${fileUnit} · slow (${health.scanMs}ms)`
         : health.error ?? health.status;
   return (
     <span className={cn("inline-block rounded px-1.5 py-0.5 text-[10px] font-medium", color)} title={label}>
       {health.status === "healthy" || health.status === "slow"
-        ? `${health.pbCount} pb`
+        ? `${health.fileCount} ${fileUnit}`
         : health.status}
       {health.status === "slow" ? ` · ${health.scanMs}ms` : null}
     </span>
@@ -63,7 +64,7 @@ function RootRow(props: {
             <span>
               source: <span className="font-mono">{props.root.source}</span>
             </span>
-            <HealthBadge health={props.health} />
+            <HealthBadge health={props.health} source={props.root.source} />
           </div>
           {props.health?.error ? (
             <div className="mt-1 text-[10px] text-red-600 dark:text-red-400">{props.health.error}</div>
@@ -101,7 +102,8 @@ export default function SettingsClient() {
     const roots = config?.roots ?? [];
     return {
       antigravity: roots.filter((r) => r.source === "antigravity"),
-      windsurf: roots.filter((r) => r.source === "windsurf")
+      windsurf: roots.filter((r) => r.source === "windsurf"),
+      codex: roots.filter((r) => r.source === "codex")
     };
   }, [config]);
 
@@ -237,6 +239,7 @@ export default function SettingsClient() {
           >
             <option value="antigravity">antigravity</option>
             <option value="windsurf">windsurf</option>
+            <option value="codex">codex</option>
           </Select>
           <Input
             className="font-mono"
@@ -319,6 +322,33 @@ export default function SettingsClient() {
               />
             ))}
             {rootsBySource.windsurf.length === 0 ? <div className="text-sm text-muted">No roots.</div> : null}
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <div className="mb-2 text-sm font-semibold">Codex roots</div>
+          <div className="flex flex-col gap-2">
+            {rootsBySource.codex.map((r) => (
+              <RootRow
+                key={r.id}
+                root={r}
+                health={rootHealthMap[r.id]}
+                onToggle={() => {
+                  if (!config) return;
+                  const next = cloneConfig(config);
+                  const idx = next.roots.findIndex((x) => x.id === r.id);
+                  if (idx >= 0) next.roots[idx].enabled = !next.roots[idx].enabled;
+                  save(next).catch(() => {});
+                }}
+                onRemove={() => {
+                  if (!config) return;
+                  const next = cloneConfig(config);
+                  next.roots = next.roots.filter((x) => x.id !== r.id);
+                  save(next).catch(() => {});
+                }}
+              />
+            ))}
+            {rootsBySource.codex.length === 0 ? <div className="text-sm text-muted">No roots.</div> : null}
           </div>
         </div>
       </div>

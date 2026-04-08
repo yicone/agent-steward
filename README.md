@@ -5,8 +5,8 @@ SSoT/DRY note:
 
 # Agent Storage Manager (v1)
 
-A local Web UI for browsing conversation history generated/persisted by Antigravity and Windsurf.
-It fetches readable content via their local Language Server RPC (instead of offline parsing `.pb`).
+A local Web UI for browsing conversation history generated/persisted by Antigravity, Windsurf, and Codex CLI.
+It fetches Antigravity and Windsurf content via their local Language Server RPC, and reads Codex sessions directly from `.jsonl` files (no running process required).
 
 ## Data Sources & Configuration
 
@@ -14,6 +14,7 @@ It fetches readable content via their local Language Server RPC (instead of offl
 - Default roots:
   - Antigravity: `~/.gemini/antigravity/conversations`
   - Windsurf: `~/.codeium/windsurf/cascade`
+  - Codex: `~/.codex/sessions`
 
 You can add/disable/delete roots in the Web UI Settings page (supports external/backup drives).
 
@@ -56,7 +57,9 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
 
 ## Features (v1)
 
-- Scan and list `.pb` session files (default directories + custom roots from Settings)
+- Scan and list session files (default directories + custom roots from Settings)
+  - Antigravity / Windsurf: `.pb` session files (flat directory)
+  - Codex CLI: `.jsonl` session files (nested `YYYY/MM/DD/` directory structure)
 - Search and filtering:
   - full-text event search within the current conversation
   - enhanced conversation filtering in the session list / viewer flow
@@ -72,12 +75,18 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - on newer builds, prefer `WINDSURF_CSRF_TOKEN` from the LS process environment when available
   - default Viewer mode: Compact
   - Compact is currently backed by legacy chat payloads; Transcript and Trajectory remain available for cross-source alignment and diagnostics
+- Codex CLI: read sessions directly from `.jsonl` files — no running process required
+  - sessions stored in `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`
+  - normalizes JSONL events (user, assistant, tool_call, tool_result, exec, reasoning, etc.) into the unified trajectory model
+  - title/cwd extracted from `session_meta` and first user message headers
+  - Trajectory viewer with full filtering and event inspector
+  - Diagnostic export includes raw JSONL events
 - Unified trajectory model:
-  - canonical event schema used by Antigravity trajectory viewer
+  - canonical event schema used by Antigravity, Windsurf, and Codex trajectory viewers
   - Windsurf adapter available via API (`view=trajectory`) for cross-agent normalization
 - Diagnostic export:
   - download per-conversation diagnostic JSON from Viewer
-  - includes raw LS payloads to compare UI-visible process data vs rendered output
+  - includes raw LS payloads (Antigravity/Windsurf) or JSONL events (Codex) to compare UI-visible process data vs rendered output
   - note: may include sensitive content (paths, commands, outputs, conversation text)
 
 For detailed view semantics and cross-source alignment notes, see `docs/viewer/trajectory-view.md`.
@@ -91,6 +100,9 @@ For detailed view semantics and cross-source alignment notes, see `docs/viewer/t
   - On current Windsurf builds, the live token may be present in the LS process environment as `WINDSURF_CSRF_TOKEN`, so this app prefers `ps eww` output when available.
   - Manual fallback: set `csrfTokenOverride` in Settings, but only if you obtained the live LS token from the running Windsurf process/session.
   - Do not use `codeium.windsurf-windsurf_auth-` from `~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb`; that UUID is not the LS CSRF token on current Windsurf builds.
+- Codex CLI: no running process required. Install the [Codex CLI](https://github.com/openai/codex) and run at least one session — session files will be created automatically at `~/.codex/sessions/`.
+  - Sessions are `.jsonl` files nested under `YYYY/MM/DD/` date subdirectories.
+  - No token or attach configuration needed; sessions are read directly from disk.
 
 ## Project Status
 

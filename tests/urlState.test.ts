@@ -64,6 +64,7 @@ describe("parseUrlState", () => {
   it("parses source", () => {
     expect(parseUrlState("?source=antigravity").source).toBe("antigravity");
     expect(parseUrlState("?source=windsurf").source).toBe("windsurf");
+    expect(parseUrlState("?source=codex").source).toBe("codex");
   });
 
   it("ignores invalid source", () => {
@@ -72,6 +73,10 @@ describe("parseUrlState", () => {
 
   it("parses id", () => {
     expect(parseUrlState("?id=abc-123").id).toBe("abc-123");
+  });
+
+  it("parses rootId", () => {
+    expect(parseUrlState("?rootId=root-2").rootId).toBe("root-2");
   });
 
   it("parses view modes", () => {
@@ -147,11 +152,12 @@ describe("parseUrlState", () => {
 
   it("parses a full realistic URL", () => {
     const search =
-      "?source=windsurf&id=session-42&view=trajectory&ft=110010&stepType=CMD&expanded=eg-1,eg-3&row=event:99&inspector=event&includeCleared=1";
+      "?source=codex&id=session-42&rootId=root-7&view=trajectory&ft=110010&stepType=CMD&expanded=eg-1,eg-3&row=event:99&inspector=event&includeCleared=1";
     const result = parseUrlState(search);
     expect(result).toEqual({
-      source: "windsurf",
+      source: "codex",
       id: "session-42",
+      rootId: "root-7",
       view: "trajectory",
       filters: {
         thought: true,
@@ -180,6 +186,7 @@ function makeDefaultState(overrides?: Partial<UrlViewerState>): UrlViewerState {
     source: null,
     id: null,
     view: null,
+    rootId: null,
     filters: {
       ...DEFAULT_FILTERS,
       stepTypeFilter: ""
@@ -202,6 +209,11 @@ describe("buildUrlSearch", () => {
     const search = buildUrlSearch(makeDefaultState({ source: "antigravity", id: "sess-1" }));
     expect(search).toContain("source=antigravity");
     expect(search).toContain("id=sess-1");
+  });
+
+  it("includes rootId when present", () => {
+    const search = buildUrlSearch(makeDefaultState({ source: "codex", id: "sess-1", rootId: "root-2" }));
+    expect(search).toContain("rootId=root-2");
   });
 
   it("omits view when compact (default)", () => {
@@ -282,6 +294,7 @@ describe("round-trip", () => {
     const original = makeDefaultState({
       source: "windsurf",
       id: "my-session",
+      rootId: "root-9",
       view: "trajectory",
       filters: { thought: true, tool: false, command: true, status: true, errorsOnly: false, hasOutput: true, stepTypeFilter: "FOO" },
       expandedGroups: ["g1", "g2"],
@@ -296,6 +309,7 @@ describe("round-trip", () => {
 
     expect(parsed.source).toBe(original.source);
     expect(parsed.id).toBe(original.id);
+    expect(parsed.rootId).toBe(original.rootId);
     expect(parsed.view).toBe(original.view);
     expect(parsed.filters).toEqual(original.filters);
     expect(parsed.expandedGroups).toEqual(original.expandedGroups);

@@ -18,6 +18,7 @@ export interface TrajectoryFilterFlags {
 export interface UrlViewerState {
   source: Source | null;
   id: string | null;
+  rootId?: string | null;
   /** Unified view mode across both sources (compact = markdown/chat). */
   view: "compact" | "transcript" | "trajectory" | null;
   filters: TrajectoryFilterFlags & { stepTypeFilter: string };
@@ -87,7 +88,15 @@ export function viewFromUrl(
   source: Source,
 ): "markdown" | "chat" | "transcript" | "trajectory" {
   if (!urlView || urlView === "compact") {
-    return source === "antigravity" ? "markdown" : "chat";
+    if (source === "antigravity") {
+      return "markdown";
+    }
+    if (source === "windsurf") {
+      return "chat";
+    }
+    // Codex and any other sources do not have a chat/compact view;
+    // default them to the trajectory viewer.
+    return "trajectory";
   }
   return urlView; // "transcript" | "trajectory" are the same internally
 }
@@ -103,11 +112,14 @@ export function parseUrlState(search: string): Partial<UrlViewerState> {
 
   // source
   const src = p.get("source");
-  if (src === "antigravity" || src === "windsurf") state.source = src;
+  if (src === "antigravity" || src === "windsurf" || src === "codex") state.source = src;
 
   // id
   const id = p.get("id");
   if (id) state.id = id;
+
+  const rootId = p.get("rootId");
+  if (rootId) state.rootId = rootId;
 
   // view
   const view = p.get("view");
@@ -162,6 +174,7 @@ export function buildUrlSearch(state: UrlViewerState): string {
 
   if (state.source) p.set("source", state.source);
   if (state.id) p.set("id", state.id);
+  if (state.rootId) p.set("rootId", state.rootId);
 
   // Only include view when it is NOT the default "compact"
   if (state.view && state.view !== "compact") p.set("view", state.view);

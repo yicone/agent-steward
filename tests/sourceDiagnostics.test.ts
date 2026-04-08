@@ -32,6 +32,11 @@ describe("formatSourceDiagnostics", () => {
         heartbeatOk: false,
         lastError: "missing token",
         recommendedAction: "set override"
+      },
+      codex: {
+        sessionsFound: false,
+        sessionsDir: "/home/user/.codex/sessions",
+        error: "No session files found"
       }
     };
 
@@ -43,5 +48,7 @@ describe("formatSourceDiagnostics", () => {
     expect(text).toContain("- recommendedAction: restart session");
     expect(text).toContain("- path: /tmp/Windsurf.log");
     expect(text).toContain("- lastError: missing token");
+    expect(text).toContain("- sessionsFound: false");
+    expect(text).toContain("- sessionsDir: /home/user/.codex/sessions");
   });
 });

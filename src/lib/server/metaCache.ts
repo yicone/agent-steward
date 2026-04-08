@@ -3,6 +3,7 @@ import "server-only";
 import type { AppConfig, ConversationMeta, Source } from "@/lib/types";
 import { getAntigravityTrajectoryMetaMap } from "@/lib/server/antigravity";
 import { getWindsurfTrajectoryMetaMap } from "@/lib/server/windsurf";
+import { getCodexTrajectoryMetaMap } from "@/lib/server/codex";
 
 type CacheEntry = {
   expiresAtMs: number;
@@ -14,7 +15,8 @@ const CACHE_TTL_MS = 5_000;
 
 const cache: Record<Source, CacheEntry> = {
   antigravity: { expiresAtMs: 0 },
-  windsurf: { expiresAtMs: 0 }
+  windsurf: { expiresAtMs: 0 },
+  codex: { expiresAtMs: 0 }
 };
 
 export async function getTrajectoryMetaMapCached(params: {
@@ -28,10 +30,14 @@ export async function getTrajectoryMetaMapCached(params: {
 
   entry.inflight = (async () => {
     try {
-      const value =
-        params.source === "antigravity"
-          ? await getAntigravityTrajectoryMetaMap()
-          : await getWindsurfTrajectoryMetaMap(params.config);
+      let value: Record<string, ConversationMeta>;
+      if (params.source === "antigravity") {
+        value = await getAntigravityTrajectoryMetaMap();
+      } else if (params.source === "windsurf") {
+        value = await getWindsurfTrajectoryMetaMap(params.config);
+      } else {
+        value = await getCodexTrajectoryMetaMap(params.config);
+      }
       entry.value = value;
       entry.expiresAtMs = Date.now() + CACHE_TTL_MS;
       return value;

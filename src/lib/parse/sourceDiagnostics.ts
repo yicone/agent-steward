@@ -3,6 +3,7 @@ import type { SourcesStatus } from "@/lib/types";
 export function formatSourceDiagnostics(status: SourcesStatus): string {
   const ag = status.antigravity;
   const ws = status.windsurf;
+  const cx = status.codex;
   return [
     "Antigravity",
     `- discovered: ${ag.discovered}`,
@@ -24,6 +25,11 @@ export function formatSourceDiagnostics(status: SourcesStatus): string {
     `- csrf: present=${ws.csrfTokenPresent ?? false}, source=${ws.csrfTokenSource ?? "none"}, required=${ws.tokenRequired ?? "unknown"}`,
     `- heartbeatOk: ${ws.heartbeatOk ?? "unknown"}`,
     `- lastError: ${ws.lastError ?? "none"}`,
-    `- recommendedAction: ${ws.recommendedAction ?? "none"}`
+    `- recommendedAction: ${ws.recommendedAction ?? "none"}`,
+    "",
+    "Codex",
+    `- sessionsFound: ${cx.sessionsFound}`,
+    `- sessionsDir: ${cx.sessionsDir ?? "n/a"}`,
+    `- error: ${cx.error ?? "none"}`
   ].join("\n");
 }

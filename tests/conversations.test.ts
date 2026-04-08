@@ -148,7 +148,7 @@ describe("probeRootHealth", () => {
     const root: RootConfig = { id: "h1", source: "antigravity", path: rootDir, enabled: true };
     const health = await probeRootHealth(root);
     expect(health.status).toBe("healthy");
-    expect(health.pbCount).toBe(2);
+    expect(health.fileCount).toBe(2);
     expect(health.scanMs).toBeGreaterThanOrEqual(0);
     expect(health.error).toBeUndefined();
   });
@@ -157,7 +157,7 @@ describe("probeRootHealth", () => {
     const root: RootConfig = { id: "m1", source: "antigravity", path: "/nonexistent/path/xyz", enabled: true };
     const health = await probeRootHealth(root);
     expect(health.status).toBe("missing");
-    expect(health.pbCount).toBe(0);
+    expect(health.fileCount).toBe(0);
     expect(health.error).toBe("Path does not exist");
   });
 
@@ -169,6 +169,31 @@ describe("probeRootHealth", () => {
     const health = await probeRootHealth(root);
     expect(health.status).toBe("missing");
     expect(health.error).toBe("Path is not a directory");
+  });
+
+  it("reports unreadable when stat on the root path is permission denied", async () => {
+    const parentDir = path.join(tmpDir, "blocked-parent");
+    const rootDir = path.join(parentDir, "child-root");
+    await fs.mkdir(rootDir, { recursive: true });
+    await fs.writeFile(path.join(rootDir, "a.pb"), "a");
+
+    if (process.platform === "win32" || typeof process.getuid !== "function" || process.getuid() === 0) {
+      const root: RootConfig = { id: "blocked", source: "antigravity", path: rootDir, enabled: true };
+      const health = await probeRootHealth(root);
+      expect(["healthy", "unreadable"]).toContain(health.status);
+      return;
+    }
+
+    await fs.chmod(parentDir, 0o000);
+    try {
+      const root: RootConfig = { id: "blocked", source: "antigravity", path: rootDir, enabled: true };
+      const health = await probeRootHealth(root);
+      expect(health.status).toBe("unreadable");
+      expect(health.fileCount).toBe(0);
+      expect(health.error).toBe("Permission denied reading path");
+    } finally {
+      await fs.chmod(parentDir, 0o755);
+    }
   });
 
   it("reports unreadable for permission-denied directories", async () => {
@@ -190,6 +215,41 @@ describe("probeRootHealth", () => {
 
     // Restore permissions for cleanup
     await fs.chmod(rootDir, 0o755);
+  });
+
+  it("Codex: counts .jsonl files in nested date subdirectories", async () => {
+    const rootDir = path.join(tmpDir, "codex-nested");
+    await fs.mkdir(path.join(rootDir, "2025", "03", "14"), { recursive: true });
+    await fs.writeFile(path.join(rootDir, "2025", "03", "14", "rollout-abc.jsonl"), "{}");
+    await fs.writeFile(path.join(rootDir, "2025", "03", "14", "rollout-def.jsonl"), "{}");
+    await fs.writeFile(path.join(rootDir, "2025", "03", "14", "notes.txt"), "note"); // non-.jsonl
+
+    const root: RootConfig = { id: "cx1", source: "codex", path: rootDir, enabled: true };
+    const health = await probeRootHealth(root);
+    expect(health.status).toBe("healthy");
+    expect(health.fileCount).toBe(2);
+    expect(health.error).toBeUndefined();
+  });
+
+  it("Codex: reports unreadable when a nested subdirectory has no read permission", async () => {
+    const rootDir = path.join(tmpDir, "codex-noperm");
+    const subDir = path.join(rootDir, "2025");
+    await fs.mkdir(subDir, { recursive: true });
+    await fs.writeFile(path.join(subDir, "session.jsonl"), "{}");
+    await fs.chmod(subDir, 0o000);
+
+    const root: RootConfig = { id: "cxnp", source: "codex", path: rootDir, enabled: true };
+    const health = await probeRootHealth(root);
+    if (process.platform === "win32" || typeof process.getuid !== "function" || process.getuid() === 0) {
+      // On Windows or environments without POSIX getuid/chmod semantics (or when running as root),
+      // the directory may still be readable despite chmod(0o000), so allow either outcome.
+      expect(["healthy", "unreadable"]).toContain(health.status);
+    } else {
+      expect(health.status).toBe("unreadable");
+      expect(health.error).toBeDefined();
+    }
+
+    await fs.chmod(subDir, 0o755);
   });
 });
 

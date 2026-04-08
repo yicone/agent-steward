@@ -5,6 +5,7 @@ import { connectUnaryJson } from "@/lib/server/connect";
 import { findLatestAntigravityDiscovery, resolveAntigravityRpcTarget } from "@/lib/server/antigravity";
 import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
 import { getWindsurfDiagnosticBundle } from "@/lib/server/windsurf";
+import { getCodexRawContent } from "@/lib/server/codex";
 
 const SERVICE = "exa.language_server_pb.LanguageServerService";
 
@@ -24,11 +25,13 @@ export type DiagnosticExport = {
     markdown: string;
   };
   windsurf?: Awaited<ReturnType<typeof getWindsurfDiagnosticBundle>>;
+  codex?: Awaited<ReturnType<typeof getCodexRawContent>>;
 };
 
 export async function buildDiagnosticExport(params: {
   source: Source;
   cascadeId: string;
+  rootId?: string;
   config: AppConfig;
   windsurf?: {
     allSteps?: boolean;
@@ -106,6 +109,17 @@ export async function buildDiagnosticExport(params: {
         convertTrajectoryToMarkdownResponse,
         markdown
       }
+    };
+  }
+
+  if (source === "codex") {
+    const codex = await getCodexRawContent(cascadeId, config, { preferredRootId: params.rootId });
+    return {
+      schemaVersion: 1,
+      generatedAt,
+      source,
+      cascadeId,
+      codex
     };
   }
 

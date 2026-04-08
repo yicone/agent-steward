@@ -13,8 +13,17 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-03-14` — Codex CLI support
+  - New `"codex"` source type alongside Antigravity and Windsurf
+  - Reads sessions directly from `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` — no running process or token required
+  - Normalizes Codex JSONL events (`session_meta`, `user_message`, `assistant_message`, `tool_call`, `tool_result`, `exec`, `reasoning`, etc.) into the unified trajectory model
+  - Extracts `title` / `cwd` from `session_meta` and first user message headers
+  - Trajectory viewer with full filter/inspector support
+  - New `GET /api/sources` `codex` status entry
+  - Diagnostic export includes raw JSONL events
+  - Codex roots section in Settings; default root: `~/.codex/sessions`
 - `2026-03-13` — Multi-root scaling milestone (`refs: #6`)
-  - Per-root health indicators in Settings (missing, unreadable, slow, pb count)
+  - Per-root health indicators in Settings (missing, unreadable, slow, file count)
   - Duplicate session detection across roots with UI affordance in Viewer
   - Cached directory listing with TTL and mtime-based invalidation for faster scans
   - New `GET /api/root-health` endpoint

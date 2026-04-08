@@ -4,6 +4,7 @@ import type { SourcesStatus } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { getAntigravityStatus } from "@/lib/server/antigravity";
 import { getWindsurfStatus } from "@/lib/server/windsurf";
+import { getCodexStatus } from "@/lib/server/codex";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,14 @@ export async function GET() {
     windsurf = { attached: false, attachMethod: "log", error: message, lastError: message };
   }
 
-  const status: SourcesStatus = { antigravity, windsurf };
+  let codex: SourcesStatus["codex"];
+  try {
+    codex = await getCodexStatus(config);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    codex = { sessionsFound: false, error: message };
+  }
+
+  const status: SourcesStatus = { antigravity, windsurf, codex };
   return NextResponse.json(status);
 }
