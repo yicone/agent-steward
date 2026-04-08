@@ -77,7 +77,7 @@ export type SourcesStatus = {
     pidAlive?: boolean;
     port?: number;
     csrfTokenPresent?: boolean;
-    csrfTokenSource?: "ps_args" | "override" | "none";
+    csrfTokenSource?: "ps_args" | "override" | "discovery_file" | "none";
     tokenRequired?: boolean;
     heartbeatOk?: boolean;
     lastError?: string;

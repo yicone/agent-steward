@@ -161,7 +161,7 @@ export async function collectJsonlFiles(
   await forEachWithConcurrency(fileEntries, FILE_STAT_CONCURRENCY, async (fullPath) => {
     const st = await safeStat(fullPath);
     if (st) {
-      results.push({ path: fullPath, mtimeMs: st.mtimeMs, sizeBytes: st.size });
+      results.push({ path: fullPath, mtimeMs: Number(st.mtimeMs), sizeBytes: Number(st.size) });
     }
   });
 

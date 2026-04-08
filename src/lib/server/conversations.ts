@@ -233,14 +233,16 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
   const rootStat = await safeStat(rootPath);
   if (!rootStat || !rootStat.isDirectory()) return [];
 
+  const rootMtimeMs = Number(rootStat.mtimeMs);
+
   /* Codex sessions are .jsonl files nested in date subdirectories */
   if (source === "codex") {
-    return scanCodexRoot(root, rootPath, rootStat.mtimeMs);
+    return scanCodexRoot(root, rootPath, rootMtimeMs);
   }
 
   /* check cache */
   const cached = _dirCache.get(root.id);
-  if (cached && cached.rootPath === rootPath && isCacheValid(cached, rootStat.mtimeMs)) {
+  if (cached && cached.rootPath === rootPath && isCacheValid(cached, rootMtimeMs)) {
     return cached.entries;
   }
 
@@ -267,8 +269,8 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
           source,
           rootId: root.id,
           path: fullPath,
-          sizeBytes: st.size,
-          mtimeMs: st.mtimeMs
+          sizeBytes: Number(st.size),
+          mtimeMs: Number(st.mtimeMs)
         } satisfies ConversationFile;
       } finally {
         release();
@@ -280,7 +282,7 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
 
   _dirCache.set(root.id, {
     rootPath,
-    dirMtimeMs: rootStat.mtimeMs,
+    dirMtimeMs: rootMtimeMs,
     entries,
     cachedAtMs: Date.now()
   });

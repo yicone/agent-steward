@@ -132,7 +132,7 @@ export function parseUrlState(search: string): Partial<UrlViewerState> {
   if (ft && ft.length === FILTER_KEYS.length && /^[01]+$/.test(ft)) {
     const flags = Object.fromEntries(
       FILTER_KEYS.map((k, i) => [k, ft[i] === "1"])
-    ) as TrajectoryFilterFlags;
+    ) as unknown as TrajectoryFilterFlags;
     state.filters = { ...flags, stepTypeFilter: p.get("stepType") ?? "" };
   } else if (p.has("stepType")) {
     state.filters = {

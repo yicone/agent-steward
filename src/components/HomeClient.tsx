@@ -2275,6 +2275,20 @@ export default function HomeClient() {
                       <span className="font-mono">{it.id}</span>
                     )}
                   </div>
+                  {(it.gitBranch || it.model) ? (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {it.gitBranch ? (
+                        <Badge className="text-[10px] px-1 py-0 border border-border/60 bg-background/5">
+                          <span className="opacity-60 mr-1">git:</span>{it.gitBranch}
+                        </Badge>
+                      ) : null}
+                      {it.model ? (
+                        <Badge className="text-[10px] px-1 py-0 bg-accent/15 text-accent-foreground">
+                          {it.model}
+                        </Badge>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-1 text-xs text-muted">
                     {formatTime(it.mtimeMs)} • {formatBytes(it.sizeBytes)}
                   </div>
