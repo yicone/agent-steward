@@ -513,6 +513,23 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
     index += 1;
   }
 
-  const summary = summarizeTrajectoryEvents(events, rawEvents.length);
-  return { events, summary };
+  // Deduplicate consecutive user_message events with identical text.
+  // The Codex CLI emits each context block twice: once as a response_item
+  // (structured record) and once as an event_msg (streaming notification).
+  // Both carry the same content, so the second occurrence must be dropped.
+  const deduped: TrajectoryEvent[] = [];
+  for (const ev of events) {
+    if (
+      ev.kind === "user" &&
+      deduped.length > 0 &&
+      deduped[deduped.length - 1]!.kind === "user" &&
+      deduped[deduped.length - 1]!.text === ev.text
+    ) {
+      continue;
+    }
+    deduped.push(ev);
+  }
+
+  const summary = summarizeTrajectoryEvents(deduped, rawEvents.length);
+  return { events: deduped, summary };
 }

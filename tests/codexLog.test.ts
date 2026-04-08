@@ -391,6 +391,53 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     expect(summary.assistantCount).toBe(1);
     expect(summary.toolCount).toBe(2);
   });
+
+  it("deduplicates consecutive user_message events with identical text (response_item + event_msg pair)", () => {
+    // The Codex CLI emits each injected context block twice: once as a
+    // response_item/message/user record and again as an event_msg/user_message
+    // notification. Only one should appear in the output.
+    const envCtx = "<environment_context>\n  <cwd>/Users/tr/Workspace/china-travel</cwd>\n</environment_context>";
+    const raw = parseCodexJsonl(
+      [
+        JSON.stringify({
+          timestamp: "2025-10-14T11:34:34.765Z",
+          type: "response_item",
+          payload: { type: "message", role: "user", content: [{ type: "input_text", text: envCtx }] }
+        }),
+        JSON.stringify({
+          timestamp: "2025-10-14T11:34:34.765Z",
+          type: "event_msg",
+          payload: { type: "user_message", message: envCtx, kind: "environment_context" }
+        }),
+        JSON.stringify({
+          timestamp: "2025-10-14T11:34:34.765Z",
+          type: "response_item",
+          payload: { type: "message", role: "user", content: [{ type: "input_text", text: "Fix the failing tests" }] }
+        }),
+        JSON.stringify({
+          timestamp: "2025-10-14T11:34:34.765Z",
+          type: "event_msg",
+          payload: { type: "user_message", message: "Fix the failing tests" }
+        })
+      ].join("\n")
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+    const userEvents = events.filter((e) => e.kind === "user");
+    expect(userEvents).toHaveLength(2);
+    expect(userEvents[0]?.text).toBe(envCtx);
+    expect(userEvents[1]?.text).toBe("Fix the failing tests");
+  });
+
+  it("preserves consecutive user_message events with different text", () => {
+    const raw = parseCodexJsonl(
+      [
+        JSON.stringify({ type: "user_message", item: { content: "First message" } }),
+        JSON.stringify({ type: "user_message", item: { content: "Second message" } })
+      ].join("\n")
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+    expect(events.filter((e) => e.kind === "user")).toHaveLength(2);
+  });
 });
 
 /* ---------- sanitizeSqliteCodexTitle ---------- */
