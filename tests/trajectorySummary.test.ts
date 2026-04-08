@@ -102,10 +102,28 @@ describe("matchesConversationSearch", () => {
     expect(matchesConversationSearch(listItem({}), "  ")).toBe(true);
   });
 
-  it("matches on id (case-insensitive)", () => {
-    expect(matchesConversationSearch(listItem({ id: "abc-123" }), "abc")).toBe(true);
-    expect(matchesConversationSearch(listItem({ id: "abc-123" }), "ABC")).toBe(true);
-    expect(matchesConversationSearch(listItem({ id: "abc-123" }), "xyz")).toBe(false);
+  it("matches on id when no title (case-insensitive)", () => {
+    expect(matchesConversationSearch(listItem({ id: "abc-123", title: undefined }), "abc")).toBe(true);
+    expect(matchesConversationSearch(listItem({ id: "abc-123", title: undefined }), "ABC")).toBe(true);
+    expect(matchesConversationSearch(listItem({ id: "abc-123", title: undefined }), "xyz")).toBe(false);
+  });
+
+  it("does not match on id when title is present (Codex rollout-id regression)", () => {
+    // All Codex session IDs start with "rollout-"; a titled session must not
+    // match the query "rollout" just because of its opaque id.
+    expect(
+      matchesConversationSearch(
+        listItem({ id: "rollout-2026-01-20T10-59-25-abc", title: "Please review my uncommitted changes" }),
+        "rollout"
+      )
+    ).toBe(false);
+    // But the title itself should still match.
+    expect(
+      matchesConversationSearch(
+        listItem({ id: "rollout-2026-01-20T10-59-25-abc", title: "Please review my uncommitted changes" }),
+        "review"
+      )
+    ).toBe(true);
   });
 
   it("matches on title", () => {

@@ -50,14 +50,17 @@ export function matchesEventSearch(event: TrajectoryEvent, query: string): boole
 
 /**
  * Returns true if the conversation list item matches the given search query.
- * Searches across: id, title, and cwd.
+ * Searches across: title (or id when no title is set), and cwd.
+ * When a title is present the id is an opaque internal identifier and is
+ * intentionally excluded — searching it would cause every Codex session
+ * (whose id always starts with "rollout-") to match the query "rollout"
+ * regardless of its human-readable title.
  * Pass an empty string to match all items.
  */
 export function matchesConversationSearch(item: ConversationListItem, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  if (item.id.toLowerCase().includes(q)) return true;
-  if (item.title?.toLowerCase().includes(q)) return true;
+  if (item.title ? item.title.toLowerCase().includes(q) : item.id.toLowerCase().includes(q)) return true;
   if (item.cwd?.toLowerCase().includes(q)) return true;
   return false;
 }

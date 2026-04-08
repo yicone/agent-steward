@@ -2219,7 +2219,7 @@ export default function HomeClient() {
           </Button>
           <div className="flex-1" />
           <div className="w-full sm:w-[360px] sm:max-w-[360px]">
-            <Input placeholder="Search by id, title or path…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+            <Input placeholder="Search by title or path…" value={filter} onChange={(e) => setFilter(e.target.value)} />
           </div>
         </div>
         <div className="mt-2 text-xs text-muted">
