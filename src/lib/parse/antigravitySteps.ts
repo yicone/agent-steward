@@ -293,13 +293,20 @@ export function normalizeAntigravityTrajectoryToEvents(params: {
       const taskName = asNonEmptyString(s?.browserSubagent?.taskName);
       const task = asNonEmptyString(s?.browserSubagent?.task);
       const clippedTask = task ? truncateText(task, 5000) : null;
-      pushEvent(index, stepType, "tool", executionId, {
+      pushEvent(index, stepType, "subagent", executionId, {
         title: "Browser Subagent",
         text: taskName ?? "Browser task",
         ...(clippedTask ? { output: clippedTask.text, outputTruncated: clippedTask.truncated } : {}),
         status,
         createdAt,
-        completedAt
+        completedAt,
+        subagent: {
+          type: "browser",
+          source: "antigravity",
+          antigravityStepType: stepType,
+          taskName: taskName ?? undefined,
+          taskDescription: task ?? undefined
+        }
       });
       continue;
     }

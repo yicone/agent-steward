@@ -114,12 +114,33 @@ export type TrajectoryEventKind =
   | "tool"
   | "command"
   | "status"
+  | "subagent"
   | "other";
 
 export type TrajectoryToolCall = {
   id?: string;
   name?: string;
   argumentsJson?: string;
+};
+
+/** Subagent invocation metadata extracted from agent runtime events. */
+export type SubagentInfo = {
+  /** Subagent classification: browser, coding, research, delegate, or unknown. */
+  type: "browser" | "coding" | "research" | "delegate" | "unknown";
+  /** Source system that produced this subagent event. */
+  source: "antigravity" | "codex";
+  /** Display name of the subtask. */
+  taskName?: string;
+  /** Detailed task description or instructions. */
+  taskDescription?: string;
+  /** Antigravity: original step type (e.g. CORTEX_STEP_TYPE_BROWSER_SUBAGENT). */
+  antigravityStepType?: string;
+  /** Codex: function name that triggered subagent detection. */
+  codexFunctionName?: string;
+  /** Codex: call_id for associating call with output. */
+  codexCallId?: string;
+  /** Codex: session_meta.forked_from_id indicating a forked subagent session. */
+  forkedFrom?: string;
 };
 
 export type TrajectoryEvent = {
@@ -140,6 +161,8 @@ export type TrajectoryEvent = {
   output?: string;
   outputTruncated?: boolean;
   toolCalls?: TrajectoryToolCall[];
+  /** Populated when kind === "subagent" with detailed subagent metadata. */
+  subagent?: SubagentInfo;
 };
 
 export type TrajectorySummary = {
@@ -150,6 +173,7 @@ export type TrajectorySummary = {
   thoughtCount: number;
   toolCount: number;
   commandCount: number;
+  subagentCount: number;
   errorCount: number;
 };
 

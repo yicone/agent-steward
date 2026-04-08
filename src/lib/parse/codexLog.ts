@@ -24,6 +24,8 @@ export type CodexSessionMeta = {
   timestamp?: string;
   /** Git branch active when the session was started. */
   gitBranch?: string;
+  /** Parent session UUID if this session was forked from another (subagent session). */
+  forkedFrom?: string;
 };
 
 /* ---------- helpers ---------- */
@@ -153,6 +155,51 @@ function truncate(text: string, maxChars: number): string {
   return `${text.slice(0, maxChars)}\n\n[truncated]`;
 }
 
+/** Detect if a function name indicates a subagent invocation. */
+function inferSubagentType(functionName: string): "browser" | "coding" | "research" | "delegate" | "unknown" | null {
+  const name = functionName.toLowerCase();
+  // High-confidence patterns
+  if (name.includes("browser") || name.includes("web_agent") || name.includes("page_navigate")) return "browser";
+  if (name.includes("subagent") || name.includes("spawn_agent") || name.includes("delegate")) return "delegate";
+  if (name.includes("research") || name.includes("search_deep") || name.includes("investigate")) return "research";
+  if (name.includes("code_review") || name.includes("review_code") || name.includes("audit")) return "coding";
+  // Medium-confidence: generic agent-like names
+  if (name.includes("agent") || name.includes("_agent_")) return "delegate";
+  return null; // Not detected as subagent
+}
+
+/** Extract task description from function call arguments. */
+function extractTaskDescription(args: unknown): string | undefined {
+  if (!args) return undefined;
+  // Handle string args (try parse as JSON)
+  let parsed: unknown = args;
+  if (typeof args === "string") {
+    try {
+      parsed = JSON.parse(args);
+    } catch {
+      return args.slice(0, 200);
+    }
+  }
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const obj = parsed as Record<string, unknown>;
+  // Common field names for task descriptions
+  const candidates = [
+    obj.task,
+    obj.task_description,
+    obj.description,
+    obj.instructions,
+    obj.prompt,
+    obj.query,
+    obj.goal,
+    obj.objective
+  ];
+  for (const val of candidates) {
+    const s = asNonEmptyString(val);
+    if (s) return s.slice(0, 500);
+  }
+  return undefined;
+}
+
 function formatToolArgs(args: unknown): string | undefined {
   if (!args) return undefined;
   let text: string;
@@ -213,12 +260,14 @@ export function extractCodexSessionMeta(events: CodexRawEvent[]): CodexSessionMe
   const item = normalized.item;
   const git = asRecord(item.git);
   const gitBranch = git ? (asNonEmptyString(git.branch) ?? undefined) : undefined;
+  const forkedFrom = asNonEmptyString(item.forked_from_id) ?? undefined;
   return {
     sessionId: asNonEmptyString(getField(item, "session_id", "id") as unknown) ?? undefined,
     cwd: asNonEmptyString(item.cwd) ?? undefined,
     model: asNonEmptyString(item.model) ?? undefined,
     timestamp: asNonEmptyString(item.timestamp) ?? normalized.timestamp,
-    gitBranch
+    gitBranch,
+    forkedFrom
   };
 }
 
@@ -429,16 +478,40 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
         const name = asNonEmptyString(getField(item, "name", "function", "tool_name") as unknown) ?? "function";
         const callId = asNonEmptyString(getField(item, "call_id", "id") as unknown) ?? undefined;
         const args = getField(item, "arguments", "args");
-        events.push({
-          id: `fn_call_${index}`,
-          index,
-          source: "codex",
-          kind: "tool",
-          stepType: "function_call",
-          title: name,
-          toolCalls: [{ id: callId, name, argumentsJson: formatToolArgs(args) }],
-          createdAt: timestamp
-        });
+        // Detect if this function call represents a subagent invocation
+        const subagentType = inferSubagentType(name);
+        if (subagentType) {
+          const taskDesc = extractTaskDescription(args);
+          events.push({
+            id: `fn_call_${index}`,
+            index,
+            source: "codex",
+            kind: "subagent",
+            stepType: "function_call",
+            title: name,
+            text: taskDesc ?? name,
+            toolCalls: [{ id: callId, name, argumentsJson: formatToolArgs(args) }],
+            subagent: {
+              type: subagentType,
+              source: "codex",
+              codexFunctionName: name,
+              codexCallId: callId,
+              taskDescription: taskDesc
+            },
+            createdAt: timestamp
+          });
+        } else {
+          events.push({
+            id: `fn_call_${index}`,
+            index,
+            source: "codex",
+            kind: "tool",
+            stepType: "function_call",
+            title: name,
+            toolCalls: [{ id: callId, name, argumentsJson: formatToolArgs(args) }],
+            createdAt: timestamp
+          });
+        }
         break;
       }
 
@@ -450,18 +523,42 @@ export function normalizeCodexEventsToTrajectoryEvents(rawEvents: CodexRawEvent[
         const rawResultText = asNonEmptyString(getField(item, "output", "result") as unknown) ?? undefined;
         const resultText = rawResultText ? truncate(rawResultText, MAX_TOOL_OUTPUT_CHARS) : undefined;
         const fnResultTruncated = rawResultText !== undefined && rawResultText !== resultText ? true : undefined;
-        events.push({
-          id: `fn_result_${index}`,
-          index,
-          source: "codex",
-          kind: "tool",
-          stepType: normalized.type,
-          title: `${name} result`,
-          output: resultText,
-          ...(fnResultTruncated ? { outputTruncated: fnResultTruncated } : {}),
-          exitCode,
-          createdAt: timestamp
-        });
+        // Check if this result corresponds to a subagent call
+        const subagentType = inferSubagentType(name);
+        const callId = asNonEmptyString(getField(item, "call_id", "id") as unknown) ?? undefined;
+        if (subagentType) {
+          events.push({
+            id: `fn_result_${index}`,
+            index,
+            source: "codex",
+            kind: "subagent",
+            stepType: normalized.type,
+            title: `${name} result`,
+            text: resultText ?? `${name} completed`,
+            outputTruncated: fnResultTruncated,
+            exitCode,
+            subagent: {
+              type: subagentType,
+              source: "codex",
+              codexFunctionName: name,
+              codexCallId: callId
+            },
+            createdAt: timestamp
+          });
+        } else {
+          events.push({
+            id: `fn_result_${index}`,
+            index,
+            source: "codex",
+            kind: "tool",
+            stepType: normalized.type,
+            title: `${name} result`,
+            output: resultText,
+            outputTruncated: fnResultTruncated,
+            exitCode,
+            createdAt: timestamp
+          });
+        }
         break;
       }
 

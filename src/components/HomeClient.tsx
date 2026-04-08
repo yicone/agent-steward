@@ -521,6 +521,7 @@ function TrajectoryEventView({
   const hasDetails = Boolean(event.output || event.toolCalls?.length);
   const clickable = typeof onSelect === "function";
   const shouldRenderMarkdown = event.kind === "thought";
+  const isSubagent = event.kind === "subagent";
   const hl = highlightQuery ?? "";
 
   return (
@@ -533,7 +534,8 @@ function TrajectoryEventView({
         "transition-shadow",
         clickable && "cursor-pointer",
         selected && "ring-2 ring-accent/40 ring-offset-0",
-        highlighted && "ring-2 ring-yellow-400/70 ring-offset-0"
+        highlighted && "ring-2 ring-yellow-400/70 ring-offset-0",
+        isSubagent && "border-l-2 border-l-amber-400/60"
       )}
       onClick={onSelect}
     >
@@ -552,11 +554,28 @@ function TrajectoryEventView({
       ) : null}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge title={event.title}><HighlightedText text={event.title} query={hl} /></Badge>
+          {isSubagent && event.subagent ? (
+            <>
+              <Badge className="bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                {event.subagent.type}
+              </Badge>
+              <Badge title={event.title} className="border border-border/60">
+                <HighlightedText text={event.title} query={hl} />
+              </Badge>
+            </>
+          ) : (
+            <Badge title={event.title}><HighlightedText text={event.title} query={hl} /></Badge>
+          )}
           <span className="truncate font-mono text-xs text-muted">{event.stepType}</span>
         </div>
         <div className="shrink-0 text-xs text-muted">{timeLabel}</div>
       </div>
+
+      {isSubagent && event.subagent?.taskDescription ? (
+        <div className="mt-2 text-sm text-muted">
+          <HighlightedText text={event.subagent.taskDescription} query={hl} />
+        </div>
+      ) : null}
 
       {event.commandLine ? (
         <div className="mt-2 font-mono text-xs">
@@ -1218,6 +1237,13 @@ function TrajectoryFilterControls({
           Status
         </Button>
         <Button
+          variant={filters.subagent ? "default" : "outline"}
+          size="sm"
+          onClick={() => onFiltersChange((prev) => ({ ...prev, subagent: !prev.subagent, errorsOnly: false }))}
+        >
+          Subagents
+        </Button>
+        <Button
           variant={filters.errorsOnly ? "default" : "outline"}
           size="sm"
           onClick={() => onFiltersChange((prev) => ({ ...prev, errorsOnly: !prev.errorsOnly }))}
@@ -1317,6 +1343,7 @@ export default function HomeClient() {
     tool: true,
     command: true,
     status: false,
+    subagent: true,
     errorsOnly: false,
     hasOutput: false,
     stepTypeFilter: ""
@@ -1391,6 +1418,7 @@ export default function HomeClient() {
             if (event.kind === "tool" && !trajectoryFilters.tool) continue;
             if (event.kind === "command" && !trajectoryFilters.command) continue;
             if (event.kind === "status" && !trajectoryFilters.status) continue;
+            if (event.kind === "subagent" && !trajectoryFilters.subagent) continue;
           }
           if (trajectoryFilters.hasOutput && !event.output) continue;
           if (trajectoryFilters.stepTypeFilter && !event.stepType.toLowerCase().includes(trajectoryFilters.stepTypeFilter.toLowerCase())) continue;
@@ -1632,6 +1660,7 @@ export default function HomeClient() {
         if (event.kind === "tool" && !trajectoryFilters.tool) setTrajectoryFilters((prev) => ({ ...prev, tool: true }));
         if (event.kind === "command" && !trajectoryFilters.command) setTrajectoryFilters((prev) => ({ ...prev, command: true }));
         if (event.kind === "status" && !trajectoryFilters.status) setTrajectoryFilters((prev) => ({ ...prev, status: true }));
+        if (event.kind === "subagent" && !trajectoryFilters.subagent) setTrajectoryFilters((prev) => ({ ...prev, subagent: true }));
       }
 
       if (content?.kind === "trajectory" && content.source === "antigravity" && antigravityView !== "trajectory") {
@@ -1777,6 +1806,10 @@ export default function HomeClient() {
       }
       if (event.kind === "status" && !prev.status) {
         next.status = true;
+        changed = true;
+      }
+      if (event.kind === "subagent" && !prev.subagent) {
+        next.subagent = true;
         changed = true;
       }
       return changed ? next : prev;

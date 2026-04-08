@@ -90,12 +90,13 @@ describe("parseUrlState", () => {
   });
 
   it("parses trajectory filter bitfield", () => {
-    const result = parseUrlState("?ft=100110");
+    const result = parseUrlState("?ft=1001010");
     expect(result.filters).toEqual({
       thought: true,
       tool: false,
       command: false,
       status: true,
+      subagent: false,
       errorsOnly: true,
       hasOutput: false,
       stepTypeFilter: ""
@@ -110,7 +111,7 @@ describe("parseUrlState", () => {
   });
 
   it("parses ft and stepType together", () => {
-    const result = parseUrlState("?ft=000001&stepType=test");
+    const result = parseUrlState("?ft=0000001&stepType=test");
     expect(result.filters?.hasOutput).toBe(true);
     expect(result.filters?.thought).toBe(false);
     expect(result.filters?.stepTypeFilter).toBe("test");
@@ -152,7 +153,7 @@ describe("parseUrlState", () => {
 
   it("parses a full realistic URL", () => {
     const search =
-      "?source=codex&id=session-42&rootId=root-7&view=trajectory&ft=110010&stepType=CMD&expanded=eg-1,eg-3&row=event:99&inspector=event&includeCleared=1";
+      "?source=codex&id=session-42&rootId=root-7&view=trajectory&ft=1100110&stepType=CMD&expanded=eg-1,eg-3&row=event:99&inspector=event&includeCleared=1";
     const result = parseUrlState(search);
     expect(result).toEqual({
       source: "codex",
@@ -164,6 +165,7 @@ describe("parseUrlState", () => {
         tool: true,
         command: false,
         status: false,
+        subagent: true,
         errorsOnly: true,
         hasOutput: false,
         stepTypeFilter: "CMD"
@@ -234,16 +236,16 @@ describe("buildUrlSearch", () => {
   it("includes ft when filters differ from default", () => {
     const search = buildUrlSearch(
       makeDefaultState({
-        filters: { thought: false, tool: true, command: true, status: false, errorsOnly: false, hasOutput: false, stepTypeFilter: "" }
+        filters: { thought: false, tool: true, command: true, status: false, subagent: true, errorsOnly: false, hasOutput: false, stepTypeFilter: "" }
       })
     );
-    expect(search).toContain("ft=011000");
+    expect(search).toContain("ft=0110100");
   });
 
   it("includes stepType when non-empty", () => {
     const search = buildUrlSearch(
       makeDefaultState({
-        filters: { thought: true, tool: true, command: true, status: false, errorsOnly: false, hasOutput: false, stepTypeFilter: "RUN" }
+        filters: { thought: true, tool: true, command: true, status: false, subagent: true, errorsOnly: false, hasOutput: false, stepTypeFilter: "RUN" }
       })
     );
     expect(search).toContain("stepType=RUN");
@@ -296,7 +298,7 @@ describe("round-trip", () => {
       id: "my-session",
       rootId: "root-9",
       view: "trajectory",
-      filters: { thought: true, tool: false, command: true, status: true, errorsOnly: false, hasOutput: true, stepTypeFilter: "FOO" },
+      filters: { thought: true, tool: false, command: true, status: true, subagent: false, errorsOnly: false, hasOutput: true, stepTypeFilter: "FOO" },
       expandedGroups: ["g1", "g2"],
       selectedRowId: "event:7",
       inspectorOpen: true,

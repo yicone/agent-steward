@@ -16,6 +16,7 @@ export function summarizeTrajectoryEvents(events: TrajectoryEvent[], totalSteps:
     thoughtCount: 0,
     toolCount: 0,
     commandCount: 0,
+    subagentCount: 0,
     errorCount: 0
   };
 
@@ -25,6 +26,7 @@ export function summarizeTrajectoryEvents(events: TrajectoryEvent[], totalSteps:
     if (event.kind === "thought") summary.thoughtCount += 1;
     if (event.kind === "tool") summary.toolCount += 1;
     if (event.kind === "command") summary.commandCount += 1;
+    if (event.kind === "subagent") summary.subagentCount += 1;
     if (isErrorLikeTrajectoryEvent(event)) summary.errorCount += 1;
   }
 

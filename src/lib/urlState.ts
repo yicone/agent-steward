@@ -10,6 +10,7 @@ export interface TrajectoryFilterFlags {
   tool: boolean;
   command: boolean;
   status: boolean;
+  subagent: boolean;
   errorsOnly: boolean;
   hasOutput: boolean;
 }
@@ -39,6 +40,7 @@ const FILTER_KEYS: readonly (keyof TrajectoryFilterFlags)[] = [
   "tool",
   "command",
   "status",
+  "subagent",
   "errorsOnly",
   "hasOutput"
 ];
@@ -49,6 +51,7 @@ export const DEFAULT_FILTERS: Readonly<TrajectoryFilterFlags> = {
   tool: true,
   command: true,
   status: false,
+  subagent: true,
   errorsOnly: false,
   hasOutput: false
 };
