@@ -25,7 +25,8 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   }
 
   const url = new URL(req.url);
-  const rootId = url.searchParams.get("rootId") ?? undefined;
+  const rawRootId = url.searchParams.get("rootId");
+  const rootId = rawRootId === null ? undefined : rawRootId.trim() || undefined;
   const allSteps = url.searchParams.get("allSteps");
   const maxStepsParam = url.searchParams.get("maxSteps");
   const maxSteps = maxStepsParam ? Number(maxStepsParam) : undefined;

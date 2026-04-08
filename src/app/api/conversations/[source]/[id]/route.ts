@@ -30,7 +30,8 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   }
 
   const url = new URL(req.url);
-  const rootId = url.searchParams.get("rootId") ?? undefined;
+  const rawRootId = url.searchParams.get("rootId");
+  const rootId = rawRootId && rawRootId.trim() !== "" ? rawRootId.trim() : undefined;
 
   try {
     if (source === "antigravity") {
