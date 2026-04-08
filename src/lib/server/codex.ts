@@ -718,6 +718,44 @@ export async function getCodexRawContent(
   };
 }
 
+/** Path to the Codex state SQLite database written by the CLI and App. */
+const CODEX_STATE_DB = "~/.codex/state_5.sqlite";
+
+/**
+ * Read title and cwd for all known threads from the Codex state SQLite database.
+ * Returns a map keyed by session ID (basename of rollout_path without .jsonl extension).
+ * Returns an empty map if the database does not exist or cannot be read.
+ */
+function getCodexTitlesFromSqlite(): Map<string, { title: string; cwd?: string }> {
+  const result = new Map<string, { title: string; cwd?: string }>();
+  const dbPath = expandHome(CODEX_STATE_DB);
+  try {
+    // node:sqlite is available on Node ≥ 22.5 (stable in Node 24).
+    // Dynamic require keeps this compatible when running under older Node or test shims.
+    const { DatabaseSync } = require("node:sqlite") as {
+      DatabaseSync: new (path: string, opts?: { open?: boolean }) => {
+        prepare: (sql: string) => { all: () => unknown[] };
+        close: () => void;
+      };
+    };
+    const db = new DatabaseSync(dbPath, { open: true });
+    const rows = db.prepare(
+      "SELECT rollout_path, title, cwd FROM threads WHERE title IS NOT NULL AND title != '' AND rollout_path IS NOT NULL"
+    ).all() as Array<{ rollout_path: string; title: string; cwd: string | null }>;
+    db.close();
+    for (const row of rows) {
+      const sessionId = path.basename(row.rollout_path, ".jsonl");
+      result.set(sessionId, {
+        title: row.title,
+        ...(row.cwd ? { cwd: row.cwd } : {})
+      });
+    }
+  } catch {
+    // DB missing, locked, or node:sqlite unavailable — caller falls back to JSONL scan.
+  }
+  return result;
+}
+
 /**
  * Maximum bytes to read per session file when extracting title/cwd metadata.
  * Codex App sessions embed large base_instructions and injected context blocks
@@ -783,13 +821,22 @@ async function extractCodexFileMeta(
 
 /**
  * Build a title/cwd metadata map for all Codex sessions across enabled roots.
- * Reads each file line-by-line up to META_READ_BUDGET_BYTES for performance.
+ *
+ * Strategy (in priority order):
+ *  1. ~/.codex/state_5.sqlite — primary source of truth; contains the title
+ *     shown in the Codex App (auto-generated after first turn, and editable by
+ *     the user). Read once up-front for all sessions.
+ *  2. JSONL stream reader (extractCodexFileMeta) — fallback for sessions not
+ *     yet recorded in the SQLite db (e.g. very new or CLI-only sessions).
  */
 export async function getCodexTrajectoryMetaMap(
   config: AppConfig
 ): Promise<Record<string, { title?: string; cwd?: string }>> {
   const enabledRoots = config.roots.filter((r) => r.source === "codex" && r.enabled);
   const result: Record<string, { title?: string; cwd?: string }> = {};
+
+  // Primary: load all known titles from SQLite in one synchronous read.
+  const sqliteTitles = getCodexTitlesFromSqlite();
 
   for (const root of enabledRoots) {
     const rootPath = expandHome(root.path);
@@ -800,12 +847,26 @@ export async function getCodexTrajectoryMetaMap(
       const existing = result[id];
       if (existing?.title && existing?.cwd) continue; // already complete from a previous root
 
-      try {
-        const meta = await extractCodexFileMeta(file.path);
+      // Check SQLite first
+      const sqliteMeta = sqliteTitles.get(id);
+      if (sqliteMeta) {
         result[id] = {
           ...(existing ?? {}),
-          ...(!existing?.title && meta.title ? { title: meta.title } : {}),
-          ...(!existing?.cwd && meta.cwd ? { cwd: meta.cwd } : {})
+          ...(!existing?.title && sqliteMeta.title ? { title: sqliteMeta.title } : {}),
+          ...(!existing?.cwd && sqliteMeta.cwd ? { cwd: sqliteMeta.cwd } : {})
+        };
+        // If cwd is still missing after SQLite, fall through to JSONL scan below
+        if (result[id]?.title && result[id]?.cwd) continue;
+      }
+
+      // Fallback: stream the JSONL file for sessions absent from SQLite
+      try {
+        const meta = await extractCodexFileMeta(file.path);
+        const base = result[id] ?? existing ?? {};
+        result[id] = {
+          ...base,
+          ...(!base.title && meta.title ? { title: meta.title } : {}),
+          ...(!base.cwd && meta.cwd ? { cwd: meta.cwd } : {})
         };
       } catch {
         // Best-effort; skip files that can't be read
