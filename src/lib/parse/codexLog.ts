@@ -22,6 +22,8 @@ export type CodexSessionMeta = {
   cwd?: string;
   model?: string;
   timestamp?: string;
+  /** Git branch active when the session was started. */
+  gitBranch?: string;
 };
 
 /* ---------- helpers ---------- */
@@ -209,12 +211,30 @@ export function extractCodexSessionMeta(events: CodexRawEvent[]): CodexSessionMe
   if (!metaEvent) return {};
   const normalized = normalizeRawCodexEvent(metaEvent);
   const item = normalized.item;
+  const git = asRecord(item.git);
+  const gitBranch = git ? (asNonEmptyString(git.branch) ?? undefined) : undefined;
   return {
     sessionId: asNonEmptyString(getField(item, "session_id", "id") as unknown) ?? undefined,
     cwd: asNonEmptyString(item.cwd) ?? undefined,
     model: asNonEmptyString(item.model) ?? undefined,
-    timestamp: asNonEmptyString(item.timestamp) ?? normalized.timestamp
+    timestamp: asNonEmptyString(item.timestamp) ?? normalized.timestamp,
+    gitBranch
   };
+}
+
+/**
+ * Extract the model name from the first `turn_context` event in the stream.
+ * The `session_meta` event does not include the resolved model name; it appears
+ * in `turn_context` after each turn begins.
+ */
+export function extractCodexModel(events: CodexRawEvent[]): string | undefined {
+  for (const event of events) {
+    const normalized = normalizeRawCodexEvent(event);
+    if (normalized.type !== "turn_context") continue;
+    const model = asNonEmptyString(normalized.item.model);
+    if (model) return model;
+  }
+  return undefined;
 }
 
 /**

@@ -9,6 +9,7 @@ import readline from "node:readline";
 import type { AppConfig, RootConfig, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
 import {
+  extractCodexModel,
   extractCodexSessionMeta,
   extractCodexTitle,
   normalizeCodexEventsToTrajectoryEvents,
@@ -821,12 +822,14 @@ const META_READ_BUDGET_BYTES = 256 * 1024;
  */
 async function extractCodexFileMeta(
   filePath: string
-): Promise<{ title?: string; cwd?: string }> {
+): Promise<{ title?: string; cwd?: string; gitBranch?: string; model?: string }> {
   return new Promise((resolve) => {
     let bytesRead = 0;
     let resolved = false;
     let title: string | undefined;
     let cwd: string | undefined;
+    let gitBranch: string | undefined;
+    let model: string | undefined;
 
     const stream = createReadStream(filePath, { encoding: "utf-8" });
     const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
@@ -836,7 +839,7 @@ async function extractCodexFileMeta(
       resolved = true;
       rl.close();
       stream.destroy();
-      resolve({ title, cwd });
+      resolve({ title, cwd, gitBranch, model });
     };
 
     stream.on("data", (chunk) => {
@@ -851,12 +854,18 @@ async function extractCodexFileMeta(
       const event = parseCodexJsonlLine(line);
       if (!event) return;
 
-      // Update cwd from any session_meta event
-      if (!cwd) {
+      // Update cwd/gitBranch from session_meta
+      if (!cwd || !gitBranch) {
         const meta = extractCodexSessionMeta([event]);
-        if (meta.cwd) cwd = meta.cwd;
+        if (!cwd && meta.cwd) cwd = meta.cwd;
+        if (!gitBranch && meta.gitBranch) gitBranch = meta.gitBranch;
       }
-      // Update title from any user_message event (skip injected context)
+      // Update model from turn_context
+      if (!model) {
+        const m = extractCodexModel([event]);
+        if (m) model = m;
+      }
+      // Update title from user_message (skip injected context)
       if (!title) {
         title = extractCodexTitle([event]);
       }
@@ -885,9 +894,9 @@ const SESSION_ID_UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-
  */
 export async function getCodexTrajectoryMetaMap(
   config: AppConfig
-): Promise<Record<string, { title?: string; cwd?: string }>> {
+): Promise<Record<string, { title?: string; cwd?: string; gitBranch?: string; model?: string }>> {
   const enabledRoots = config.roots.filter((r) => r.source === "codex" && r.enabled);
-  const result: Record<string, { title?: string; cwd?: string }> = {};
+  const result: Record<string, { title?: string; cwd?: string; gitBranch?: string; model?: string }> = {};
 
   // Load both sources up-front (synchronous reads, one pass each).
   const sessionIndexTitles = getCodexTitlesFromSessionIndex(); // UUID → title
@@ -900,7 +909,7 @@ export async function getCodexTrajectoryMetaMap(
     for (const file of files) {
       const sessionId = path.basename(file.path, ".jsonl");
       const existing = result[sessionId];
-      if (existing?.title && existing?.cwd) continue; // already complete
+      if (existing?.title && existing?.cwd && existing?.gitBranch !== undefined && existing?.model !== undefined) continue;
 
       // Extract the thread UUID from the session ID tail (rollout-DATE-<uuid>)
       const uuidMatch = SESSION_ID_UUID_RE.exec(sessionId);
@@ -922,17 +931,27 @@ export async function getCodexTrajectoryMetaMap(
           ...(!existing?.title && resolvedTitle ? { title: resolvedTitle } : {}),
           ...(!existing?.cwd && resolvedCwd ? { cwd: resolvedCwd } : {})
         };
-        if (result[sessionId]?.title && result[sessionId]?.cwd) continue;
+        // gitBranch and model are only available from JSONL — always fall through
       }
 
-      // Level 3: stream the JSONL file for sessions not covered above
+      // Level 3: stream the JSONL file for gitBranch/model (always) and
+      // title/cwd for sessions not covered above
+      const needsJSONL =
+        !result[sessionId]?.title ||
+        !result[sessionId]?.cwd ||
+        result[sessionId]?.gitBranch === undefined ||
+        result[sessionId]?.model === undefined;
+      if (!needsJSONL) continue;
+
       try {
         const meta = await extractCodexFileMeta(file.path);
         const base = result[sessionId] ?? existing ?? {};
         result[sessionId] = {
           ...base,
           ...(!base.title && meta.title ? { title: meta.title } : {}),
-          ...(!base.cwd && meta.cwd ? { cwd: meta.cwd } : {})
+          ...(!base.cwd && meta.cwd ? { cwd: meta.cwd } : {}),
+          ...(base.gitBranch === undefined && meta.gitBranch ? { gitBranch: meta.gitBranch } : {}),
+          ...(base.model === undefined && meta.model ? { model: meta.model } : {})
         };
       } catch {
         // Best-effort; skip files that can't be read

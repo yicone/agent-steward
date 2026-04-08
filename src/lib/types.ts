@@ -31,6 +31,10 @@ export type ConversationFile = {
 export type ConversationListItem = ConversationFile & {
   title?: string;
   cwd?: string;
+  /** Git branch active when the session was started (Codex only). */
+  gitBranch?: string;
+  /** Model used in the session, e.g. "gpt-5.4" (Codex only). */
+  model?: string;
   /** Root IDs that contain a session with the same id (excluding the item's own rootId). */
   duplicateRootIds?: string[];
 };
@@ -184,6 +188,10 @@ export type ConversationContent =
 export type ConversationMeta = {
   title?: string;
   cwd?: string;
+  /** Git branch active when the session was started (Codex only). */
+  gitBranch?: string;
+  /** Model used in the session, e.g. "gpt-5.4" (Codex only). */
+  model?: string;
 };
 
 export type SearchResult = {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  extractCodexModel,
   extractCodexSessionMeta,
   extractCodexTitle,
   normalizeCodexEventsToTrajectoryEvents,
@@ -437,6 +438,90 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     );
     const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
     expect(events.filter((e) => e.kind === "user")).toHaveLength(2);
+  });
+});
+
+/* ---------- extractCodexSessionMeta (gitBranch) ---------- */
+
+describe("extractCodexSessionMeta gitBranch", () => {
+  it("extracts git.branch from session_meta item", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        type: "session_meta",
+        item: {
+          id: "test-uuid",
+          cwd: "/Users/tr/Workspace/project",
+          timestamp: "2026-04-08T12:00:00Z",
+          git: { branch: "feature/new-stuff", commit_hash: "abc123" }
+        }
+      })
+    );
+    const meta = extractCodexSessionMeta(raw);
+    expect(meta.gitBranch).toBe("feature/new-stuff");
+    expect(meta.cwd).toBe("/Users/tr/Workspace/project");
+  });
+
+  it("returns undefined gitBranch when git field missing", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        type: "session_meta",
+        item: { id: "test-uuid", cwd: "/Users/tr/Workspace/project" }
+      })
+    );
+    const meta = extractCodexSessionMeta(raw);
+    expect(meta.gitBranch).toBeUndefined();
+    expect(meta.cwd).toBe("/Users/tr/Workspace/project");
+  });
+
+  it("returns undefined gitBranch when git.branch is empty", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        type: "session_meta",
+        item: { id: "test-uuid", git: { branch: "", commit_hash: "abc" } }
+      })
+    );
+    const meta = extractCodexSessionMeta(raw);
+    expect(meta.gitBranch).toBeUndefined();
+  });
+});
+
+/* ---------- extractCodexModel ---------- */
+
+describe("extractCodexModel", () => {
+  it("extracts model from turn_context item", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        type: "turn_context",
+        item: { model: "gpt-5.4", turn_id: "turn-1" }
+      })
+    );
+    expect(extractCodexModel(raw)).toBe("gpt-5.4");
+  });
+
+  it("extracts model from the first turn_context among multiple events", () => {
+    const raw = parseCodexJsonl(
+      [
+        JSON.stringify({ type: "session_meta", item: { id: "s1" } }),
+        JSON.stringify({ type: "turn_context", item: { model: "o4-mini", turn_id: "t1" } }),
+        JSON.stringify({ type: "turn_context", item: { model: "gpt-5.4", turn_id: "t2" } })
+      ].join("\n")
+    );
+    // Should return the first model found
+    expect(extractCodexModel(raw)).toBe("o4-mini");
+  });
+
+  it("returns undefined when no turn_context present", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({ type: "session_meta", item: { id: "s1", model: "should-be-ignored" } })
+    );
+    expect(extractCodexModel(raw)).toBeUndefined();
+  });
+
+  it("returns undefined when model is empty", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({ type: "turn_context", item: { model: "", turn_id: "t1" } })
+    );
+    expect(extractCodexModel(raw)).toBeUndefined();
   });
 });
 
