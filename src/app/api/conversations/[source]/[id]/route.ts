@@ -4,7 +4,7 @@ import type { ConversationContent, Source, TrajectoryEvent } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getWindsurfChat, getWindsurfTrajectory } from "@/lib/server/windsurf";
-import { getCodexConversation } from "@/lib/server/codex";
+import { getCodexConversation, validateRootId } from "@/lib/server/codex";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 import { indexSession, isSessionIndexed } from "@/lib/server/searchIndex";
 
@@ -30,7 +30,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   }
 
   const url = new URL(req.url);
-  const rootId = url.searchParams.get("rootId") ?? undefined;
+  const rootId = validateRootId(url.searchParams.get("rootId"));
 
   try {
     if (source === "antigravity") {
@@ -46,15 +46,19 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       // Fetch title/cwd from the metadata cache (same source as the list view).
       const eventsSnap = antigravity.events;
       setImmediate(() => {
-        readConfig()
-          .then(({ config }) => getTrajectoryMetaMapCached({ source: "antigravity", config }))
-          .then((metaMap) => {
+        (async () => {
+          try {
+            const { config } = await readConfig();
+            const metaMap = await getTrajectoryMetaMapCached({ source: "antigravity", config });
             const meta = metaMap[id] ?? {};
-            indexSession(id, "antigravity", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
-          })
-          .catch((err) => {
+            await indexSession(id, "antigravity", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap);
+          } catch (err) {
             console.warn(`[search] Failed to index antigravity session ${id}:`, err instanceof Error ? err.message : err);
-          });
+          }
+        })().catch((err) => {
+          // Catch any unexpected errors from the async IIFE
+          console.error(`[search] Unexpected error in antigravity session indexing for ${id}:`, err);
+        });
       });
       return NextResponse.json(out);
     }
@@ -74,20 +78,23 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       // user keeps the session open in the CLI. Re-index on every open so the
       // search index stays fresh even after the session was previously indexed.
       setImmediate(() => {
-        Promise.resolve()
-          .then(() => getTrajectoryMetaMapCached({ source: "codex", config }))
-          .then((metaMap) => {
+        (async () => {
+          try {
+            const metaMap = await getTrajectoryMetaMapCached({ source: "codex", config });
             const meta = metaMap[id] ?? {};
-            indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap, {
+            await indexSession(id, "codex", meta.title ?? id, meta.cwd ?? extractCwd(eventsSnap), eventsSnap, {
               rootId: resolvedRootId
             });
-          })
-          .catch((err) => {
+          } catch (err) {
             console.warn(
               `[search] Failed to index codex session ${id}:`,
               err instanceof Error ? err.message : err
             );
-          });
+          }
+        })().catch((err) => {
+          // Catch any unexpected errors from the async IIFE
+          console.error(`[search] Unexpected error in codex session indexing for ${id}:`, err);
+        });
       });
       return NextResponse.json(out);
     }

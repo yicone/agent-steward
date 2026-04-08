@@ -25,7 +25,7 @@ describe("resolveRestoredSelection", () => {
     const result = resolveRestoredSelection(items, "session-1", "root-b");
 
     expect(result.effectiveRootId).toBe("root-b");
-    expect(result.selectedKey).toBe("root-b:session-1");
+    expect(result.selectedKey).toBe(JSON.stringify({ rootId: "root-b", id: "session-1" }));
   });
 
   it("falls back to an id-only match when the URL rootId is stale", () => {
@@ -37,13 +37,13 @@ describe("resolveRestoredSelection", () => {
     const result = resolveRestoredSelection(items, "session-1", "missing-root");
 
     expect(result.effectiveRootId).toBe("root-a");
-    expect(result.selectedKey).toBe("root-a:session-1");
+    expect(result.selectedKey).toBe(JSON.stringify({ rootId: "root-a", id: "session-1" }));
   });
 
   it("does not keep an invalid rootId when no matching item exists", () => {
     const result = resolveRestoredSelection([], "session-1", "missing-root");
 
     expect(result.effectiveRootId).toBeUndefined();
-    expect(result.selectedKey).toBe("unknown:session-1");
+    expect(result.selectedKey).toBe(JSON.stringify({ rootId: "unknown", id: "session-1" }));
   });
 });

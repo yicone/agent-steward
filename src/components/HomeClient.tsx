@@ -82,7 +82,7 @@ export function resolveRestoredSelection(
   return {
     match,
     effectiveRootId,
-    selectedKey: effectiveRootId ? `${effectiveRootId}:${id}` : `unknown:${id}`,
+    selectedKey: toSelectionKey(effectiveRootId ?? "unknown", id),
   };
 }
 
@@ -2034,7 +2034,7 @@ export default function HomeClient() {
       }
       return it.id === id;
     });
-    const effectiveRootId = match?.rootId ?? rootId;
+    const effectiveRootId = match?.rootId ?? (rootId ?? undefined);
     const key = toSelectionKey(effectiveRootId, id!);
     setSelectedKey(key);
     setSelectedId(id!);

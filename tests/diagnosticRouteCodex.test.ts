@@ -11,6 +11,7 @@ vi.mock("@/lib/server/diagnosticExport", () => ({
   buildDiagnosticExport: (...args: unknown[]) => buildDiagnosticExportMock(...args)
 }));
 
+// @ts-ignore - TypeScript has issues with dynamic route imports, but this works at runtime
 import { GET } from "@/app/api/conversations/[source]/[id]/diagnostic/route";
 
 afterEach(() => {
