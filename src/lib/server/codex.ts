@@ -13,7 +13,8 @@ import {
   extractCodexTitle,
   normalizeCodexEventsToTrajectoryEvents,
   parseCodexJsonl,
-  parseCodexJsonlLine
+  parseCodexJsonlLine,
+  sanitizeSqliteCodexTitle
 } from "@/lib/parse/codexLog";
 
 const MAX_CODEX_RAW_LINES = 5000;
@@ -745,8 +746,9 @@ function getCodexTitlesFromSqlite(): Map<string, { title: string; cwd?: string }
     db.close();
     for (const row of rows) {
       const sessionId = path.basename(row.rollout_path, ".jsonl");
+      const title = sanitizeSqliteCodexTitle(row.title) ?? row.title;
       result.set(sessionId, {
-        title: row.title,
+        title,
         ...(row.cwd ? { cwd: row.cwd } : {})
       });
     }

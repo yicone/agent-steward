@@ -5,7 +5,8 @@ import {
   extractCodexTitle,
   normalizeCodexEventsToTrajectoryEvents,
   parseCodexJsonl,
-  parseCodexJsonlLine
+  parseCodexJsonlLine,
+  sanitizeSqliteCodexTitle
 } from "../src/lib/parse/codexLog";
 
 /* ---------- parseCodexJsonlLine ---------- */
@@ -389,5 +390,49 @@ describe("normalizeCodexEventsToTrajectoryEvents", () => {
     expect(summary.userCount).toBe(1);
     expect(summary.assistantCount).toBe(1);
     expect(summary.toolCount).toBe(2);
+  });
+});
+
+/* ---------- sanitizeSqliteCodexTitle ---------- */
+
+describe("sanitizeSqliteCodexTitle", () => {
+  const CONDUCTOR_PREFIX =
+    "<system_instruction>\nYou are working inside Conductor, a Mac app that lets the user run many coding agents in parallel.\n</system_instruction>\n\n";
+
+  it("strips a system_instruction block and returns the real task", () => {
+    const raw = `${CONDUCTOR_PREFIX}请运行 \`PORT=3001 pnpm test:e2e\``;
+    expect(sanitizeSqliteCodexTitle(raw)).toBe("请运行 `PORT=3001 pnpm test:e2e`");
+  });
+
+  it("strips multiple consecutive system_instruction blocks", () => {
+    const raw =
+      "<system_instruction>\nBlock 1\n</system_instruction>\n" +
+      "<system-instruction>\nBlock 2\n</system-instruction>\n\n" +
+      "Fix the flaky test";
+    expect(sanitizeSqliteCodexTitle(raw)).toBe("Fix the flaky test");
+  });
+
+  it("returns only the first line of the remaining content", () => {
+    const raw = `${CONDUCTOR_PREFIX}Line one\nLine two\nLine three`;
+    expect(sanitizeSqliteCodexTitle(raw)).toBe("Line one");
+  });
+
+  it("returns undefined when nothing meaningful remains after stripping", () => {
+    expect(sanitizeSqliteCodexTitle("<system_instruction>\nOnly this\n</system_instruction>\n")).toBeUndefined();
+  });
+
+  it("returns undefined when leftover is only a markdown separator", () => {
+    expect(sanitizeSqliteCodexTitle(`${CONDUCTOR_PREFIX}---\nsome frontmatter`)).toBeUndefined();
+  });
+
+  it("passes through a plain title unchanged", () => {
+    expect(sanitizeSqliteCodexTitle("Refactor the auth module")).toBe("Refactor the auth module");
+  });
+
+  it("truncates long titles to 120 chars with ellipsis", () => {
+    const long = `${CONDUCTOR_PREFIX}${ "a".repeat(130)}`;
+    const result = sanitizeSqliteCodexTitle(long);
+    expect(result).toHaveLength(121); // 120 + ellipsis character
+    expect(result).toMatch(/…$/);
   });
 });

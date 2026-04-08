@@ -227,7 +227,27 @@ const INJECTED_CONTEXT_PREFIXES = [
   "<user_instructions>",
   "<permissions instructions>",
   "# agents.md instructions for ",
+  "<system_instruction>",
+  "<system-instruction>",
 ];
+
+/** Matches a <system_instruction> or <system-instruction> XML block (multiline). */
+const SYSTEM_INSTRUCTION_BLOCK_RE = /<system[_-]instruction>[\s\S]*?<\/system[_-]instruction>\s*/gi;
+
+/**
+ * Clean a title stored in the Codex SQLite DB that may have been produced by an
+ * orchestrator (e.g. Conductor) that prepends `<system_instruction>` blocks to
+ * the first user message before Codex sees it. Strips all such blocks, then
+ * applies the same first-line/truncation logic used by extractCodexTitle.
+ * Returns undefined if nothing meaningful remains after stripping.
+ */
+export function sanitizeSqliteCodexTitle(raw: string): string | undefined {
+  const stripped = raw.replace(SYSTEM_INSTRUCTION_BLOCK_RE, "").trimStart();
+  if (!stripped || isInjectedContextMessage(stripped)) return undefined;
+  const firstLine = (stripped.split("\n")[0] ?? stripped).trim();
+  if (!firstLine || firstLine === "---") return undefined;
+  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}\u2026` : firstLine;
+}
 
 function isInjectedContextMessage(content: string): boolean {
   const lower = content.trimStart().toLowerCase();
