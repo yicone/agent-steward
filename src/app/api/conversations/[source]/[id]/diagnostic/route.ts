@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { Source } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { buildDiagnosticExport } from "@/lib/server/diagnosticExport";
+import { validateRootId } from "@/lib/server/codex";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,8 +26,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   }
 
   const url = new URL(req.url);
-  const rawRootId = url.searchParams.get("rootId");
-  const rootId = rawRootId === null ? undefined : rawRootId.trim() || undefined;
+  const rootId = validateRootId(url.searchParams.get("rootId"));
   const allSteps = url.searchParams.get("allSteps");
   const maxStepsParam = url.searchParams.get("maxSteps");
   const maxSteps = maxStepsParam ? Number(maxStepsParam) : undefined;

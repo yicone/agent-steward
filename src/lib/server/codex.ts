@@ -22,6 +22,16 @@ const MAX_CODEX_CONVERSATION_LINES = 5000;
 /* ---------- helpers ---------- */
 
 /**
+ * Standardize root ID validation across all API routes.
+ * Returns undefined for null, empty, or whitespace-only strings.
+ */
+export function validateRootId(rawRootId: string | null): string | undefined {
+  if (rawRootId === null) return undefined;
+  const trimmed = rawRootId.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/**
  * Stat a path and return a discriminated result so callers can distinguish
  * "path does not exist / is not a directory" (ENOENT, ENOTDIR) from
  * "permission denied" (EACCES, EPERM).
@@ -202,9 +212,38 @@ const SESSION_PATH_CACHE_TTL_MS = 10_000;
 /** Module-level cache, keyed by root id. */
 const _sessionPathCache = new Map<string, SessionPathCacheEntry>();
 
+/** Simple mutex for cache operations to prevent race conditions */
+const _cacheMutex = {
+  locked: false,
+  waiters: [] as Array<() => void>,
+  
+  async lock(): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.locked) {
+        this.locked = true;
+        resolve();
+      } else {
+        this.waiters.push(resolve);
+      }
+    });
+  },
+  
+  unlock(): void {
+    if (this.waiters.length > 0) {
+      const next = this.waiters.shift()!;
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+};
+
 function invalidateCachedSessionId(rootId: string | undefined, sessionId: string): void {
+  // Perform cache invalidation atomically to prevent race conditions
   if (!rootId) {
-    for (const entry of _sessionPathCache.values()) {
+    // Invalidate from all roots - create a snapshot to avoid concurrent modification
+    const entries = Array.from(_sessionPathCache.entries());
+    for (const [, entry] of entries) {
       entry.idToPath.delete(sessionId);
     }
     return;
@@ -288,13 +327,19 @@ async function findCodexSessionFile(
 
     // Try cached index first (only if root path hasn't changed)
     const cached = _sessionPathCache.get(root.id);
-    if (cached && cached.rootPath === rootPath && now - cached.cachedAtMs <= SESSION_PATH_CACHE_TTL_MS) {
+    if (cached && cached.rootPath === rootPath && now - cached.cachedAtMs < SESSION_PATH_CACHE_TTL_MS) {
       const hit = cached.idToPath.get(id);
       if (hit) {
         if ((await ensureCodexSessionFileExists(root.id, id, hit)) === "ok") {
           return { filePath: hit, rootId: root.id };
         }
-        _sessionPathCache.delete(root.id);
+        // Remove stale cache entry atomically
+        await _cacheMutex.lock();
+        try {
+          _sessionPathCache.delete(root.id);
+        } finally {
+          _cacheMutex.unlock();
+        }
       } else {
         // Not in this root's current index — continue to the next root without scanning.
         continue;
@@ -333,14 +378,26 @@ async function findCodexSessionFile(
         idToPath.set(sessionId, f.path);
       }
     }
-    _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now, rootPath });
+    // Update cache atomically
+    await _cacheMutex.lock();
+    try {
+      _sessionPathCache.set(root.id, { idToPath, cachedAtMs: now, rootPath });
+    } finally {
+      _cacheMutex.unlock();
+    }
 
     const hit = idToPath.get(id);
     if (hit) {
       if ((await ensureCodexSessionFileExists(root.id, id, hit)) === "ok") {
         return { filePath: hit, rootId: root.id };
       }
-      _sessionPathCache.delete(root.id);
+      // Remove stale cache entry
+      await _cacheMutex.lock();
+      try {
+        _sessionPathCache.delete(root.id);
+      } finally {
+        _cacheMutex.unlock();
+      }
     }
   }
 
@@ -516,13 +573,15 @@ export async function getCodexConversation(
     );
   }
 
-  const lines: string[] = [];
   const stream = createReadStream(filePath, { encoding: "utf-8" });
   const rl = readline.createInterface({
     input: stream,
     crlfDelay: Infinity
   });
 
+  let lineCount = 0;
+  const contentParts: string[] = [];
+  
   try {
     for await (const line of rl) {
       const trimmed = line.trim();
@@ -530,9 +589,10 @@ export async function getCodexConversation(
         continue;
       }
 
-      lines.push(line);
+      contentParts.push(line);
+      lineCount++;
 
-      if (lines.length >= MAX_CODEX_CONVERSATION_LINES) {
+      if (lineCount >= MAX_CODEX_CONVERSATION_LINES) {
         // We've reached the cap of lines to parse for the UI conversation.
         break;
       }
@@ -540,11 +600,19 @@ export async function getCodexConversation(
   } catch (err) {
     throw toCodexSessionReadError(err, id, rootId);
   } finally {
-    rl.close();
-    stream.destroy();
+    try {
+      rl.close();
+    } catch (rlErr) {
+      console.warn(`[codex] Failed to close readline interface for ${id}:`, rlErr instanceof Error ? rlErr.message : String(rlErr));
+    }
+    try {
+      stream.destroy();
+    } catch (streamErr) {
+      console.warn(`[codex] Failed to destroy stream for ${id}:`, streamErr instanceof Error ? streamErr.message : String(streamErr));
+    }
   }
 
-  const content = lines.join("\n");
+  const content = contentParts.join("\n");
   const rawEvents = parseCodexJsonl(content);
   return {
     ...normalizeCodexEventsToTrajectoryEvents(rawEvents),
@@ -604,8 +672,13 @@ export async function getCodexRawContent(
         // We have not yet hit the cap; parse and store this line.
         try {
           rawLines.push(JSON.parse(line));
-        } catch {
-          rawLines.push(line);
+        } catch (parseErr) {
+          // Store parsing error metadata instead of raw invalid JSON
+          rawLines.push({
+            _error: "json_parse_failed",
+            _originalLine: line,
+            _parseError: parseErr instanceof Error ? parseErr.message : String(parseErr)
+          });
         }
       } else {
         // We've reached the cap of lines to return. Mark as truncated and stop reading
@@ -617,8 +690,16 @@ export async function getCodexRawContent(
   } catch (err) {
     throw toCodexSessionReadError(err, id, resolved.rootId);
   } finally {
-    rl.close();
-    stream.destroy();
+    try {
+      rl.close();
+    } catch (rlErr) {
+      console.warn(`[codex] Failed to close readline interface for ${id}:`, rlErr instanceof Error ? rlErr.message : String(rlErr));
+    }
+    try {
+      stream.destroy();
+    } catch (streamErr) {
+      console.warn(`[codex] Failed to destroy stream for ${id}:`, streamErr instanceof Error ? streamErr.message : String(streamErr));
+    }
   }
 
   const returnedLines = rawLines.length;
@@ -674,7 +755,11 @@ export async function getCodexTrajectoryMetaMap(
         // Best-effort; skip files that can't be read
       } finally {
         if (fd) {
-          await fd.close().catch(() => {});
+          try {
+            await fd.close();
+          } catch (closeErr) {
+            console.warn(`[codex] Failed to close file handle for ${file.path}:`, closeErr instanceof Error ? closeErr.message : String(closeErr));
+          }
         }
       }
     }

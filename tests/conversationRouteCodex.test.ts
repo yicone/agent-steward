@@ -12,6 +12,11 @@ vi.mock("@/lib/server/config", () => ({
 
 vi.mock("@/lib/server/codex", () => ({
   getCodexConversation: (...args: unknown[]) => getCodexConversationMock(...args),
+  validateRootId: (rawRootId: string | null) => {
+    if (rawRootId === null) return undefined;
+    const trimmed = rawRootId.trim();
+    return trimmed === "" ? undefined : trimmed;
+  },
 }))
 
 vi.mock("@/lib/server/metaCache", () => ({
@@ -32,6 +37,7 @@ vi.mock("@/lib/server/windsurf", () => ({
   getWindsurfTrajectory: vi.fn(),
 }))
 
+// @ts-ignore - TypeScript has issues with dynamic route imports, but this works at runtime
 import { GET } from "@/app/api/conversations/[source]/[id]/route"
 
 afterEach(() => {
