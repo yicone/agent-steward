@@ -218,19 +218,42 @@ export function extractCodexSessionMeta(events: CodexRawEvent[]): CodexSessionMe
 }
 
 /**
- * Extract a short title from the first user message in the session.
+ * Prefixes that identify Codex-injected context blocks rather than real user
+ * messages. These are prepended by the CLI/App before every session and should
+ * not be used as the conversation title.
+ */
+const INJECTED_CONTEXT_PREFIXES = [
+  "<environment_context>",
+  "<user_instructions>",
+  "<permissions instructions>",
+  "# agents.md instructions for ",
+];
+
+function isInjectedContextMessage(content: string): boolean {
+  const lower = content.trimStart().toLowerCase();
+  return INJECTED_CONTEXT_PREFIXES.some((prefix) => lower.startsWith(prefix));
+}
+
+/**
+ * Extract a short title from the first genuine user message in the session.
+ * Skips injected context blocks (environment_context, user_instructions,
+ * AGENTS.md instructions, permissions instructions) that the Codex CLI/App
+ * prepends automatically before real user prompts.
  */
 export function extractCodexTitle(events: CodexRawEvent[]): string | undefined {
-  const userEvent = events.find((e) => normalizeRawCodexEvent(e).type === "user_message");
-  if (!userEvent) return undefined;
-  const normalized = normalizeRawCodexEvent(userEvent);
-  const content =
-    asNonEmptyString(getField(normalized.item, "content") as unknown) ??
-    extractMessageText(getField(normalized.item, "content"));
-  if (!content) return undefined;
-  // Use first line, truncated to 120 chars
-  const firstLine = content.split("\n")[0] ?? content;
-  return firstLine.length > 120 ? `${firstLine.slice(0, 120)}…` : firstLine;
+  for (const event of events) {
+    const normalized = normalizeRawCodexEvent(event);
+    if (normalized.type !== "user_message") continue;
+    const content =
+      asNonEmptyString(getField(normalized.item, "content") as unknown) ??
+      extractMessageText(getField(normalized.item, "content"));
+    if (!content) continue;
+    if (isInjectedContextMessage(content)) continue;
+    // Use first line, truncated to 120 chars
+    const firstLine = content.split("\n")[0] ?? content;
+    return firstLine.length > 120 ? `${firstLine.slice(0, 120)}…` : firstLine;
+  }
+  return undefined;
 }
 
 /* ---------- normalization ---------- */

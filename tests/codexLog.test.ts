@@ -141,6 +141,39 @@ describe("extractCodexTitle", () => {
     );
     expect(extractCodexTitle(events)).toBe("Investigate flaky tests");
   });
+
+  it("skips <environment_context> injection and returns the real user message", () => {
+    const lines = [
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>\\n  <cwd>/Users/tr</cwd>\\n</environment_context>"}]}}',
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"Fix the failing tests"}]}}'
+    ].join("\n");
+    expect(extractCodexTitle(parseCodexJsonl(lines))).toBe("Fix the failing tests");
+  });
+
+  it("skips <user_instructions> injection and returns the real user message", () => {
+    const lines = [
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"<user_instructions>\\n# Repository Guidelines\\nUse TypeScript.\\n</user_instructions>"}]}}',
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"请执行 scripts/check.rb"}]}}'
+    ].join("\n");
+    expect(extractCodexTitle(parseCodexJsonl(lines))).toBe("请执行 scripts/check.rb");
+  });
+
+  it("skips # AGENTS.md instructions injection and returns the real user message", () => {
+    const lines = [
+      '{"type":"response_item","item":{"type":"message","role":"developer","content":[{"type":"input_text","text":"<permissions instructions> sandbox ..."}]}}',
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /Users/tr\\n<INSTRUCTIONS>\\nFollow the rules.\\n</INSTRUCTIONS>"}]}}',
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"Merge the feature branch into main"}]}}'
+    ].join("\n");
+    expect(extractCodexTitle(parseCodexJsonl(lines))).toBe("Merge the feature branch into main");
+  });
+
+  it("returns undefined when all user messages are injected context with no real prompt", () => {
+    const lines = [
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>\\n  <cwd>/Users/tr</cwd>\\n</environment_context>"}]}}',
+      '{"type":"response_item","item":{"type":"message","role":"user","content":[{"type":"input_text","text":"<user_instructions>\\nFollow the rules.\\n</user_instructions>"}]}}'
+    ].join("\n");
+    expect(extractCodexTitle(parseCodexJsonl(lines))).toBeUndefined();
+  });
 });
 
 /* ---------- normalizeCodexEventsToTrajectoryEvents ---------- */
