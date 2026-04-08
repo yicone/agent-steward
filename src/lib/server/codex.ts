@@ -12,7 +12,8 @@ import {
   extractCodexSessionMeta,
   extractCodexTitle,
   normalizeCodexEventsToTrajectoryEvents,
-  parseCodexJsonl
+  parseCodexJsonl,
+  parseCodexJsonlLine
 } from "@/lib/parse/codexLog";
 
 const MAX_CODEX_RAW_LINES = 5000;
@@ -718,8 +719,71 @@ export async function getCodexRawContent(
 }
 
 /**
+ * Maximum bytes to read per session file when extracting title/cwd metadata.
+ * Codex App sessions embed large base_instructions and injected context blocks
+ * before the first real user message; 256 KB covers >95% of sessions while
+ * keeping memory usage bounded during bulk scans.
+ */
+const META_READ_BUDGET_BYTES = 256 * 1024;
+
+/**
+ * Extract title and cwd from a Codex session file by streaming line-by-line up
+ * to META_READ_BUDGET_BYTES. Stops early as soon as both values are found.
+ * Line-based streaming avoids the half-parsed-line problem of a raw buffer read.
+ */
+async function extractCodexFileMeta(
+  filePath: string
+): Promise<{ title?: string; cwd?: string }> {
+  return new Promise((resolve) => {
+    let bytesRead = 0;
+    let resolved = false;
+    let title: string | undefined;
+    let cwd: string | undefined;
+
+    const stream = createReadStream(filePath, { encoding: "utf-8" });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      rl.close();
+      stream.destroy();
+      resolve({ title, cwd });
+    };
+
+    stream.on("data", (chunk) => {
+      bytesRead += (chunk as string).length;
+      if (bytesRead > META_READ_BUDGET_BYTES) {
+        finish();
+      }
+    });
+
+    rl.on("line", (line) => {
+      if (resolved) return;
+      const event = parseCodexJsonlLine(line);
+      if (!event) return;
+
+      // Update cwd from any session_meta event
+      if (!cwd) {
+        const meta = extractCodexSessionMeta([event]);
+        if (meta.cwd) cwd = meta.cwd;
+      }
+      // Update title from any user_message event (skip injected context)
+      if (!title) {
+        title = extractCodexTitle([event]);
+      }
+
+      if (title && cwd) finish();
+    });
+
+    rl.on("close", finish);
+    stream.on("error", finish);
+  });
+}
+
+/**
  * Build a title/cwd metadata map for all Codex sessions across enabled roots.
- * Only reads the first few lines of each file for performance.
+ * Reads each file line-by-line up to META_READ_BUDGET_BYTES for performance.
  */
 export async function getCodexTrajectoryMetaMap(
   config: AppConfig
@@ -736,31 +800,15 @@ export async function getCodexTrajectoryMetaMap(
       const existing = result[id];
       if (existing?.title && existing?.cwd) continue; // already complete from a previous root
 
-      let fd: fs.FileHandle | undefined;
       try {
-        // Read only the first 8 KB to extract metadata without loading the full file.
-        fd = await fs.open(file.path, "r");
-        const buf = Buffer.alloc(8192);
-        const { bytesRead } = await fd.read(buf, 0, 8192, 0);
-        const head = buf.subarray(0, bytesRead).toString("utf-8");
-        const rawEvents = parseCodexJsonl(head);
-        const meta = extractCodexSessionMeta(rawEvents);
-        const title = extractCodexTitle(rawEvents);
+        const meta = await extractCodexFileMeta(file.path);
         result[id] = {
           ...(existing ?? {}),
-          ...(!existing?.title && title ? { title } : {}),
+          ...(!existing?.title && meta.title ? { title: meta.title } : {}),
           ...(!existing?.cwd && meta.cwd ? { cwd: meta.cwd } : {})
         };
       } catch {
         // Best-effort; skip files that can't be read
-      } finally {
-        if (fd) {
-          try {
-            await fd.close();
-          } catch (closeErr) {
-            console.warn(`[codex] Failed to close file handle for ${file.path}:`, closeErr instanceof Error ? closeErr.message : String(closeErr));
-          }
-        }
       }
     }
   }

@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { collectJsonlFiles, getCodexStatus } from "../src/lib/server/codex";
+import { collectJsonlFiles, getCodexStatus, getCodexTrajectoryMetaMap } from "../src/lib/server/codex";
 import type { AppConfig } from "../src/lib/types";
 
 let tmpDir: string;
@@ -61,6 +61,48 @@ describe("collectJsonlFiles", () => {
     expect(files[0]!.path).toContain("a.jsonl");
     expect(partialErrors.length).toBeGreaterThan(0);
     readdirSpy.mockRestore();
+  });
+});
+
+describe("getCodexTrajectoryMetaMap", () => {
+  it("extracts title and cwd from a normal session file", async () => {
+    const sessionDir = path.join(tmpDir, "sessions", "2026", "04", "08");
+    await fs.mkdir(sessionDir, { recursive: true });
+    const lines = [
+      JSON.stringify({ type: "session_meta", item: { id: "s1", cwd: "/Users/tr/Workspace/myapp", timestamp: "2026-04-08T00:00:00Z" } }),
+      JSON.stringify({ type: "response_item", item: { type: "message", role: "user", content: [{ type: "input_text", text: "Fix the flaky test" }] } })
+    ].join("\n") + "\n";
+    await fs.writeFile(path.join(sessionDir, "rollout-test-001.jsonl"), lines);
+
+    const config = makeConfig([{ id: "r1", source: "codex", path: path.join(tmpDir, "sessions"), enabled: true }]);
+    const map = await getCodexTrajectoryMetaMap(config);
+    expect(map["rollout-test-001"]?.title).toBe("Fix the flaky test");
+    expect(map["rollout-test-001"]?.cwd).toBe("/Users/tr/Workspace/myapp");
+  });
+
+  it("skips injected context lines and returns the real user message as title", async () => {
+    const sessionDir = path.join(tmpDir, "sessions", "2026", "04", "01");
+    await fs.mkdir(sessionDir, { recursive: true });
+    // Simulate the real Codex App layout: large session_meta, then injected context, then real user message
+    const largeSessionMeta = JSON.stringify({
+      type: "session_meta",
+      item: { id: "s2", cwd: "/Users/tr/Workspace/proj", timestamp: "2026-04-01T00:00:00Z", base_instructions: "x".repeat(20_000) }
+    });
+    const injectedContext = JSON.stringify({
+      type: "response_item",
+      item: { type: "message", role: "user", content: [{ type: "input_text", text: "# AGENTS.md instructions for /Users/tr\n<INSTRUCTIONS>\nFollow the rules.\n</INSTRUCTIONS>" }] }
+    });
+    const realUserMsg = JSON.stringify({
+      type: "response_item",
+      item: { type: "message", role: "user", content: [{ type: "input_text", text: "Refactor the auth module" }] }
+    });
+    const lines = [largeSessionMeta, injectedContext, realUserMsg].join("\n") + "\n";
+    await fs.writeFile(path.join(sessionDir, "rollout-test-002.jsonl"), lines);
+
+    const config = makeConfig([{ id: "r2", source: "codex", path: path.join(tmpDir, "sessions"), enabled: true }]);
+    const map = await getCodexTrajectoryMetaMap(config);
+    expect(map["rollout-test-002"]?.title).toBe("Refactor the auth module");
+    expect(map["rollout-test-002"]?.cwd).toBe("/Users/tr/Workspace/proj");
   });
 });
 
