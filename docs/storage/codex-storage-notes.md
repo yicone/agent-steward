@@ -37,12 +37,29 @@
 | type | 说明 |
 | --- | --- |
 | `session_meta` | 会话元数据（id、cwd、base_instructions 等）；通常是文件首行，但可能很长（>15 KB） |
-| `response_item` | 对话轮次条目；`item.role` 区分 `user` / `assistant` |
-| `event_msg` | 内部事件（turn 开始/结束等） |
+| `response_item` | 对话轮次条目；`item.role` 区分 `user` / `assistant`；**每个用户消息会出现一次** |
+| `event_msg` | 内部事件通知；`payload.type` 包含 `user_message` / `agent_message` / `agent_reasoning` 等；**与 response_item 内容重复** |
 | `turn_context` | 轮次上下文快照 |
 | `tool_call` / `tool_result` | 工具调用及结果 |
 | `exec` | Shell 命令执行 |
 | `reasoning` | 推理摘要（o 系列模型） |
+
+### 重复事件模式（Duplicate Events）
+
+Codex CLI 对**每条用户消息 emit 两次**：
+
+1. **`response_item` / `message` / `user`** —— 结构化对话记录（conversation history 中的条目）
+2. **`event_msg` / `user_message`** —— 流式通知事件（用于 UI 实时更新）
+
+两者 `timestamp` 相同，`text` 内容完全一致。若不做处理，解析后会出现连续两条完全相同的用户消息。
+
+**agent-session-view 的处理方式**：只解析 `response_item`，**完全忽略 `event_msg`**（因此不存在重复问题，但丢失 `agent_reasoning` 等仅存在于 `event_msg` 的数据）。
+
+**我们的处理方式**（`src/lib/parse/codexLog.ts`）：
+
+- 同时解析两种事件类型，保留 `event_msg` 独有的数据（reasoning、token_count 等）
+- 在 `normalizeCodexEventsToTrajectoryEvents` 末尾执行**连续去重**：若两条相邻 `user` 事件 `text` 相同，则丢弃第二条
+- 实现见：`src/lib/parse/codexLog.ts` lines 516–531
 
 ### 注入上下文（Injected Context）
 
@@ -275,3 +292,7 @@ grep "<uuid>" ~/.codex/session_index.jsonl
   - 发现 `~/.codex/session_index.jsonl` 为手动重命名的权威来源（append-only，Rust `set_thread_name` handler 写入）。
   - 将标题读取升级为三层策略：`session_index.jsonl` → `state_5.sqlite` → JSONL 流式解析。
   - 确认空壳会话（`has_user_event = 0`）显示 `rollout-*` 为正常预期行为。
+- **2026-04-09**：
+  - 调查 Codex JSONL 中 `response_item` 与 `event_msg` 的重复 emit 模式；确认 Codex CLI 对每条用户消息 emit 两次（结构化记录 + 流式通知）。
+  - 在 `normalizeCodexEventsToTrajectoryEvents` 中实现连续去重逻辑：相邻 `user` 事件若 `text` 相同则丢弃第二条；对比 `agent-session-view` 的处理策略（仅解析 `response_item`）。
+  - 补充文档：新增「重复事件模式」章节（第二节），说明重复原因、对比竞品处理方式、记录我们的实现策略。
