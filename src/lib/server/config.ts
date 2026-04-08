@@ -73,7 +73,19 @@ function sanitizeRoots(roots: unknown): RootConfig[] {
       enabled: Boolean(r.enabled)
     });
   }
-  return out.length ? out : defaultRoots();
+  if (!out.length) return defaultRoots();
+
+  // Backfill default roots for any source not represented in the saved config.
+  // This ensures users who saved their config before a new source was introduced
+  // (e.g. Codex) automatically get the default root for that source injected.
+  const presentSources = new Set(out.map((r) => r.source));
+  for (const def of defaultRoots()) {
+    if (!presentSources.has(def.source)) {
+      out.push(def);
+    }
+  }
+
+  return out;
 }
 
 function sanitizeConfig(input: unknown): AppConfig {
