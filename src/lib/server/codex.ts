@@ -722,13 +722,31 @@ export async function getCodexRawContent(
 /** Path to the Codex state SQLite database written by the CLI and App. */
 const CODEX_STATE_DB = "~/.codex/state_5.sqlite";
 
+/** Path to the append-only JSONL file that stores auto-generated and manually renamed thread names. */
+const CODEX_SESSION_INDEX = "~/.codex/session_index.jsonl";
+
+interface SqliteThreadRow {
+  /** Full absolute path to the .jsonl session file. */
+  rollout_path: string;
+  /** Thread UUID — same as the id used in session_index.jsonl. */
+  thread_id: string;
+  /** Auto-generated title stored by the CLI/App (may be stale if user renamed). */
+  title: string;
+  cwd: string | null;
+}
+
 /**
- * Read title and cwd for all known threads from the Codex state SQLite database.
- * Returns a map keyed by session ID (basename of rollout_path without .jsonl extension).
- * Returns an empty map if the database does not exist or cannot be read.
+ * Read all thread rows from the Codex state SQLite database.
+ * Returns two maps:
+ *  - bySessionId: rollout-basename → { title, cwd } (used when session_index has no entry)
+ *  - byCwd:       thread_uuid      → cwd           (used to enrich session_index entries)
  */
-function getCodexTitlesFromSqlite(): Map<string, { title: string; cwd?: string }> {
-  const result = new Map<string, { title: string; cwd?: string }>();
+function getCodexDataFromSqlite(): {
+  bySessionId: Map<string, { title: string; cwd?: string }>;
+  cwdByThreadId: Map<string, string>;
+} {
+  const bySessionId = new Map<string, { title: string; cwd?: string }>();
+  const cwdByThreadId = new Map<string, string>();
   const dbPath = expandHome(CODEX_STATE_DB);
   try {
     // node:sqlite is available on Node ≥ 22.5 (stable in Node 24).
@@ -741,19 +759,49 @@ function getCodexTitlesFromSqlite(): Map<string, { title: string; cwd?: string }
     };
     const db = new DatabaseSync(dbPath, { open: true });
     const rows = db.prepare(
-      "SELECT rollout_path, title, cwd FROM threads WHERE title IS NOT NULL AND title != '' AND rollout_path IS NOT NULL"
-    ).all() as Array<{ rollout_path: string; title: string; cwd: string | null }>;
+      "SELECT id AS thread_id, rollout_path, title, cwd FROM threads WHERE rollout_path IS NOT NULL"
+    ).all() as SqliteThreadRow[];
     db.close();
     for (const row of rows) {
-      const sessionId = path.basename(row.rollout_path, ".jsonl");
-      const title = sanitizeSqliteCodexTitle(row.title) ?? row.title;
-      result.set(sessionId, {
-        title,
-        ...(row.cwd ? { cwd: row.cwd } : {})
-      });
+      if (row.cwd) cwdByThreadId.set(row.thread_id, row.cwd);
+      if (row.title) {
+        const sessionId = path.basename(row.rollout_path, ".jsonl");
+        const title = sanitizeSqliteCodexTitle(row.title) ?? row.title;
+        bySessionId.set(sessionId, {
+          title,
+          ...(row.cwd ? { cwd: row.cwd } : {})
+        });
+      }
     }
   } catch {
     // DB missing, locked, or node:sqlite unavailable — caller falls back to JSONL scan.
+  }
+  return { bySessionId, cwdByThreadId };
+}
+
+/**
+ * Read the authoritative thread name index written by the Codex CLI/App.
+ * This append-only JSONL file records both auto-generated titles (written after
+ * the first turn completes) and user-edited renames. The last entry for each ID
+ * wins. Returns a map keyed by thread UUID.
+ */
+function getCodexTitlesFromSessionIndex(): Map<string, string> {
+  const result = new Map<string, string>();
+  const filePath = expandHome(CODEX_SESSION_INDEX);
+  try {
+    const raw = require("node:fs").readFileSync(filePath, "utf-8") as string;
+    for (const line of raw.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const obj = JSON.parse(trimmed) as { id?: string; thread_name?: string };
+        if (obj.id && obj.thread_name) result.set(obj.id, obj.thread_name);
+      } catch {
+        // Skip malformed lines.
+      }
+    }
+  } catch {
+    // File missing or unreadable — caller falls back to SQLite / JSONL.
   }
   return result;
 }
@@ -821,15 +869,19 @@ async function extractCodexFileMeta(
   });
 }
 
+/** Matches the trailing UUID in a rollout session ID, e.g. "rollout-DATE-<uuid>". */
+const SESSION_ID_UUID_RE = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
 /**
  * Build a title/cwd metadata map for all Codex sessions across enabled roots.
  *
  * Strategy (in priority order):
- *  1. ~/.codex/state_5.sqlite — primary source of truth; contains the title
- *     shown in the Codex App (auto-generated after first turn, and editable by
- *     the user). Read once up-front for all sessions.
- *  2. JSONL stream reader (extractCodexFileMeta) — fallback for sessions not
- *     yet recorded in the SQLite db (e.g. very new or CLI-only sessions).
+ *  1. ~/.codex/session_index.jsonl — authoritative; records auto-generated titles
+ *     (written after first turn) and user-edited renames. Last entry per UUID wins.
+ *  2. ~/.codex/state_5.sqlite — auto-generated titles for sessions not yet in the
+ *     index; also the sole source of cwd for sessions found in the index.
+ *  3. JSONL stream reader (extractCodexFileMeta, 256 KB budget) — fallback for
+ *     sessions absent from both index and SQLite (very new or CLI-only sessions).
  */
 export async function getCodexTrajectoryMetaMap(
   config: AppConfig
@@ -837,35 +889,47 @@ export async function getCodexTrajectoryMetaMap(
   const enabledRoots = config.roots.filter((r) => r.source === "codex" && r.enabled);
   const result: Record<string, { title?: string; cwd?: string }> = {};
 
-  // Primary: load all known titles from SQLite in one synchronous read.
-  const sqliteTitles = getCodexTitlesFromSqlite();
+  // Load both sources up-front (synchronous reads, one pass each).
+  const sessionIndexTitles = getCodexTitlesFromSessionIndex(); // UUID → title
+  const { bySessionId: sqliteBySession, cwdByThreadId } = getCodexDataFromSqlite();
 
   for (const root of enabledRoots) {
     const rootPath = expandHome(root.path);
     const files = await collectJsonlFiles(rootPath);
 
     for (const file of files) {
-      const id = path.basename(file.path, ".jsonl");
-      const existing = result[id];
-      if (existing?.title && existing?.cwd) continue; // already complete from a previous root
+      const sessionId = path.basename(file.path, ".jsonl");
+      const existing = result[sessionId];
+      if (existing?.title && existing?.cwd) continue; // already complete
 
-      // Check SQLite first
-      const sqliteMeta = sqliteTitles.get(id);
-      if (sqliteMeta) {
-        result[id] = {
+      // Extract the thread UUID from the session ID tail (rollout-DATE-<uuid>)
+      const uuidMatch = SESSION_ID_UUID_RE.exec(sessionId);
+      const threadId = uuidMatch?.[1];
+
+      // Level 1: session_index.jsonl — authoritative title (includes manual renames)
+      const indexTitle = threadId ? sessionIndexTitles.get(threadId) : undefined;
+
+      // Level 2: SQLite — cwd for session_index hits; title+cwd for non-index sessions
+      const sqliteMeta = sqliteBySession.get(sessionId);
+      const sqliteCwd = threadId ? cwdByThreadId.get(threadId) : undefined;
+
+      const resolvedTitle = indexTitle ?? sqliteMeta?.title;
+      const resolvedCwd = sqliteCwd ?? sqliteMeta?.cwd;
+
+      if (resolvedTitle || resolvedCwd) {
+        result[sessionId] = {
           ...(existing ?? {}),
-          ...(!existing?.title && sqliteMeta.title ? { title: sqliteMeta.title } : {}),
-          ...(!existing?.cwd && sqliteMeta.cwd ? { cwd: sqliteMeta.cwd } : {})
+          ...(!existing?.title && resolvedTitle ? { title: resolvedTitle } : {}),
+          ...(!existing?.cwd && resolvedCwd ? { cwd: resolvedCwd } : {})
         };
-        // If cwd is still missing after SQLite, fall through to JSONL scan below
-        if (result[id]?.title && result[id]?.cwd) continue;
+        if (result[sessionId]?.title && result[sessionId]?.cwd) continue;
       }
 
-      // Fallback: stream the JSONL file for sessions absent from SQLite
+      // Level 3: stream the JSONL file for sessions not covered above
       try {
         const meta = await extractCodexFileMeta(file.path);
-        const base = result[id] ?? existing ?? {};
-        result[id] = {
+        const base = result[sessionId] ?? existing ?? {};
+        result[sessionId] = {
           ...base,
           ...(!base.title && meta.title ? { title: meta.title } : {}),
           ...(!base.cwd && meta.cwd ? { cwd: meta.cwd } : {})

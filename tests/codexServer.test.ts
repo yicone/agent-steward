@@ -104,6 +104,27 @@ describe("getCodexTrajectoryMetaMap", () => {
     expect(map["rollout-test-002"]?.title).toBe("Refactor the auth module");
     expect(map["rollout-test-002"]?.cwd).toBe("/Users/tr/Workspace/proj");
   });
+
+  it("falls back to JSONL parsing for sessions with UUID in name when no external title sources are available", async () => {
+    // Verifies that UUID extraction from session ID doesn't break JSONL fallback path
+    const uuid = "00000000-0000-0000-0000-000000000099";
+    const sessionId = `rollout-2026-04-08T19-42-24-${uuid}`;
+    const sessionDir = path.join(tmpDir, "sessions", "2026", "04", "08");
+    await fs.mkdir(sessionDir, { recursive: true });
+
+    const lines = [
+      JSON.stringify({ type: "session_meta", item: { id: uuid, cwd: "/Users/tr/Workspace/docs", timestamp: "2026-04-08T19:42:24Z" } }),
+      JSON.stringify({ type: "response_item", item: { type: "message", role: "user", content: [{ type: "input_text", text: "Explain merge commit and fast-forward" }] } })
+    ].join("\n") + "\n";
+    await fs.writeFile(path.join(sessionDir, `${sessionId}.jsonl`), lines);
+
+    const config = makeConfig([{ id: "r3", source: "codex", path: path.join(tmpDir, "sessions"), enabled: true }]);
+    const map = await getCodexTrajectoryMetaMap(config);
+
+    // session_index and SQLite are absent (test env) so JSONL fallback resolves the title
+    expect(map[sessionId]?.title).toBe("Explain merge commit and fast-forward");
+    expect(map[sessionId]?.cwd).toBe("/Users/tr/Workspace/docs");
+  });
 });
 
 describe("getCodexStatus", () => {
