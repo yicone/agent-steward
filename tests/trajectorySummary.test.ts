@@ -40,6 +40,17 @@ describe("summarizeTrajectoryEvents", () => {
     const summary = summarizeTrajectoryEvents(events, 3);
     expect(summary.errorCount).toBe(2);
   });
+
+  it("counts subagent events", () => {
+    const events: TrajectoryEvent[] = [
+      event({ id: "a", kind: "subagent", stepType: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT", title: "Browser Subagent" }),
+      event({ id: "b", kind: "subagent", stepType: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT", title: "Browser Subagent" }),
+      event({ id: "c", kind: "thought", stepType: "CORTEX_STEP_TYPE_PLANNER_RESPONSE", title: "Thinking" })
+    ];
+
+    const summary = summarizeTrajectoryEvents(events, 3);
+    expect(summary.subagentCount).toBe(2);
+  });
 });
 
 function listItem(overrides: Partial<ConversationListItem>): ConversationListItem {
@@ -93,6 +104,48 @@ describe("matchesEventSearch", () => {
     expect(
       matchesEventSearch(event({ toolCalls: [{ name: "read_file", argumentsJson: "{}" }] }), "write_file")
     ).toBe(false);
+  });
+
+  it("matches on subagent fields", () => {
+    const subagentEvent = event({
+      kind: "subagent",
+      stepType: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT",
+      title: "Browser Subagent",
+      subagent: {
+        type: "browser",
+        source: "antigravity",
+        antigravityStepType: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT",
+        taskName: "Verify Login Page",
+        taskDescription: "Navigate to login and verify form"
+      }
+    });
+
+    // Match on subagent.type
+    expect(matchesEventSearch(subagentEvent, "browser")).toBe(true);
+    // Match on subagent.taskName
+    expect(matchesEventSearch(subagentEvent, "verify login")).toBe(true);
+    // Match on subagent.taskDescription
+    expect(matchesEventSearch(subagentEvent, "navigate")).toBe(true);
+    // Match on subagent.antigravityStepType
+    expect(matchesEventSearch(subagentEvent, "CORTEX_STEP_TYPE_BROWSER")).toBe(true);
+    // Non-matching query
+    expect(matchesEventSearch(subagentEvent, "research")).toBe(false);
+  });
+
+  it("matches on codex subagent fields", () => {
+    const subagentEvent = event({
+      kind: "subagent",
+      stepType: "function_call",
+      title: "Subagent",
+      subagent: {
+        type: "delegate",
+        source: "codex",
+        codexFunctionName: "spawn_coding_agent"
+      }
+    });
+
+    expect(matchesEventSearch(subagentEvent, "spawn_coding")).toBe(true);
+    expect(matchesEventSearch(subagentEvent, "delegate")).toBe(true);
   });
 });
 

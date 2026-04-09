@@ -255,6 +255,8 @@ function bubbleTone(kind: string) {
       return "bg-amber-400/10 border-amber-300/25 text-amber-200";
     case "tool":
       return "bg-panel/35 border-border/70";
+    case "subagent":
+      return "bg-amber-400/10 border-amber-400/30";
     default:
       return "bg-background/8 border-border/80";
   }
@@ -2550,6 +2552,11 @@ export default function HomeClient() {
                   <Badge>events {content.summary.renderedEvents}</Badge>
                   <Badge>thoughts {content.summary.thoughtCount}</Badge>
                   <Badge>tools {content.summary.toolCount + content.summary.commandCount}</Badge>
+                  {content.summary.subagentCount > 0 ? (
+                    <Badge className="bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                      subagents {content.summary.subagentCount}
+                    </Badge>
+                  ) : null}
                   {content.summary.errorCount > 0 ? (
                     <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
                       errors {content.summary.errorCount}
@@ -2631,6 +2638,11 @@ export default function HomeClient() {
                   <Badge>events {content.summary.renderedEvents}</Badge>
                   <Badge>thoughts {content.summary.thoughtCount}</Badge>
                   <Badge>tools {content.summary.toolCount + content.summary.commandCount}</Badge>
+                  {content.summary.subagentCount > 0 ? (
+                    <Badge className="bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                      subagents {content.summary.subagentCount}
+                    </Badge>
+                  ) : null}
                   {content.summary.errorCount > 0 ? (
                     <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
                       errors {content.summary.errorCount}
@@ -2715,8 +2727,14 @@ export default function HomeClient() {
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge>events {content.summary.renderedEvents}</Badge>
+                  <Badge>thoughts {content.summary.thoughtCount}</Badge>
                   <Badge>tools {content.summary.toolCount}</Badge>
                   <Badge>commands {content.summary.commandCount}</Badge>
+                  {content.summary.subagentCount > 0 ? (
+                    <Badge className="bg-amber-400/15 text-amber-700 dark:text-amber-300 border border-amber-400/30">
+                      subagents {content.summary.subagentCount}
+                    </Badge>
+                  ) : null}
                   {content.summary.errorCount > 0 ? (
                     <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
                       errors {content.summary.errorCount}

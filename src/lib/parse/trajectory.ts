@@ -35,7 +35,7 @@ export function summarizeTrajectoryEvents(events: TrajectoryEvent[], totalSteps:
 
 /**
  * Returns true if the event matches the given search query.
- * Searches across: title, text, output, stepType, commandLine, and tool call names.
+ * Searches across: title, text, output, stepType, commandLine, tool call names, and subagent fields.
  * Pass an empty string to match all events.
  */
 export function matchesEventSearch(event: TrajectoryEvent, query: string): boolean {
@@ -47,6 +47,14 @@ export function matchesEventSearch(event: TrajectoryEvent, query: string): boole
   if (event.stepType.toLowerCase().includes(q)) return true;
   if (event.commandLine?.toLowerCase().includes(q)) return true;
   if (event.toolCalls?.some((tc) => tc.name?.toLowerCase().includes(q))) return true;
+  // Search subagent fields
+  if (event.subagent) {
+    if (event.subagent.type?.toLowerCase().includes(q)) return true;
+    if (event.subagent.taskName?.toLowerCase().includes(q)) return true;
+    if (event.subagent.taskDescription?.toLowerCase().includes(q)) return true;
+    if (event.subagent.antigravityStepType?.toLowerCase().includes(q)) return true;
+    if (event.subagent.codexFunctionName?.toLowerCase().includes(q)) return true;
+  }
   return false;
 }
 

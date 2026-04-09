@@ -568,3 +568,102 @@ describe("sanitizeSqliteCodexTitle", () => {
     expect(result).toMatch(/…$/);
   });
 });
+
+/* ---------- Subagent detection ---------- */
+
+describe("normalizeCodexEventsToTrajectoryEvents subagent detection", () => {
+  it("detects browser subagent from function_call name patterns", () => {
+    const raw = parseCodexJsonl(
+      [
+        JSON.stringify({ timestamp: "2026-04-09T10:00:00Z", type: "response_item", payload: { type: "function_call", name: "browser_navigate", arguments: "{\"url\":\"https://example.com\"}", call_id: "call_browser_1" } }),
+        JSON.stringify({ timestamp: "2026-04-09T10:00:05Z", type: "response_item", payload: { type: "function_call_output", name: "browser_navigate", call_id: "call_browser_1", output: "Page loaded successfully" } })
+      ].join("\n")
+    );
+    const { events, summary } = normalizeCodexEventsToTrajectoryEvents(raw);
+
+    expect(summary.subagentCount).toBe(2); // call + result
+
+    // Check function_call is detected as subagent
+    const callEvent = events.find((e) => e.stepType === "function_call");
+    expect(callEvent).toBeDefined();
+    expect(callEvent?.kind).toBe("subagent");
+    expect(callEvent?.subagent).toMatchObject({
+      type: "browser",
+      source: "codex",
+      codexFunctionName: "browser_navigate"
+    });
+
+    // Check function_call_output is also detected as subagent
+    const resultEvent = events.find((e) => e.stepType === "function_call_output");
+    expect(resultEvent).toBeDefined();
+    expect(resultEvent?.kind).toBe("subagent");
+  });
+
+  it("detects delegate subagent from spawn_agent function name", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        timestamp: "2026-04-09T10:00:00Z",
+        type: "response_item",
+        payload: { type: "function_call", name: "spawn_coding_agent", arguments: "{\"task\":\"Refactor auth module\"}", call_id: "call_1" }
+      })
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+
+    const subagentEvent = events.find((e) => e.kind === "subagent");
+    expect(subagentEvent).toBeDefined();
+    expect(subagentEvent?.subagent).toMatchObject({
+      type: "delegate",
+      source: "codex",
+      codexFunctionName: "spawn_coding_agent"
+    });
+  });
+
+  it("detects research subagent from function name pattern", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        timestamp: "2026-04-09T10:00:00Z",
+        type: "response_item",
+        payload: { type: "function_call", name: "deep_research", arguments: "{\"query\":\"test\"}", call_id: "call_1" }
+      })
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+
+    const subagentEvent = events.find((e) => e.kind === "subagent");
+    expect(subagentEvent).toBeDefined();
+    expect(subagentEvent?.subagent?.type).toBe("research");
+  });
+
+  it("does not detect regular tools as subagents", () => {
+    const raw = parseCodexJsonl(
+      [
+        JSON.stringify({ timestamp: "2026-04-09T10:00:00Z", type: "response_item", payload: { type: "function_call", name: "read_file", arguments: "{\"path\":\"/etc/hosts\"}", call_id: "call_1" } }),
+        JSON.stringify({ timestamp: "2026-04-09T10:00:01Z", type: "response_item", payload: { type: "function_call", name: "shell", arguments: "{\"command\":\"ls -la\"}", call_id: "call_2" } })
+      ].join("\n")
+    );
+    const { events, summary } = normalizeCodexEventsToTrajectoryEvents(raw);
+
+    expect(summary.subagentCount).toBe(0);
+
+    const toolEvents = events.filter((e) => e.kind === "tool");
+    expect(toolEvents).toHaveLength(2);
+
+    const readFileEvent = toolEvents.find((e) => e.title === "read_file");
+    expect(readFileEvent?.subagent).toBeUndefined();
+  });
+
+  it("extracts task description from subagent function arguments", () => {
+    const raw = parseCodexJsonl(
+      JSON.stringify({
+        timestamp: "2026-04-09T10:00:00Z",
+        type: "response_item",
+        payload: { type: "function_call", name: "browser_agent", arguments: JSON.stringify({ task: "Navigate to login page and verify form fields", url: "https://app.com/login" }), call_id: "call_1" }
+      })
+    );
+    const { events } = normalizeCodexEventsToTrajectoryEvents(raw);
+
+    const subagentEvent = events.find((e) => e.kind === "subagent");
+    expect(subagentEvent).toBeDefined();
+    expect(subagentEvent?.text).toContain("Navigate to login page");
+    expect(subagentEvent?.subagent?.taskDescription).toContain("Navigate to login page");
+  });
+});

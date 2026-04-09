@@ -80,4 +80,61 @@ describe("normalizeAntigravityTrajectoryToEvents", () => {
     expect(out.events).toHaveLength(1);
     expect(out.events[0]?.kind).toBe("status");
   });
+
+  it("maps CORTEX_STEP_TYPE_BROWSER_SUBAGENT to subagent kind with metadata", () => {
+    const trajectory = {
+      steps: [
+        {
+          type: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT",
+          status: "CORTEX_STEP_STATUS_DONE",
+          metadata: { createdAt: "2026-02-01T00:00:00Z", executionId: "exec-1" },
+          browserSubagent: {
+            taskName: "Verify Settings Page",
+            task: "1. Navigate to http://localhost:3000/settings\n2. Log in with test credentials"
+          }
+        }
+      ]
+    };
+
+    const out = normalizeAntigravityTrajectoryToEvents({ trajectory });
+    expect(out.summary.subagentCount).toBe(1);
+    expect(out.events).toHaveLength(1);
+
+    const subagentEvent = out.events[0]!;
+    expect(subagentEvent.kind).toBe("subagent");
+    expect(subagentEvent.stepType).toBe("CORTEX_STEP_TYPE_BROWSER_SUBAGENT");
+    expect(subagentEvent.title).toBe("Browser Subagent");
+    expect(subagentEvent.text).toBe("Verify Settings Page");
+    expect(subagentEvent.subagent).toEqual({
+      type: "browser",
+      source: "antigravity",
+      antigravityStepType: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT",
+      taskName: "Verify Settings Page",
+      taskDescription: "1. Navigate to http://localhost:3000/settings\n2. Log in with test credentials"
+    });
+  });
+
+  it("handles subagent without taskName gracefully", () => {
+    const trajectory = {
+      steps: [
+        {
+          type: "CORTEX_STEP_TYPE_BROWSER_SUBAGENT",
+          status: "CORTEX_STEP_STATUS_DONE",
+          metadata: { createdAt: "2026-02-01T00:00:00Z" },
+          browserSubagent: {
+            task: "Navigate to the page"
+          }
+        }
+      ]
+    };
+
+    const out = normalizeAntigravityTrajectoryToEvents({ trajectory });
+    expect(out.summary.subagentCount).toBe(1);
+
+    const subagentEvent = out.events[0]!;
+    expect(subagentEvent.kind).toBe("subagent");
+    expect(subagentEvent.text).toBe("Browser task");
+    expect(subagentEvent.subagent?.taskName).toBeUndefined();
+    expect(subagentEvent.subagent?.taskDescription).toBe("Navigate to the page");
+  });
 });
