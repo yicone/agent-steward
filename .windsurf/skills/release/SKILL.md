@@ -1,8 +1,6 @@
 ---
-name: "Release"
-description: Execute version bump and release for the project
-category: Workflow
-tags: [release, versioning, publish]
+name: release
+description: Execute version bump and release for the project. Use when the user wants to publish a new version.
 ---
 
 Execute a version bump and release for Agent Storage Manager.
@@ -70,20 +68,20 @@ If any check fails, stop and report the issue.
    - Create release from the new tag
    - Copy relevant CHANGELOG section as release notes
 
-   **Output**
+## Output
 
-   ```md
-   ## Release Complete: vx.x.x
+```md
+## Release Complete: vx.x.x
 
-   - Version bumped in package.json
-   - Git tag created and pushed
-   - CHANGELOG updated
-   - [GitHub release created]
+- Version bumped in package.json
+- Git tag created and pushed
+- CHANGELOG updated
+- [GitHub release created]
 
-   Next steps:
-   - Verify the release on GitHub: https://github.com/yicone/agent-storage-manager/releases
-   - [Other post-release tasks if applicable]
-   ```
+Next steps:
+- Verify the release on GitHub: https://github.com/yicone/agent-storage-manager/releases
+- [Other post-release tasks if applicable]
+```
 
 ## Guardrails
 

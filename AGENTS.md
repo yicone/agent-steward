@@ -57,6 +57,28 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Run targeted tests for the code you change when feasible.
 - If you touch parsing, attach, normalization, or diagnostics logic, prefer adding or updating unit tests in the same area.
 
+## Before Ending a Session
+
+When wrapping up work, verify documentation is current.
+
+**How to trigger**:
+- **Windsurf**: Invoke `wrap-up` skill (e.g., "/wrap-up" or "执行 wrap-up")
+- **Codex**: Invoke `wrap-up` skill (e.g., "执行 wrap-up skill")
+- **Manual**: Run through the checklist below
+
+**Note**: Agent cannot detect session end automatically. You must explicitly request wrap-up.
+
+Checklist:
+
+- [ ] **CHANGELOG.md**: User-facing changes recorded under `## Unreleased`
+  - Skip: internal refactors, tests-only changes, documentation typo fixes
+  - Include: new features, bug fixes, UI changes, performance improvements
+- [ ] **ROADMAP.md**: Move completed items to CHANGELOG (don't duplicate)
+- [ ] **README.md**: Update if behavior or prerequisites changed
+- [ ] **ADR**: Create/update if architectural direction changed
+
+**Quick check**: Run `git diff --stat` to see what files changed, then decide what needs documenting.
+
 ## Release Process
 
 When a release is needed (significant milestone, bug fixes, or explicit request):
@@ -67,7 +89,7 @@ When a release is needed (significant milestone, bug fixes, or explicit request)
    - Build succeeds (`pnpm build`)
    - CHANGELOG.md updated with `## Unreleased` entries
 
-2. **Version bump** (use skill `/release` or manually):
+2. **Version bump** (invoke `release` skill or manually):
    - `pnpm version:patch` — bug fixes (0.1.0 → 0.1.1)
    - `pnpm version:minor` — new features (0.1.0 → 0.2.0)
    - `pnpm version:major` — breaking changes (0.1.0 → 1.0.0)
