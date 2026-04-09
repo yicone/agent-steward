@@ -1375,6 +1375,37 @@ export default function HomeClient() {
   // True from when urlInitRef is consumed until the async restore promise
   // settles, so the URL-sync effect stays suppressed for the whole restore.
   const urlRestoringRef = useRef(false);
+  // Track if restoration has been initiated (to prevent re-running)
+  const restorationInitiatedRef = useRef(false);
+  // Track if restoration has completed to prevent re-running after hot reload
+  const restorationCompletedRef = useRef(false);
+
+  // Re-parse URL on mount to handle hot reload (Fast Refresh)
+  const [mountCount, setMountCount] = useState(0);
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const parsed = parseUrlState(window.location.search);
+    // Always update urlInitRef from current URL on mount/hot reload
+    // This ensures hot reload doesn't lose the deep-link parameters
+    if (parsed.id) {
+      urlInitRef.current = parsed;
+      // Reset restoration flags so restoration can run again
+      restorationInitiatedRef.current = false;
+      restorationCompletedRef.current = false;
+      // Increment mount count to force restoration effect to re-run
+      setMountCount(c => c + 1);
+    }
+  }, []);
+
+  // Ref to track the selected conversation button for auto-scroll
+  const selectedButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Scroll selected conversation into view when selectedKey changes
+  useEffect(() => {
+    if (selectedButtonRef.current) {
+      selectedButtonRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedKey]);
   // Tracks whether the first config load has completed, so refreshConfigAndStatus
   // can skip re-setting source on manual refreshes without closing over `config`.
   const configInitializedRef = useRef(false);
@@ -2027,8 +2058,9 @@ export default function HomeClient() {
       inspectorMode: urlInspMode,
       includeCleared: urlCleared
     } = urlInit;
-    urlInitRef.current = {}; // clear so future source switches reset normally
     urlRestoringRef.current = true; // block URL sync until the async restore fully settles
+    restorationInitiatedRef.current = true; // mark that restoration has started
+    // Don't clear urlInitRef.current - keep it so URL sync check continues to block
 
     let cancelled = false; // guard against stale async callbacks after unmount/re-render
 
@@ -2103,10 +2135,13 @@ export default function HomeClient() {
       }
       // Restore complete — allow URL sync to resume.
       urlRestoringRef.current = false;
+      restorationInitiatedRef.current = false;
+      restorationCompletedRef.current = true;
+      urlInitRef.current = {}; // clear after restoration completes
     });
     return () => { cancelled = true; urlRestoringRef.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, loadingList, source]);
+  }, [items, loadingList, source, mountCount]);
 
   // -----------------------------------------------------------------------
   // URL sync: push current viewer state to URL on every relevant change
@@ -2118,7 +2153,17 @@ export default function HomeClient() {
     // Skip while the deep-link restore effect has not yet consumed the initial URL state,
     // or while the async restore is still in progress, so replaceState never overwrites
     // the URL before restoration (including row/expanded state) is fully applied.
-    if (urlInitRef.current.id || urlRestoringRef.current) return;
+    if (urlInitRef.current.id || urlRestoringRef.current || restorationInitiatedRef.current) return;
+    // Also skip if the actual browser URL has an id parameter that doesn't match selectedId
+    // This prevents URL sync from stripping the URL during hot reload before restoration runs
+    if (typeof window !== "undefined") {
+      const currentUrlParams = new URLSearchParams(window.location.search);
+      const urlId = currentUrlParams.get("id");
+      // Block sync if URL has an id but we haven't selected anything yet (restoration in progress)
+      if (urlId && !selectedId) return;
+      // Also block if the URL id doesn't match the selected id
+      if (urlId && urlId !== selectedId) return;
+    }
     const currentView =
       source === "antigravity"
         ? antigravityView
@@ -2148,7 +2193,7 @@ export default function HomeClient() {
   }, [
     config, source, selectedId, selectedItem, antigravityView, windsurfView,
     trajectoryFilters, collapsedExecutionGroups, selectedRowId,
-    inspectorOpen, inspectorMode, windsurfIncludeCleared
+    inspectorOpen, inspectorMode, windsurfIncludeCleared, mountCount
   ]);
 
   const antigravityPill = (() => {
@@ -2277,6 +2322,7 @@ export default function HomeClient() {
                 <button
                   key={key}
                   type="button"
+                  ref={selected ? selectedButtonRef : undefined}
                   className={cn(
                     "w-full border-b border-border/40 px-3 py-2 text-left transition-colors hover:bg-background/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
                     selected && "border-accent/25 bg-accent/10"
