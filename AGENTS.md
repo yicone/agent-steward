@@ -56,3 +56,27 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 
 - Run targeted tests for the code you change when feasible.
 - If you touch parsing, attach, normalization, or diagnostics logic, prefer adding or updating unit tests in the same area.
+
+## Release Process
+
+When a release is needed (significant milestone, bug fixes, or explicit request):
+
+1. **Pre-release checks** (all must pass):
+   - Working directory clean (`git status`)
+   - Tests pass (`pnpm test`)
+   - Build succeeds (`pnpm build`)
+   - CHANGELOG.md updated with `## Unreleased` entries
+
+2. **Version bump** (use skill `/release` or manually):
+   - `pnpm version:patch` — bug fixes (0.1.0 → 0.1.1)
+   - `pnpm version:minor` — new features (0.1.0 → 0.2.0)
+   - `pnpm version:major` — breaking changes (0.1.0 → 1.0.0)
+
+3. **Post-bump**:
+   - Move CHANGELOG entries from `## Unreleased` to new version section
+   - Commit: `docs(changelog): update for vx.x.x`
+   - Push the commit (tag already pushed by `postversion` hook)
+
+4. **Source of truth for versioning**:
+   - `docs/dev/versioning-strategy.md` — when to use manual vs automated releases
+   - `package.json` `version` — single source of current version
