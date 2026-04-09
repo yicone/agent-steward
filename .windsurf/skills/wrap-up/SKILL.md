@@ -44,27 +44,33 @@ Execute end-of-session wrap-up checklist.
 
    Don't duplicate: Close Issue → CHANGELOG entry
 
-4. **Check README.md** (if behavior/prerequisites changed)
+4. **Check OpenSpec artifacts** (if `openspec/` changed)
+
+   - Keep proposal, design, specs, and tasks aligned with the actual implementation
+   - Run `openspec validate <change-id> --strict` for the affected change when possible
+   - If an OpenSpec change exists for the work, treat it as the normative source for intended behavior
+
+5. **Check README.md** (if behavior/prerequisites changed)
 
    - Update setup instructions if dependencies changed
    - Update usage examples if CLI/API changed
 
-5. **Check ADR** (if architectural decisions made)
+6. **Check ADR** (if architectural decisions made)
 
    - Create new ADR for significant design choices
    - Update existing ADR if decision evolved
 
-6. **Run final validation**
+7. **Run final validation**
 
    ```bash
    pnpm test
    pnpm build
    ```
 
-7. **Commit documentation updates**
+8. **Commit documentation updates**
 
    ```bash
-   git add CHANGELOG.md ROADMAP.md README.md docs/adr/
+   git add CHANGELOG.md README.md docs/adr/ openspec/
    git commit -m "docs: update documentation for session wrap-up"
    ```
 
@@ -75,7 +81,7 @@ Execute end-of-session wrap-up checklist.
 
 **Files analyzed**: N changed
 **CHANGELOG**: [updated / no changes needed]
-**ROADMAP**: [updated / no changes needed]
+**OpenSpec**: [updated / no changes needed]
 **README**: [updated / no changes needed]
 **ADR**: [updated / no changes needed]
 

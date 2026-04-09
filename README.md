@@ -50,7 +50,8 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
 ## Project Docs
 
 - `README.md`: current product scope, configuration, and runtime prerequisites
-- `ROADMAP.md`: open/planned work only
+- GitHub Issues: active execution tracking for concrete work in progress
+- `openspec/specs/` and `openspec/changes/`: normative specs and active change artifacts when work is tracked in OpenSpec
 - `CHANGELOG.md`: shipped changes and merged GitHub work
 - `docs/adr/ADR-001-use-language-server-rpc.md`: canonical decision for session retrieval strategy
 - `docs/storage/local-storage-notes.md`: version-scoped Antigravity / Windsurf storage and attach facts
@@ -106,9 +107,9 @@ For detailed view semantics and cross-source alignment notes, see `docs/viewer/t
 
 ## Project Status
 
-- Current planning is tracked in `ROADMAP.md`.
+- Active execution tracking lives in GitHub Issues.
+- When work is managed with OpenSpec, active changes live in `openspec/changes/` and accepted behavior baselines live in `openspec/specs/`.
 - Current shipped milestones are tracked in `CHANGELOG.md`.
-- GitHub Issues / PRs help index work when they exist, but these docs remain usable without them.
 
 ## Technical Docs
 

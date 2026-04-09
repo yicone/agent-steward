@@ -10,8 +10,9 @@ Repository guidance for coding agents working in `agent-storage-manager`.
 ## Source of truth
 
 - `README.md`: current product scope, user-facing setup, and runtime prerequisites
-- `ROADMAP.md`: future work only
 - `CHANGELOG.md`: shipped / merged work only
+- GitHub Issues: active work tracking (short-term, 0-2 weeks)
+- `openspec/specs/` and `openspec/changes/`: normative requirements and active change artifacts when the current work is being tracked in OpenSpec
 - `docs/adr/ADR-001-use-language-server-rpc.md`: canonical decision for session retrieval strategy
 - `docs/storage/local-storage-notes.md`: version-scoped Antigravity / Windsurf storage, attach, and token facts
 
@@ -43,14 +44,20 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 
 ## Documentation rules
 
+**Two-layer source of truth**:
+
+| Layer | Scope | Tool | When to update |
+|-------|-------|------|----------------|
+| **Execution** (0-2 weeks) | Concrete tasks in progress | GitHub Issues | Create Issue when starting work |
+| **History** (shipped) | Completed milestones | CHANGELOG.md | Record on every user-facing ship |
+
 - Follow SSoT / DRY.
-- Treat GitHub Issues / PRs as optional coordination artifacts, not as the only record of scope or completion.
-- Keep `ROADMAP.md` theme-first: organize entries by product / engineering topic, not by issue number.
-- In `ROADMAP.md`, use GitHub references only as secondary metadata (for example `refs: #8`), not as the primary structure.
-- Do not turn `ROADMAP.md` into a live GitHub status snapshot; record durable planning themes there and move shipped items to `CHANGELOG.md`.
-- If work is shipped/completed, update `CHANGELOG.md` instead of leaving it in `ROADMAP.md`.
+- Treat GitHub Issues as execution coordination, not durable planning. Close Issues when done.
+- If an OpenSpec change exists for the work, treat its artifacts and affected specs as the normative source for that change's intended behavior.
+- When shipping: Close Issue → Record in CHANGELOG.md.
 - If work changes current behavior or prerequisites, update `README.md`.
-- If work changes long-lived architectural direction, update the relevant ADR instead of inventing a parallel explanation elsewhere.
+- If work changes long-lived architectural direction, update the relevant ADR.
+- Mid-term planning (2 weeks-3 months) lives in GitHub Issues with appropriate labels/milestones, or in your personal notes — not in a separate ROADMAP file.
 
 ## Validation
 
@@ -73,7 +80,8 @@ Checklist:
 - [ ] **CHANGELOG.md**: User-facing changes recorded under `## Unreleased`
   - Skip: internal refactors, tests-only changes, documentation typo fixes
   - Include: new features, bug fixes, UI changes, performance improvements
-- [ ] **ROADMAP.md**: Move completed items to CHANGELOG (don't duplicate)
+- [ ] **GitHub Issues**: Close completed Issues, create new Issues for upcoming work
+- [ ] **OpenSpec**: If `openspec/` artifacts changed, keep proposal/design/specs/tasks aligned and run `openspec validate <change-id> --strict`
 - [ ] **README.md**: Update if behavior or prerequisites changed
 - [ ] **ADR**: Create/update if architectural direction changed
 
