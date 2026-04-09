@@ -1878,19 +1878,40 @@ export default function HomeClient() {
     setStatus((await stRes.json()) as SourcesStatus);
   }
 
+  // Ref to track the current loadList operation for cancellation
+  const loadListAbortRef = useRef<AbortController | null>(null);
+
   async function loadList(nextSource: Source) {
+    // Cancel any in-flight loadList operation
+    if (loadListAbortRef.current) {
+      loadListAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    loadListAbortRef.current = abortController;
+
     setLoadingList(true);
     setError(null);
     setItems([]);
     try {
-      const res = await fetch(`/api/conversations?source=${nextSource}&limit=200&offset=0`);
+      const res = await fetch(`/api/conversations?source=${nextSource}&limit=200&offset=0`, {
+        signal: abortController.signal
+      });
+      // Check if this operation was cancelled by a newer one
+      if (abortController.signal.aborted) return;
       const json = (await res.json()) as ApiConversationListResponse;
       if (!res.ok) throw new Error((json as any)?.error ?? "Failed to load conversations");
+      // Check again after await
+      if (abortController.signal.aborted) return;
       setItems(json.items);
     } catch (e) {
+      if ((e as Error).name === "AbortError") return; // Ignore abort errors
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoadingList(false);
+      // Only clear loading if this is still the current operation
+      if (loadListAbortRef.current === abortController) {
+        setLoadingList(false);
+        loadListAbortRef.current = null;
+      }
     }
   }
 
@@ -2047,6 +2068,9 @@ export default function HomeClient() {
     // from the current source, wait until the source-change effect has run
     // and the list for the correct source is loaded.
     if (urlInit.source && source !== urlInit.source) return;
+    // Additional guard: if items is empty but we're not loading, the list
+    // might have been reset by a source change. Wait for actual data.
+    if (items.length === 0 && !loadingList) return;
 
     // Consume the init ref so this runs only once.
     const {
