@@ -36,10 +36,13 @@ Execute end-of-session wrap-up checklist.
      - User impact
    ```
 
-3. **Check ROADMAP.md** (if items completed)
+3. **Check GitHub Issues** (execution layer)
 
-   - Move shipped items from `## In Progress` to CHANGELOG
-   - Don't duplicate content between files
+   - Close Issues for completed work
+   - Create new Issues for upcoming work
+   - Use labels/milestones for mid-term planning (2 weeks-3 months)
+
+   Don't duplicate: Close Issue → CHANGELOG entry
 
 4. **Check README.md** (if behavior/prerequisites changed)
 
