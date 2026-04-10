@@ -13,6 +13,23 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-10` — Session Backup foundation
+  - Added canonical `session-record/v1` and `session-backup/v1` schemas plus managed backup storage under `~/.agent-storage-manager/backups`
+  - Added create/import/verify APIs for session backups, with schema/integrity validation and stable user-facing diagnostics
+  - Added `Back Up Session` to the Sessions viewer, with Codex-only opt-in source copy for v1
+
+- `2026-04-09` — Subagent event support for Antigravity and Codex
+  - **Infrastructure**: New `subagent` trajectory event kind with `SubagentInfo` metadata (`type`, `source`, `taskName`, `taskDescription`, `forkedFrom`)
+  - **Antigravity**: Convert `CORTEX_STEP_TYPE_BROWSER_SUBAGENT` from `tool` to `subagent` kind; populate browser type and task details
+  - **Codex**: Heuristic detection via `inferSubagentType()` matching function names (browser/delegate/research/coding patterns); `extractTaskDescription()` pulls task info from function args
+  - **UI**: Amber-styled subagent badges with type indicator, trajectory filtering toggle (default on), subagent count in header summary
+  - **Filters**: Add `subagent` to `TrajectoryFilterFlags` with URL bitfield support (7-bit format)
+
+- `2026-04-09` — Codex conversation metadata enrichment (gitBranch & model)
+  - Extract `gitBranch` from `session_meta.git.branch` and `model` from first `turn_context` event
+  - JSONL streaming parse for both fields even when title/cwd come from SQLite (third-tier fallback)
+  - UI: Display as outline badge (`git:branch-name`) and accent badge (`gpt-5.4`) in conversation list
+
 - `2026-03-14` — Codex CLI support
   - New `"codex"` source type alongside Antigravity and Windsurf
   - Reads sessions directly from `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` — no running process or token required
@@ -31,14 +48,36 @@ This file records shipped, merged changes for Agent Storage Manager.
   - Added full-text event search
   - Improved conversation filtering flow
 
+### Fixed
+
+- `2026-04-09` — Conversation list race condition when deep-linking to Codex
+  - Fixed `loadList` AbortController to cancel in-flight fetches when source changes rapidly
+  - Prevents Antigravity conversation list from overwriting Codex list on initial page load with `?source=codex` URL
+
+- `2026-04-09` — Hot reload (Fast Refresh) no longer clears deep-link URL state
+  - Add `restorationInitiatedRef` and `restorationCompletedRef` to track restoration lifecycle
+  - Re-parse URL from `window.location.search` on mount to preserve deep-link parameters across hot reloads
+  - Defer clearing `urlInitRef` until after restoration completes to prevent premature URL sync
+  - Add `selectedButtonRef` with auto-scroll behavior for selected conversation in the list
+
+- `2026-04-09` — Duplicate user messages in Codex trajectory view
+  - Remove consecutive identical messages caused by Codex CLI emitting both `response_item` and `event_msg` for the same content
+- `2026-04-08` — Conversation search filtering accuracy
+  - Search now matches only `title` (not internal `id`) when a human-readable title is present
+  - Fixes false positives when searching "rollout" (Codex session IDs always start with `rollout-`)
+  - Updated search placeholder to "Search by title or path…"
+
 ### Improved
 
+- `2026-04-08` — Codex title/cwd enrichment upgraded to three-tier strategy
+  - Tier 1: `session_index.jsonl` for manually renamed titles
+  - Tier 2: `state_5.sqlite` for auto-generated titles and `cwd`
+  - Tier 3: JSONL streaming parse as fallback
 - `2026-03-12` — Clarified and unified Viewer view-mode semantics
   - Unified readability mode naming to `Compact` and made it the first/default tab across sources
   - Clarified that RPC shape differences do not imply source capability differences
   - Kept normalized `Transcript`/`Trajectory` as the cross-source canonical surfaces
   - Detailed semantics and alignment notes: `docs/viewer/trajectory-view.md`
-
 - `2026-03-10` — Error center milestone completed via GitHub issue `#2` and PRs `#17`, `#18`, `#19`, `#20`
   - Added grouped error navigation behavior
   - Improved selection, highlight, and “only errors” browsing flow
