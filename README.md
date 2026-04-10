@@ -89,6 +89,11 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - download per-conversation diagnostic JSON from Viewer
   - includes raw LS payloads (Antigravity/Windsurf) or JSONL events (Codex) to compare UI-visible process data vs rendered output
   - note: may include sensitive content (paths, commands, outputs, conversation text)
+- Session Backup:
+  - create managed session backups from the Viewer via `Back Up Session`
+  - backup packages use canonical `session-record/v1` inside `session-backup/v1`
+  - verify/import flows are available through `/api/session-backups`, `/api/session-backups/import`, and `/api/session-backups/[backupId]`
+  - v1 `Source Backup` is opt-in and currently supports copy-only source preservation for Codex sessions only
 
 For detailed view semantics and cross-source alignment notes, see `docs/viewer/trajectory-view.md`.
 

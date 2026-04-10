@@ -40,6 +40,19 @@ type RestoredSelection = {
   selectedKey: string;
 };
 
+type SessionBackupFeedback =
+  | {
+      kind: "success";
+      message: string;
+      backupId: string;
+    }
+  | {
+      kind: "error";
+      title: string;
+      message: string;
+      hint?: string;
+    };
+
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
@@ -83,6 +96,28 @@ export function resolveRestoredSelection(
     match,
     effectiveRootId,
     selectedKey: toSelectionKey(effectiveRootId ?? "unknown", id),
+  };
+}
+
+export function supportsSessionSourceCopy(source: Source): boolean {
+  return source === "codex";
+}
+
+export function buildSessionBackupRequest(input: {
+  source: Source;
+  sessionId: string;
+  selectedItem: ConversationListItem | null;
+  includeSourceCopy: boolean;
+}) {
+  const includeSourceCopy = input.includeSourceCopy && supportsSessionSourceCopy(input.source);
+
+  return {
+    source: input.source,
+    sessionId: input.sessionId,
+    ...(input.source === "codex" && input.selectedItem?.rootId
+      ? { rootId: input.selectedItem.rootId }
+      : {}),
+    ...(includeSourceCopy ? { includeSourceCopy: true } : {})
   };
 }
 
@@ -1337,6 +1372,9 @@ export default function HomeClient() {
   const [loadingContent, setLoadingContent] = useState(false);
   const [content, setContent] = useState<ConversationContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [backupIncludeSourceCopy, setBackupIncludeSourceCopy] = useState(false);
+  const [backupFeedback, setBackupFeedback] = useState<SessionBackupFeedback | null>(null);
   const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("markdown");
   const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("chat");
   const [windsurfIncludeCleared, setWindsurfIncludeCleared] = useState(false);
@@ -1418,6 +1456,8 @@ export default function HomeClient() {
     if (!parsed) return null;
     return items.find((it) => it.id === parsed.id && it.rootId === parsed.rootId) ?? null;
   }, [items, selectedKey]);
+
+  const sourceCopySupported = useMemo(() => supportsSessionSourceCopy(source), [source]);
 
   const filteredItems = useMemo(() => {
     if (!filter.trim()) return items;
@@ -1766,6 +1806,53 @@ export default function HomeClient() {
     }
   }, [windsurfIncludeCleared]);
 
+  const createSessionBackup = useCallback(async () => {
+    if (!selectedId) return;
+
+    setCreatingBackup(true);
+    setBackupFeedback(null);
+
+    try {
+      const res = await fetch("/api/session-backups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(
+          buildSessionBackupRequest({
+            source,
+            sessionId: selectedId,
+            selectedItem,
+            includeSourceCopy: backupIncludeSourceCopy
+          })
+        )
+      });
+      const json = (await res.json()) as { backupId?: string; error?: string; title?: string; hint?: string };
+      if (!res.ok || typeof json.backupId !== "string") {
+        setBackupFeedback({
+          kind: "error",
+          title: json.title ?? "Backup failed",
+          message: json.error ?? "Failed to back up session",
+          hint: json.hint
+        });
+        return;
+      }
+      setBackupFeedback({
+        kind: "success",
+        message: "Session backup created.",
+        backupId: json.backupId
+      });
+    } catch (e) {
+      setBackupFeedback({
+        kind: "error",
+        title: "Backup failed",
+        message: e instanceof Error ? e.message : String(e)
+      });
+    } finally {
+      setCreatingBackup(false);
+    }
+  }, [backupIncludeSourceCopy, selectedId, selectedItem, source]);
+
   const handleGlobalSearchSelect = useCallback(
     (sessionId: string, sessionSource: Source, rootId?: string) => {
       // Switch source tab if needed. Flag the ref so the useEffect([source]) reset
@@ -1858,6 +1945,13 @@ export default function HomeClient() {
     setScrollToRowId(rowId);
     setPendingTrajectoryJumpEventId(null);
   }, [pendingTrajectoryJumpEventId, content, eventsById, trajectoryRows, antigravityView, windsurfView]);
+
+  useEffect(() => {
+    setBackupFeedback(null);
+    if (!sourceCopySupported) {
+      setBackupIncludeSourceCopy(false);
+    }
+  }, [selectedId, source, sourceCopySupported]);
 
   async function refreshConfigAndStatus() {
     const isFirstLoad = !configInitializedRef.current;
@@ -2444,19 +2538,71 @@ export default function HomeClient() {
           ) : null}
 
           {selectedId ? (
-            <div className="mb-2 flex justify-end">
-              <Button asChild variant="outline" size="sm">
-                <a
-                  href={
-                    source === "codex" && selectedItem?.rootId
-                      ? `/api/conversations/${source}/${selectedId}/diagnostic?rootId=${encodeURIComponent(selectedItem.rootId)}`
-                      : `/api/conversations/${source}/${selectedId}/diagnostic`
-                  }
-                  title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)"
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                {sourceCopySupported ? (
+                  <label
+                    className="flex items-center gap-2 text-xs text-muted"
+                    title="Advanced option. Copies the original source file into the backup package."
+                  >
+                    <Switch
+                      checked={backupIncludeSourceCopy}
+                      onCheckedChange={setBackupIncludeSourceCopy}
+                      aria-label="Include source copy"
+                      disabled={creatingBackup}
+                    />
+                    Include source copy
+                  </label>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void createSessionBackup()}
+                  disabled={creatingBackup}
+                  title="Create a managed session backup package"
                 >
-                  Diagnostic JSON
-                </a>
-              </Button>
+                  {creatingBackup ? "Backing up…" : "Back Up Session"}
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a
+                    href={
+                      source === "codex" && selectedItem?.rootId
+                        ? `/api/conversations/${source}/${selectedId}/diagnostic?rootId=${encodeURIComponent(selectedItem.rootId)}`
+                        : `/api/conversations/${source}/${selectedId}/diagnostic`
+                    }
+                    title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)"
+                  >
+                    Diagnostic JSON
+                  </a>
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {backupFeedback ? (
+            <div
+              className={cn(
+                "mb-3 rounded-2xl border px-3 py-2 text-sm",
+                backupFeedback.kind === "success"
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-danger/55 bg-danger/10 text-danger"
+              )}
+            >
+              {backupFeedback.kind === "success" ? (
+                <>
+                  <span className="font-medium">{backupFeedback.message}</span>{" "}
+                  <span className="font-mono text-xs opacity-90">{backupFeedback.backupId}</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-medium">{backupFeedback.title}:</span> {backupFeedback.message}
+                  {backupFeedback.hint ? (
+                    <span className="mt-1 block text-xs opacity-90">{backupFeedback.hint}</span>
+                  ) : null}
+                </>
+              )}
             </div>
           ) : null}
 

@@ -521,6 +521,10 @@ A preserved copy of a session in the product's portable canonical format.
 
 Unless otherwise stated, this refers to backing up a `Session Record`, not a rendered `Session View`.
 
+Current implementation schema family:
+
+- `session-backup/v1`
+
 ### Source Backup
 
 A preserved copy of the original `Session Source` or other original source material.
@@ -553,6 +557,14 @@ May include:
 - metadata
 
 Recommended canonical term for future backup and migration UX.
+
+### Session Record Schema
+
+The versioned schema family used for canonical `Session Record` serialization.
+
+Current implementation schema family:
+
+- `session-record/v1`
 
 ### Resume Workflow
 

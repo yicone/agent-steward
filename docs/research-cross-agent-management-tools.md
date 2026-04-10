@@ -1,6 +1,6 @@
 # 跨 Agent 管理工具调研
 
-更新时间：2026-03-12
+更新时间：2026-04-10
 
 > 目标：按统一分类框架梳理跨 agent 管理能力，覆盖开源项目、主流产品内置能力、以及商业化形态。
 
@@ -106,6 +106,7 @@
 
 | 工具/产品 | 形态 | 商业性质 | 定位 |
 |---|---|---|---|
+| jazzyalex/agent-sessions | macOS Desktop App | 开源 | 多 agent session browser + resume workflow + live cockpit |
 | esc5221/claude-code-viewer | Desktop App | 开源 | Claude Code 会话日志浏览与分析 |
 | tad-hq/universal-session-viewer | Desktop App | 开源 | 会话浏览/检索/分析（含续写链识别） |
 | dotneet/agent-session-view | CLI + Web/桌面 | 开源 | Claude Code + Codex CLI 会话查看/导出 |
@@ -124,6 +125,7 @@
 3. **Spec-driven（SDD）**是独立能力域，不应混入“编排”或“命令资产”分类中；它常与二者组合使用。  
 4. 对流行 Coding Agent 的分析应纳入同一分类框架：其“内置能力”是各分类的产品内实现，而不是额外新类别。  
 5. “本地会话观测与诊断”是独立高价值类别：它与配置管理/编排并列，关注历史可观测性、问题定位和跨来源检索。
+6. backup / export / import / migration 值得作为横切关注点单独跟踪：它们会跨越 session、rules、skills、commands 等多个类别，不适合简单塞进某一个主分类。
 
 ## 选型建议
 

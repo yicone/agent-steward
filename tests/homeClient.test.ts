@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveRestoredSelection } from "@/components/HomeClient";
+import { buildSessionBackupRequest, resolveRestoredSelection, supportsSessionSourceCopy } from "@/components/HomeClient";
 import type { ConversationListItem } from "@/lib/types";
 
 function makeItem(overrides: Partial<ConversationListItem>): ConversationListItem {
@@ -45,5 +45,47 @@ describe("resolveRestoredSelection", () => {
 
     expect(result.effectiveRootId).toBeUndefined();
     expect(result.selectedKey).toBe(JSON.stringify({ rootId: "unknown", id: "session-1" }));
+  });
+});
+
+describe("supportsSessionSourceCopy", () => {
+  it("supports source copy only for codex in v1", () => {
+    expect(supportsSessionSourceCopy("codex")).toBe(true);
+    expect(supportsSessionSourceCopy("antigravity")).toBe(false);
+    expect(supportsSessionSourceCopy("windsurf")).toBe(false);
+  });
+});
+
+describe("buildSessionBackupRequest", () => {
+  it("includes codex rootId and opt-in source copy when supported", () => {
+    const selectedItem = makeItem({ rootId: "root-b" });
+
+    expect(
+      buildSessionBackupRequest({
+        source: "codex",
+        sessionId: "session-1",
+        selectedItem,
+        includeSourceCopy: true,
+      })
+    ).toEqual({
+      source: "codex",
+      sessionId: "session-1",
+      rootId: "root-b",
+      includeSourceCopy: true,
+    });
+  });
+
+  it("drops unsupported source-copy requests for non-codex sources", () => {
+    expect(
+      buildSessionBackupRequest({
+        source: "windsurf",
+        sessionId: "session-2",
+        selectedItem: null,
+        includeSourceCopy: true,
+      })
+    ).toEqual({
+      source: "windsurf",
+      sessionId: "session-2",
+    });
   });
 });
