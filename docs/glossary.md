@@ -80,7 +80,7 @@ Use this as a product principle, not as a page or feature label.
 
 ### Context Cockpit
 
-A recommended product metaphor for the project-level control surface.
+A historical or strategic product metaphor for the project-level control surface.
 
 Meaning:
 
@@ -89,8 +89,9 @@ Meaning:
 - analyze
 - migrate
 
-Use in product strategy discussions.
+Use in product strategy discussions when discussing the broader design space.
 Avoid using it as a hard UI label unless design explicitly chooses it.
+Current internal working direction uses `Project Agent Context Steward` rather than `Context Cockpit` as the primary framing.
 
 ### Context Governance
 
