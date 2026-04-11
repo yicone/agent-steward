@@ -70,7 +70,41 @@ export function resolveInitialSource(input: {
   externalSelectionSource?: Source;
   defaultSource: Source;
 }): Source {
-  return input.urlSource ?? input.externalSelectionSource ?? input.defaultSource;
+  return input.externalSelectionSource ?? input.urlSource ?? input.defaultSource;
+}
+
+export function shouldResetViewerSelectionOnSourceChange(input: {
+  source: Source;
+  crossSourceSelection?: Source | null;
+  urlId?: string;
+  urlSource?: Source;
+  externalSelectionRequestId?: number | null;
+  pendingExternalSelectionRequestId?: number | null;
+}): boolean {
+  if (
+    input.externalSelectionRequestId != null
+    && input.pendingExternalSelectionRequestId === input.externalSelectionRequestId
+  ) {
+    return false;
+  }
+
+  if (input.crossSourceSelection === input.source) {
+    return false;
+  }
+
+  if (input.urlId && input.urlSource === input.source) {
+    return false;
+  }
+
+  return true;
+}
+
+export function shouldDeferSearchSelectionLoad(input: {
+  currentSource: Source;
+  nextSource: Source;
+  itemCount: number;
+}): boolean {
+  return input.nextSource !== input.currentSource || input.itemCount === 0;
 }
 
 function formatBytes(bytes: number) {
@@ -1426,6 +1460,8 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
   const crossSourceSelectionRef = useRef<Source | null>(null);
   const externalSelectionRequestRef = useRef<number | null>(null);
   const externalSelectionSourceRef = useRef<Source | undefined>(externalSelection?.source);
+  const pendingExternalSelectionRequestRef = useRef<number | null>(null);
+  const pendingSearchSelectionRef = useRef<Pick<HomeClientExternalSelection, "sessionId" | "source" | "rootId"> | null>(null);
 
   // URL deep-link: parsed once on mount. The useState lazy initializer guarantees
   // parseUrlState only runs on the first render; the ref gives mutable access
@@ -1903,6 +1939,11 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
       setAntigravityView("markdown");
       setWindsurfView("chat");
       setCollapsedExecutionGroups({});
+      if (shouldDeferSearchSelectionLoad({ currentSource: source, nextSource: sessionSource, itemCount: items.length })) {
+        pendingSearchSelectionRef.current = { sessionId, source: sessionSource, rootId };
+        return;
+      }
+      pendingSearchSelectionRef.current = null;
       loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined, {
         rootId: match?.rootId ?? rootId
       }).catch(
@@ -1917,6 +1958,10 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
     if (!externalSelection) return;
     if (externalSelectionRequestRef.current === externalSelection.requestId) return;
     externalSelectionRequestRef.current = externalSelection.requestId;
+    pendingExternalSelectionRequestRef.current = externalSelection.requestId;
+    urlInitRef.current = {};
+    urlRestoringRef.current = false;
+    restorationInitiatedRef.current = false;
     handleGlobalSearchSelect(externalSelection.sessionId, externalSelection.source, externalSelection.rootId);
   }, [externalSelection, handleGlobalSearchSelect]);
 
@@ -2119,23 +2164,28 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
 
   useEffect(() => {
     loadList(source).catch(() => {});
-    // If this source change was triggered by a cross-source GlobalSearch selection
-    // (handleGlobalSearchSelect sets crossSourceSelectionRef), skip the reset so
-    // the pending session selection survives the source-change cycle.
     const crossSourceSelection = crossSourceSelectionRef.current;
-    if (crossSourceSelection) {
+    const urlInit = urlInitRef.current;
+
+    if (!shouldResetViewerSelectionOnSourceChange({
+      source,
+      crossSourceSelection,
+      urlId: urlInit.id ?? undefined,
+      urlSource: urlInit.source ?? undefined,
+      externalSelectionRequestId: externalSelection?.requestId ?? null,
+      pendingExternalSelectionRequestId: pendingExternalSelectionRequestRef.current,
+    })) {
       if (crossSourceSelection === source) {
         crossSourceSelectionRef.current = null;
-        return;
       }
-      // Stale ref for a different source; clear it so it cannot affect future switches.
-      crossSourceSelectionRef.current = null;
+      if (pendingExternalSelectionRequestRef.current === (externalSelection?.requestId ?? null)) {
+        pendingExternalSelectionRequestRef.current = null;
+      }
+      return;
     }
-    // URL deep-link: skip the reset only when the source change is the initial
-    // one driven by refreshConfigAndStatus setting the URL's target source.
-    // If the user actively switches to a different source, run the normal reset.
-    const urlInit = urlInitRef.current;
-    if (urlInit.id && source === urlInit.source) return;
+
+    crossSourceSelectionRef.current = null;
+    pendingExternalSelectionRequestRef.current = null;
 
     setSelectedKey(null);
     setSelectedId(null);
@@ -2144,7 +2194,7 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
     setAntigravityView("markdown");
     setWindsurfView("chat");
     setCollapsedExecutionGroups({});
-  }, [source]);
+  }, [source, externalSelection?.requestId]);
 
   // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
   // re-derive selectedKey from selectedId so the conversation list highlights
@@ -2162,6 +2212,32 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
     const expectedKey = toSelectionKey(match.rootId, match.id);
     setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
   }, [items, selectedId, selectedKey]);
+
+  useEffect(() => {
+    const pendingSelection = pendingSearchSelectionRef.current;
+    if (!pendingSelection) return;
+    if (pendingSelection.source !== source) return;
+    if (loadingList || items.length === 0) return;
+
+    const match = items.find((it) => {
+      if (it.id !== pendingSelection.sessionId) return false;
+      return pendingSelection.rootId ? it.rootId === pendingSelection.rootId : true;
+    }) ?? items.find((it) => it.id === pendingSelection.sessionId);
+
+    const effectiveRootId = match?.rootId ?? pendingSelection.rootId;
+    const key = toSelectionKey(effectiveRootId, pendingSelection.sessionId);
+    setSelectedKey(key);
+    setSelectedId(pendingSelection.sessionId);
+    pendingSearchSelectionRef.current = null;
+
+    loadConversation(
+      pendingSelection.source,
+      pendingSelection.sessionId,
+      0,
+      pendingSelection.source === "windsurf" ? "chat" : undefined,
+      { rootId: effectiveRootId }
+    ).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [items, loadingList, source, loadConversation]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;
