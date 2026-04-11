@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { JsonViewer } from "@/components/JsonViewer";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import type { ContextAssetSubtype } from "@/lib/contextAssets";
 import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
@@ -60,9 +61,17 @@ export type HomeClientExternalSelection = {
   rootId?: string;
 };
 
+export type HomeClientAssetHandoff = {
+  sessionId: string;
+  source: Source;
+  rootId?: string;
+  subtype: ContextAssetSubtype;
+};
+
 export type HomeClientProps = {
   chrome?: "full" | "embedded";
   externalSelection?: HomeClientExternalSelection | null;
+  onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
 };
 
 export function resolveInitialSource(input: {
@@ -1413,7 +1422,7 @@ function fromSelectionKey(key: string | null): { rootId?: string; id: string } |
   }
 }
 
-export default function HomeClient({ chrome = "full", externalSelection = null }: HomeClientProps = {}) {
+export default function HomeClient({ chrome = "full", externalSelection = null, onOpenAssetsForSession }: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
   const [source, setSource] = useState<Source>("antigravity");
@@ -2666,6 +2675,23 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
                 ) : null}
               </div>
               <div className="flex flex-wrap justify-end gap-2">
+                {onOpenAssetsForSession ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenAssetsForSession({
+                        sessionId: selectedId,
+                        source,
+                        ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                        subtype: "rule",
+                      })
+                    }
+                    title="Route to Assets with a bounded subtype handoff from the selected session"
+                  >
+                    Inspect in Assets
+                  </Button>
+                ) : null}
                 <Button
                   variant="outline"
                   size="sm"

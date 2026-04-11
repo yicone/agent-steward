@@ -18,6 +18,11 @@ This file records shipped, merged changes for Agent Storage Manager.
   - Preserved the existing session viewer under `Sessions`, including source diagnostics, URL deep links, search selection, and direct session backup
   - Added bounded foundation placeholders for future asset, analysis, backup, and migration work without claiming unavailable inventory or analysis behavior
 
+- `2026-04-11` — Assets foundation
+  - Replaced the `Assets` placeholder with a bounded reusable context assets surface for rules, memory, skills, commands, and unknown asset fragments
+  - Added local asset seed data, normalization helpers, subtype/scope/source/status filtering, selected asset detail, provenance, and in-effect/usage cues
+  - Added routed handoff paths into `Assets` from Sessions, Project Overview, and Analysis without carrying full transcript or trajectory state
+
 - `2026-04-10` — Session Backup foundation
   - Added canonical `session-record/v1` and `session-backup/v1` schemas plus managed backup storage under `~/.agent-storage-manager/backups`
   - Added create/import/verify APIs for session backups, with schema/integrity validation and stable user-facing diagnostics
