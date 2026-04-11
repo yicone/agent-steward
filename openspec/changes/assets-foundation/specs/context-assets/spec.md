@@ -6,7 +6,7 @@ The system SHALL represent reusable context assets as first-class local objects 
 #### Scenario: Asset exposes canonical classification
 - **WHEN** the system renders a reusable context asset
 - **THEN** it identifies the asset as a rule, memory item, skill, or command
-- **AND** it exposes the asset scope as `global`, `user`, or `project`
+- **AND** it exposes the asset scope as `global`, `user`, `project`, or `unknown`
 - **AND** it exposes the asset source separately from scope
 
 #### Scenario: Missing metadata remains explicit

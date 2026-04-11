@@ -66,8 +66,6 @@ describe("assets handoff builders", () => {
     ).toMatchObject({
       origin: "sessions",
       sessionId: "session-1",
-      sessionSource: "codex",
-      sessionRootId: "root-a",
       subtype: "rule",
     });
   });

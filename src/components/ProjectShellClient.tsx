@@ -61,8 +61,6 @@ export function buildAssetsHandoffFromSession(input: HomeClientAssetHandoff): As
     returnLabel: "Return to the originating session if you need more evidence.",
     subtype: input.subtype,
     sessionId: input.sessionId,
-    sessionSource: input.source,
-    sessionRootId: input.rootId,
   };
 }
 
@@ -270,6 +268,9 @@ export default function ProjectShellClient() {
   }, []);
 
   const handleSearchSelect = useCallback((sessionId: string, source: Source, rootId?: string) => {
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
       buildExternalSessionSelection({
@@ -281,18 +282,31 @@ export default function ProjectShellClient() {
     );
   }, []);
 
+  const handleNavigate = useCallback((page: ProjectShellPage) => {
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue(null);
+    setActivePage(page);
+  }, []);
+
   const handleOpenAssets = useCallback((handoff: AssetsHandoff) => {
     setAssetsHandoff(handoff);
+    setAnalysisCue(null);
+    setBackupCue(null);
     setActivePage("assets");
   }, []);
 
   const handleOpenAssetsFromSession = useCallback((handoff: HomeClientAssetHandoff) => {
     setAssetsHandoff(buildAssetsHandoffFromSession(handoff));
+    setAnalysisCue(null);
+    setBackupCue(null);
     setActivePage("assets");
   }, []);
 
   const handleOpenSessionFromAssets = useCallback((selection: { sessionId: string; source: Source; rootId?: string }) => {
     setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
       buildExternalSessionSelection({
@@ -310,6 +324,8 @@ export default function ProjectShellClient() {
     subtype?: ContextAssetSubtype;
     status?: ContextAssetStatus;
   }) => {
+    setAssetsHandoff(null);
+    setBackupCue(null);
     setAnalysisCue({
       title: "Routed from Assets",
       body: `Issue focus: ${context.issueLabel}. ${context.subtype ? `Subtype: ${context.subtype}. ` : ""}${context.status ? `Status: ${context.status}.` : ""}`.trim(),
@@ -318,6 +334,8 @@ export default function ProjectShellClient() {
   }, []);
 
   const handleOpenBackupFromAssets = useCallback((context: { assetId?: string; subtype?: ContextAssetSubtype }) => {
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
     setBackupCue({
       title: "Routed from Assets",
       body: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}. Workflow execution still belongs to Backup / Migration.`,
@@ -355,7 +373,7 @@ export default function ProjectShellClient() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActivePage(item.id)}
+                onClick={() => handleNavigate(item.id)}
                 className={cn(
                   "min-w-fit rounded-xl border px-3 py-2 text-left transition-colors",
                   item.id === activePage
@@ -382,7 +400,7 @@ export default function ProjectShellClient() {
             </div>
           ) : null}
 
-          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={setActivePage} onOpenAssets={handleOpenAssets} /> : null}
+          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={handleNavigate} onOpenAssets={handleOpenAssets} /> : null}
           {activePage === "sessions" ? (
             <HomeClient
               chrome="embedded"
@@ -404,7 +422,7 @@ export default function ProjectShellClient() {
               label="interpretation"
               body="Analysis will summarize context issues and route each finding to a concrete object or workflow. This placeholder avoids creating a findings inventory before analysis contracts exist."
               preservedPath="Use Sessions inspector and error center for current evidence-driven investigation."
-              onNavigateSessions={() => setActivePage("sessions")}
+              onNavigateSessions={() => handleNavigate("sessions")}
               cue={analysisCue ?? undefined}
               actionLabel="Review affected assets"
               onAction={() =>
@@ -426,7 +444,7 @@ export default function ProjectShellClient() {
               label="restricted workflow"
               body="Project-level backup and migration workflows will live here once bundle and migration contracts are implemented. Existing direct session backup remains inside selected Sessions."
               preservedPath="Open a session and use its Backup Session action for current supported backup behavior."
-              onNavigateSessions={() => setActivePage("sessions")}
+              onNavigateSessions={() => handleNavigate("sessions")}
               cue={backupCue ?? undefined}
             />
           ) : null}

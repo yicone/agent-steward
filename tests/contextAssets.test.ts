@@ -21,9 +21,9 @@ describe("normalizeContextAsset", () => {
       id: "asset-1",
       title: "Imported fragment",
       subtype: "unknown",
-      scope: "project",
       source: "unknown",
       status: "unknown",
+      scope: "unknown",
       provenance: "Provenance unavailable.",
       usage: {
         state: "unknown",

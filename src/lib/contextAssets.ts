@@ -1,7 +1,7 @@
 import type { Source } from "@/lib/types";
 
 export const CONTEXT_ASSET_SUBTYPES = ["rule", "memory", "skill", "command", "unknown"] as const;
-export const CONTEXT_ASSET_SCOPES = ["global", "user", "project"] as const;
+export const CONTEXT_ASSET_SCOPES = ["global", "user", "project", "unknown"] as const;
 export const CONTEXT_ASSET_SOURCES = ["antigravity", "windsurf", "codex", "imported", "generated", "unknown"] as const;
 export const CONTEXT_ASSET_STATUSES = ["active", "stale", "conflicted", "orphaned", "archived", "unknown"] as const;
 
@@ -81,8 +81,6 @@ export type AssetsHandoff = {
   status?: ContextAssetStatus;
   assetId?: string;
   sessionId?: string;
-  sessionSource?: Source;
-  sessionRootId?: string;
   issueLabel?: string;
 };
 
@@ -101,8 +99,8 @@ export function normalizeContextAssetSubtype(input?: string | null): ContextAsse
 }
 
 export function normalizeContextAssetScope(input?: string | null): ContextAssetScope {
-  if (!input) return "project";
-  return CONTEXT_ASSET_SCOPES.includes(input as ContextAssetScope) ? (input as ContextAssetScope) : "project";
+  if (!input) return "unknown";
+  return CONTEXT_ASSET_SCOPES.includes(input as ContextAssetScope) ? (input as ContextAssetScope) : "unknown";
 }
 
 export function normalizeContextAssetSource(input?: string | null): ContextAssetSource {
@@ -353,6 +351,7 @@ export function formatContextAssetSubtypeLabel(subtype: ContextAssetSubtype): st
 }
 
 export function formatContextAssetScopeLabel(scope: ContextAssetScope): string {
+  if (scope === "unknown") return "Unknown";
   return scope.charAt(0).toUpperCase() + scope.slice(1);
 }
 

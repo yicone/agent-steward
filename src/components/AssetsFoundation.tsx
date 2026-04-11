@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -110,6 +110,21 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
   const [activeHandoff, setActiveHandoff] = useState<AssetsHandoff | null>(handoff);
   const [staleSelection, setStaleSelection] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const loadingTimeoutRef = useRef<number | null>(null);
+
+  const clearLoadingTimeout = useCallback(() => {
+    if (loadingTimeoutRef.current === null) return;
+    window.clearTimeout(loadingTimeoutRef.current);
+    loadingTimeoutRef.current = null;
+  }, []);
+
+  const scheduleLoadingComplete = useCallback((callback: () => void) => {
+    clearLoadingTimeout();
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      loadingTimeoutRef.current = null;
+      callback();
+    }, LOADING_DELAY_MS);
+  }, [clearLoadingTimeout]);
 
   useEffect(() => {
     const nextFilters = buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters());
@@ -117,16 +132,16 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
     setActiveHandoff(handoff);
     setIsLoading(true);
 
-    const timeout = window.setTimeout(() => {
+    scheduleLoadingComplete(() => {
       const filtered = applyContextAssetFilters(assets, nextFilters);
       const selected = resolveContextAssetSelection(filtered, handoff);
       setSelectedAssetId(selected?.id ?? null);
       setStaleSelection(Boolean(handoff) && Boolean(handoff?.assetId || handoff?.sessionId) && !selected);
       setIsLoading(false);
-    }, LOADING_DELAY_MS);
+    });
 
-    return () => window.clearTimeout(timeout);
-  }, [assets, handoff]);
+    return clearLoadingTimeout;
+  }, [assets, clearLoadingTimeout, handoff, scheduleLoadingComplete]);
 
   const filteredAssets = useMemo(() => applyContextAssetFilters(assets, filters), [assets, filters]);
   const selectedAsset = useMemo(
@@ -151,7 +166,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
     setSelectedAssetId(null);
     setStaleSelection(false);
     setIsLoading(true);
-    window.setTimeout(() => setIsLoading(false), LOADING_DELAY_MS);
+    scheduleLoadingComplete(() => setIsLoading(false));
   }
 
   function handleSelectAsset(asset: ContextAsset) {
@@ -411,10 +426,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
 
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype })}>
-                    Prepare migration
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype })}>
-                    Prepare archive / backup
+                    Prepare backup / migration
                   </Button>
                 </div>
               </div>
