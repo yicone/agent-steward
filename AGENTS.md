@@ -64,6 +64,14 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Run targeted tests for the code you change when feasible.
 - If you touch parsing, attach, normalization, or diagnostics logic, prefer adding or updating unit tests in the same area.
 
+## PR Review Workflow
+
+- For PR review triage and agent-assisted fixes, follow `docs/dev/pr-review-agent-workflow.md`.
+- Treat Copilot review comments as advisory input, not merge-blocking approval or requested changes.
+- Classify review feedback before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
+- Do not automatically change product names, scope boundaries, or placeholder commitments without user confirmation.
+- After pushing review fixes, request Copilot re-review manually or with `gh` when available; do not assume Copilot re-reviews automatically after new commits.
+
 ## Before Ending a Session
 
 When wrapping up work, verify documentation is current.

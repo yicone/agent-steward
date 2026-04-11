@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-11` — Project shell foundation
+  - Added a project-first shell with `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration` surfaces
+  - Preserved the existing session viewer under `Sessions`, including source diagnostics, URL deep links, search selection, and direct session backup
+  - Added bounded foundation placeholders for future asset, analysis, backup, and migration work without claiming unavailable inventory or analysis behavior
+
 - `2026-04-10` — Session Backup foundation
   - Added canonical `session-record/v1` and `session-backup/v1` schemas plus managed backup storage under `~/.agent-storage-manager/backups`
   - Added create/import/verify APIs for session backups, with schema/integrity validation and stable user-facing diagnostics

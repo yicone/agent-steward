@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSessionBackupRequest, resolveRestoredSelection, supportsSessionSourceCopy } from "@/components/HomeClient";
+import {
+  buildSessionBackupRequest,
+  resolveInitialSource,
+  resolveRestoredSelection,
+  shouldDeferSearchSelectionLoad,
+  shouldResetViewerSelectionOnSourceChange,
+  supportsSessionSourceCopy,
+} from "@/components/HomeClient";
 import type { ConversationListItem } from "@/lib/types";
 
 function makeItem(overrides: Partial<ConversationListItem>): ConversationListItem {
@@ -45,6 +52,108 @@ describe("resolveRestoredSelection", () => {
 
     expect(result.effectiveRootId).toBeUndefined();
     expect(result.selectedKey).toBe(JSON.stringify({ rootId: "unknown", id: "session-1" }));
+  });
+});
+
+describe("resolveInitialSource", () => {
+  it("prefers external search selection over URL source and default source", () => {
+    expect(
+      resolveInitialSource({
+        urlSource: "codex",
+        externalSelectionSource: "windsurf",
+        defaultSource: "antigravity",
+      })
+    ).toBe("windsurf");
+  });
+
+  it("prefers external search selection over default source", () => {
+    expect(
+      resolveInitialSource({
+        externalSelectionSource: "codex",
+        defaultSource: "antigravity",
+      })
+    ).toBe("codex");
+  });
+
+  it("falls back to default source when no URL or external selection exists", () => {
+    expect(
+      resolveInitialSource({
+        defaultSource: "windsurf",
+      })
+    ).toBe("windsurf");
+  });
+});
+
+describe("shouldResetViewerSelectionOnSourceChange", () => {
+  it("keeps a freshly requested external selection during the initial sessions mount", () => {
+    expect(
+      shouldResetViewerSelectionOnSourceChange({
+        source: "antigravity",
+        externalSelectionRequestId: 7,
+        pendingExternalSelectionRequestId: 7,
+      })
+    ).toBe(false);
+  });
+
+  it("keeps the pending selection across a cross-source switch", () => {
+    expect(
+      shouldResetViewerSelectionOnSourceChange({
+        source: "codex",
+        crossSourceSelection: "codex",
+      })
+    ).toBe(false);
+  });
+
+  it("does not reset while restoring the currently addressed URL session", () => {
+    expect(
+      shouldResetViewerSelectionOnSourceChange({
+        source: "windsurf",
+        urlId: "session-9",
+        urlSource: "windsurf",
+      })
+    ).toBe(false);
+  });
+
+  it("resets normally when there is no pending external selection or matching URL restore", () => {
+    expect(
+      shouldResetViewerSelectionOnSourceChange({
+        source: "antigravity",
+        urlId: "session-9",
+        urlSource: "codex",
+      })
+    ).toBe(true);
+  });
+});
+
+describe("shouldDeferSearchSelectionLoad", () => {
+  it("defers loading when the search result targets a different source", () => {
+    expect(
+      shouldDeferSearchSelectionLoad({
+        currentSource: "antigravity",
+        nextSource: "codex",
+        itemCount: 200,
+      })
+    ).toBe(true);
+  });
+
+  it("defers loading on a fresh mount before the conversation list is ready", () => {
+    expect(
+      shouldDeferSearchSelectionLoad({
+        currentSource: "antigravity",
+        nextSource: "antigravity",
+        itemCount: 0,
+      })
+    ).toBe(true);
+  });
+
+  it("loads immediately when the target source already matches and items exist", () => {
+    expect(
+      shouldDeferSearchSelectionLoad({
+        currentSource: "codex",
+        nextSource: "codex",
+        itemCount: 12,
+      })
+    ).toBe(false);
   });
 });
 

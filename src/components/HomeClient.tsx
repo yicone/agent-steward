@@ -53,6 +53,60 @@ type SessionBackupFeedback =
       hint?: string;
     };
 
+export type HomeClientExternalSelection = {
+  requestId: number;
+  sessionId: string;
+  source: Source;
+  rootId?: string;
+};
+
+export type HomeClientProps = {
+  chrome?: "full" | "embedded";
+  externalSelection?: HomeClientExternalSelection | null;
+};
+
+export function resolveInitialSource(input: {
+  urlSource?: Source;
+  externalSelectionSource?: Source;
+  defaultSource: Source;
+}): Source {
+  return input.externalSelectionSource ?? input.urlSource ?? input.defaultSource;
+}
+
+export function shouldResetViewerSelectionOnSourceChange(input: {
+  source: Source;
+  crossSourceSelection?: Source | null;
+  urlId?: string;
+  urlSource?: Source;
+  externalSelectionRequestId?: number | null;
+  pendingExternalSelectionRequestId?: number | null;
+}): boolean {
+  if (
+    input.externalSelectionRequestId != null
+    && input.pendingExternalSelectionRequestId === input.externalSelectionRequestId
+  ) {
+    return false;
+  }
+
+  if (input.crossSourceSelection === input.source) {
+    return false;
+  }
+
+  if (input.urlId && input.urlSource === input.source) {
+    return false;
+  }
+
+  return true;
+}
+
+export function shouldDeferSearchSelectionLoad(input: {
+  currentSource: Source;
+  nextSource: Source;
+  itemCount: number;
+}): boolean {
+  return input.nextSource !== input.currentSource || input.itemCount === 0;
+}
+
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
@@ -1359,7 +1413,7 @@ function fromSelectionKey(key: string | null): { rootId?: string; id: string } |
   }
 }
 
-export default function HomeClient() {
+export default function HomeClient({ chrome = "full", externalSelection = null }: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
   const [source, setSource] = useState<Source>("antigravity");
@@ -1404,6 +1458,10 @@ export default function HomeClient() {
   // The useEffect([source]) reset checks this ref so it doesn't wipe the pending
   // session selection that the callback already queued.
   const crossSourceSelectionRef = useRef<Source | null>(null);
+  const externalSelectionRequestRef = useRef<number | null>(null);
+  const externalSelectionSourceRef = useRef<Source | undefined>(externalSelection?.source);
+  const pendingExternalSelectionRequestRef = useRef<number | null>(null);
+  const pendingSearchSelectionRef = useRef<Pick<HomeClientExternalSelection, "sessionId" | "source" | "rootId"> | null>(null);
 
   // URL deep-link: parsed once on mount. The useState lazy initializer guarantees
   // parseUrlState only runs on the first render; the ref gives mutable access
@@ -1881,6 +1939,11 @@ export default function HomeClient() {
       setAntigravityView("markdown");
       setWindsurfView("chat");
       setCollapsedExecutionGroups({});
+      if (shouldDeferSearchSelectionLoad({ currentSource: source, nextSource: sessionSource, itemCount: items.length })) {
+        pendingSearchSelectionRef.current = { sessionId, source: sessionSource, rootId };
+        return;
+      }
+      pendingSearchSelectionRef.current = null;
       loadConversation(sessionSource, sessionId, 0, sessionSource === "windsurf" ? "chat" : undefined, {
         rootId: match?.rootId ?? rootId
       }).catch(
@@ -1889,6 +1952,18 @@ export default function HomeClient() {
     },
     [source, items, loadConversation]
   );
+
+  useEffect(() => {
+    externalSelectionSourceRef.current = externalSelection?.source;
+    if (!externalSelection) return;
+    if (externalSelectionRequestRef.current === externalSelection.requestId) return;
+    externalSelectionRequestRef.current = externalSelection.requestId;
+    pendingExternalSelectionRequestRef.current = externalSelection.requestId;
+    urlInitRef.current = {};
+    urlRestoringRef.current = false;
+    restorationInitiatedRef.current = false;
+    handleGlobalSearchSelect(externalSelection.sessionId, externalSelection.source, externalSelection.rootId);
+  }, [externalSelection, handleGlobalSearchSelect]);
 
   useEffect(() => {
     if (!pendingTrajectoryJumpEventId) return;
@@ -1964,7 +2039,11 @@ export default function HomeClient() {
     // On manual refresh, preserve the user's current source selection.
     if (isFirstLoad) {
       const urlInit = urlInitRef.current;
-      const initSource = urlInit.source ?? cfgJson.config.ui.defaultSource;
+      const initSource = resolveInitialSource({
+        urlSource: urlInit.source ?? undefined,
+        externalSelectionSource: externalSelectionSourceRef.current,
+        defaultSource: cfgJson.config.ui.defaultSource,
+      });
       setSource(initSource);
     }
 
@@ -2085,23 +2164,28 @@ export default function HomeClient() {
 
   useEffect(() => {
     loadList(source).catch(() => {});
-    // If this source change was triggered by a cross-source GlobalSearch selection
-    // (handleGlobalSearchSelect sets crossSourceSelectionRef), skip the reset so
-    // the pending session selection survives the source-change cycle.
     const crossSourceSelection = crossSourceSelectionRef.current;
-    if (crossSourceSelection) {
+    const urlInit = urlInitRef.current;
+
+    if (!shouldResetViewerSelectionOnSourceChange({
+      source,
+      crossSourceSelection,
+      urlId: urlInit.id ?? undefined,
+      urlSource: urlInit.source ?? undefined,
+      externalSelectionRequestId: externalSelectionRequestRef.current,
+      pendingExternalSelectionRequestId: pendingExternalSelectionRequestRef.current,
+    })) {
       if (crossSourceSelection === source) {
         crossSourceSelectionRef.current = null;
-        return;
       }
-      // Stale ref for a different source; clear it so it cannot affect future switches.
-      crossSourceSelectionRef.current = null;
+      if (pendingExternalSelectionRequestRef.current === externalSelectionRequestRef.current) {
+        pendingExternalSelectionRequestRef.current = null;
+      }
+      return;
     }
-    // URL deep-link: skip the reset only when the source change is the initial
-    // one driven by refreshConfigAndStatus setting the URL's target source.
-    // If the user actively switches to a different source, run the normal reset.
-    const urlInit = urlInitRef.current;
-    if (urlInit.id && source === urlInit.source) return;
+
+    crossSourceSelectionRef.current = null;
+    pendingExternalSelectionRequestRef.current = null;
 
     setSelectedKey(null);
     setSelectedId(null);
@@ -2128,6 +2212,32 @@ export default function HomeClient() {
     const expectedKey = toSelectionKey(match.rootId, match.id);
     setSelectedKey((prev) => (prev === expectedKey ? prev : expectedKey));
   }, [items, selectedId, selectedKey]);
+
+  useEffect(() => {
+    const pendingSelection = pendingSearchSelectionRef.current;
+    if (!pendingSelection) return;
+    if (pendingSelection.source !== source) return;
+    if (loadingList || items.length === 0) return;
+
+    const match = items.find((it) => {
+      if (it.id !== pendingSelection.sessionId) return false;
+      return pendingSelection.rootId ? it.rootId === pendingSelection.rootId : true;
+    }) ?? items.find((it) => it.id === pendingSelection.sessionId);
+
+    const effectiveRootId = match?.rootId ?? pendingSelection.rootId;
+    const key = toSelectionKey(effectiveRootId, pendingSelection.sessionId);
+    setSelectedKey(key);
+    setSelectedId(pendingSelection.sessionId);
+    pendingSearchSelectionRef.current = null;
+
+    loadConversation(
+      pendingSelection.source,
+      pendingSelection.sessionId,
+      0,
+      pendingSelection.source === "windsurf" ? "chat" : undefined,
+      { rootId: effectiveRootId }
+    ).catch((e) => setError(e instanceof Error ? e.message : String(e)));
+  }, [items, loadingList, source, loadConversation]);
 
   useEffect(() => {
     if (content?.kind !== "trajectory") return;
@@ -2374,13 +2484,13 @@ export default function HomeClient() {
     <div className="mx-auto max-w-[1200px] p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold">Agent Storage Manager</div>
+          <div className="text-lg font-semibold">{chrome === "full" ? "Agent Storage Manager" : "Sessions"}</div>
           {antigravityPill}
           {windsurfPill}
           {codexPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <GlobalSearch onSelect={handleGlobalSearchSelect} />
+          {chrome === "full" ? <GlobalSearch onSelect={handleGlobalSearchSelect} /> : null}
           <Button variant="outline" size="sm" onClick={() => refreshConfigAndStatus()}>
             Refresh
           </Button>
