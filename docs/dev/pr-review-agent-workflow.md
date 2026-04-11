@@ -67,6 +67,68 @@ CLI fallback:
 
 Codex should not mark GitHub conversations resolved or submit replies unless explicitly asked.
 
+## Resolving Conversations
+
+`Resolve conversation` marks a GitHub review thread as handled. It does not change code, approve a pull request, or prove that validation passed. It is a collaboration-state update that changes what reviewers see as still needing attention.
+
+Codex may recommend resolving a thread when:
+
+- the comment was classified as `must-fix` or `should-fix`, the fix was pushed, and relevant validation passed;
+- the comment is stale or false positive, with a concrete explanation;
+- the comment is a duplicate of another handled thread.
+
+Codex must not resolve a thread when:
+
+- it is a `product-decision` and the human maintainer has not confirmed the decision;
+- the response is only an opinion without validation or evidence;
+- the comment concerns security, privacy, data loss, local paths, tokens, backups, or migration integrity and no concrete fix has been verified.
+
+Default policy:
+
+- Codex should list the threads it recommends resolving and wait for explicit human authorization before calling GitHub's resolve mutation.
+
+## Suggested Changesets
+
+GitHub review comments may include a suggested changeset with a `Commit suggestion` button. That button applies the reviewer-provided patch directly to the PR branch as a commit.
+
+Use it only for small, mechanical, low-risk changes:
+
+- typos;
+- markdown table formatting;
+- comment wording;
+- obvious import cleanup;
+- single-line documentation fixes.
+
+Do not use it for:
+
+- React state or effect changes;
+- URL/deep-link behavior;
+- session backup, migration, parser, source attach, or diagnostics logic;
+- OpenSpec behavior changes;
+- any change requiring new tests or multi-file edits.
+
+Preferred policy:
+
+- Let Codex implement logic changes locally, run validation, and push a normal commit.
+- If a human uses `Commit suggestion` for a trivial fix, Codex should pull the branch afterward and run at least the relevant lightweight validation before merge.
+
+## Automation Level
+
+Recommended automation is semi-automatic:
+
+| Step | Automation level |
+| ---- | ---------------- |
+| Fetch review comments and thread state | Automatic via `gh pr view` and `gh api graphql` |
+| Classify comments | Codex-assisted, human confirmation for ambiguous items |
+| Apply fixes | Codex-assisted after scope confirmation |
+| Run validation | Automatic/local |
+| Push fix commit | Automatic after validation |
+| Request Copilot re-review | Automatic via `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when supported |
+| Resolve conversations | Manual authorization, then automatic via GitHub GraphQL |
+| Merge PR | Human decision |
+
+Do not implement this with Git hooks. Hooks run on local commit/push boundaries, while review state lives in GitHub and requires network access, permissions, PR context, and product-scope judgment.
+
 ## Suggested Codex Prompt
 
 Use this prompt in the control thread or a focused PR-fix thread:
