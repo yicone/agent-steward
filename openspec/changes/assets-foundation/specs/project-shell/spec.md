@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Placeholder surfaces do not claim full behavior
-The system SHALL expose foundation surfaces for top-level pages without claiming unimplemented full behavior.
+The system SHALL expose foundation or placeholder surfaces for top-level pages without claiming unimplemented full behavior.
 
 #### Scenario: Assets foundation is bounded
 - **WHEN** the user navigates to `Assets`

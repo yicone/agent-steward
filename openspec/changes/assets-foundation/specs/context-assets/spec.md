@@ -12,6 +12,7 @@ The system SHALL represent reusable context assets as first-class local objects 
 #### Scenario: Missing metadata remains explicit
 - **WHEN** a reusable context asset lacks known source, provenance, status, or in-effect metadata
 - **THEN** the system displays the missing field as unknown, unavailable, or unsupported rather than inferring a value silently
+- **AND** if the asset subtype cannot be determined, the system classifies it as unknown rather than silently assigning a default subtype
 
 ### Requirement: Assets page backbone
 The system SHALL provide an Assets surface that orients users around reusable context asset subtype, scope, inventory, status, provenance, and project applicability.
@@ -36,6 +37,12 @@ The system SHALL support bounded empty, loading, normal, selected, issue, and ro
 - **AND** it shows a zero-state inventory rather than fake asset rows
 - **AND** it offers bounded next actions such as switching filters, importing assets, or inspecting sessions for promotable material
 
+#### Scenario: Routed handoff lands on empty inventory
+- **WHEN** routed handoff context applies filters that result in an empty asset inventory
+- **THEN** the Assets page keeps the routed subtype and scope filters visible
+- **AND** it shows the zero-state inventory with an explanation that no assets match the routed context
+- **AND** it preserves the origin cue until the user changes focus intentionally
+
 #### Scenario: Loading state keeps page structure stable
 - **WHEN** the Assets surface is loading asset inventory for the active filters
 - **THEN** the asset scope header remains visible
@@ -53,6 +60,7 @@ The system SHALL explain a selected reusable context asset through a detail pane
 - **WHEN** the user selects an asset from the inventory
 - **THEN** the page shows the selected asset identity
 - **AND** it shows the selected asset subtype, scope, source, status, and provenance summary
+- **AND** it optionally shows a concise body summary when the asset source provides one
 - **AND** it keeps the selected asset tied to the current inventory context
 
 #### Scenario: Selected asset can link to evidence
@@ -80,6 +88,13 @@ The system SHALL consume routed handoff context into the Assets surface through 
 - **THEN** the Assets page applies the subtype filter
 - **AND** it shows a compact origin cue referencing the source session or event
 - **AND** it does not carry the full transcript, trajectory state, or session-local reading mode
+
+#### Scenario: Overview handoff preselects subtype or scope
+- **WHEN** the user enters `Assets` from `Project Overview` with an in-effect asset or asset-class attention item
+- **THEN** the Assets page applies the relevant subtype or scope filter
+- **AND** it preselects the asset when an object reference is available
+- **AND** it shows a compact origin cue referencing the overview context
+- **AND** it does not carry full project-summary state
 
 #### Scenario: Analysis handoff preserves issue context
 - **WHEN** the user enters `Assets` from `Analysis` for an affected reusable asset or asset class
