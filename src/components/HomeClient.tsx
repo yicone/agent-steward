@@ -53,6 +53,26 @@ type SessionBackupFeedback =
       hint?: string;
     };
 
+export type HomeClientExternalSelection = {
+  requestId: number;
+  sessionId: string;
+  source: Source;
+  rootId?: string;
+};
+
+export type HomeClientProps = {
+  chrome?: "full" | "embedded";
+  externalSelection?: HomeClientExternalSelection | null;
+};
+
+export function resolveInitialSource(input: {
+  urlSource?: Source;
+  externalSelectionSource?: Source;
+  defaultSource: Source;
+}): Source {
+  return input.urlSource ?? input.externalSelectionSource ?? input.defaultSource;
+}
+
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
@@ -1359,7 +1379,7 @@ function fromSelectionKey(key: string | null): { rootId?: string; id: string } |
   }
 }
 
-export default function HomeClient() {
+export default function HomeClient({ chrome = "full", externalSelection = null }: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
   const [source, setSource] = useState<Source>("antigravity");
@@ -1404,6 +1424,8 @@ export default function HomeClient() {
   // The useEffect([source]) reset checks this ref so it doesn't wipe the pending
   // session selection that the callback already queued.
   const crossSourceSelectionRef = useRef<Source | null>(null);
+  const externalSelectionRequestRef = useRef<number | null>(null);
+  const externalSelectionSourceRef = useRef<Source | undefined>(externalSelection?.source);
 
   // URL deep-link: parsed once on mount. The useState lazy initializer guarantees
   // parseUrlState only runs on the first render; the ref gives mutable access
@@ -1891,6 +1913,14 @@ export default function HomeClient() {
   );
 
   useEffect(() => {
+    externalSelectionSourceRef.current = externalSelection?.source;
+    if (!externalSelection) return;
+    if (externalSelectionRequestRef.current === externalSelection.requestId) return;
+    externalSelectionRequestRef.current = externalSelection.requestId;
+    handleGlobalSearchSelect(externalSelection.sessionId, externalSelection.source, externalSelection.rootId);
+  }, [externalSelection, handleGlobalSearchSelect]);
+
+  useEffect(() => {
     if (!pendingTrajectoryJumpEventId) return;
     if (content?.kind !== "trajectory") return;
 
@@ -1964,7 +1994,11 @@ export default function HomeClient() {
     // On manual refresh, preserve the user's current source selection.
     if (isFirstLoad) {
       const urlInit = urlInitRef.current;
-      const initSource = urlInit.source ?? cfgJson.config.ui.defaultSource;
+      const initSource = resolveInitialSource({
+        urlSource: urlInit.source ?? undefined,
+        externalSelectionSource: externalSelectionSourceRef.current,
+        defaultSource: cfgJson.config.ui.defaultSource,
+      });
       setSource(initSource);
     }
 
@@ -2374,13 +2408,13 @@ export default function HomeClient() {
     <div className="mx-auto max-w-[1200px] p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold">Agent Storage Manager</div>
+          <div className="text-lg font-semibold">{chrome === "full" ? "Agent Storage Manager" : "Sessions"}</div>
           {antigravityPill}
           {windsurfPill}
           {codexPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <GlobalSearch onSelect={handleGlobalSearchSelect} />
+          {chrome === "full" ? <GlobalSearch onSelect={handleGlobalSearchSelect} /> : null}
           <Button variant="outline" size="sm" onClick={() => refreshConfigAndStatus()}>
             Refresh
           </Button>

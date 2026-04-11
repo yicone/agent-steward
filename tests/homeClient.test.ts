@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSessionBackupRequest, resolveRestoredSelection, supportsSessionSourceCopy } from "@/components/HomeClient";
+import { buildSessionBackupRequest, resolveInitialSource, resolveRestoredSelection, supportsSessionSourceCopy } from "@/components/HomeClient";
 import type { ConversationListItem } from "@/lib/types";
 
 function makeItem(overrides: Partial<ConversationListItem>): ConversationListItem {
@@ -45,6 +45,35 @@ describe("resolveRestoredSelection", () => {
 
     expect(result.effectiveRootId).toBeUndefined();
     expect(result.selectedKey).toBe(JSON.stringify({ rootId: "unknown", id: "session-1" }));
+  });
+});
+
+describe("resolveInitialSource", () => {
+  it("prefers URL source over external search selection and default source", () => {
+    expect(
+      resolveInitialSource({
+        urlSource: "codex",
+        externalSelectionSource: "windsurf",
+        defaultSource: "antigravity",
+      })
+    ).toBe("codex");
+  });
+
+  it("prefers external search selection over default source", () => {
+    expect(
+      resolveInitialSource({
+        externalSelectionSource: "codex",
+        defaultSource: "antigravity",
+      })
+    ).toBe("codex");
+  });
+
+  it("falls back to default source when no URL or external selection exists", () => {
+    expect(
+      resolveInitialSource({
+        defaultSource: "windsurf",
+      })
+    ).toBe("windsurf");
   });
 });
 
