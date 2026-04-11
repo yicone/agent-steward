@@ -2172,13 +2172,13 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
       crossSourceSelection,
       urlId: urlInit.id ?? undefined,
       urlSource: urlInit.source ?? undefined,
-      externalSelectionRequestId: externalSelection?.requestId ?? null,
+      externalSelectionRequestId: externalSelectionRequestRef.current,
       pendingExternalSelectionRequestId: pendingExternalSelectionRequestRef.current,
     })) {
       if (crossSourceSelection === source) {
         crossSourceSelectionRef.current = null;
       }
-      if (pendingExternalSelectionRequestRef.current === (externalSelection?.requestId ?? null)) {
+      if (pendingExternalSelectionRequestRef.current === externalSelectionRequestRef.current) {
         pendingExternalSelectionRequestRef.current = null;
       }
       return;
@@ -2194,7 +2194,7 @@ export default function HomeClient({ chrome = "full", externalSelection = null }
     setAntigravityView("markdown");
     setWindsurfView("chat");
     setCollapsedExecutionGroups({});
-  }, [source, externalSelection?.requestId]);
+  }, [source]);
 
   // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
   // re-derive selectedKey from selectedId so the conversation list highlights
