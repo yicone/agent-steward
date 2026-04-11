@@ -38,6 +38,7 @@ export type AssetsFoundationProps = {
   onOpenSession(selection: { sessionId: string; source: Source; rootId?: string }): void;
   onOpenAnalysis(context: { issueLabel: string; assetId?: string; subtype?: ContextAssetSubtype; status?: ContextAssetStatus }): void;
   onOpenBackup(context: { assetId?: string; subtype?: ContextAssetSubtype }): void;
+  loadingDelayMs?: number;
 };
 
 const LOADING_DELAY_MS = 120;
@@ -101,15 +102,20 @@ function renderStatusBadge(status: ContextAssetStatus) {
   return <Badge variant="warn">{formatContextAssetStatusLabel(status)}</Badge>;
 }
 
-export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpenBackup }: AssetsFoundationProps) {
+export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpenBackup, loadingDelayMs = LOADING_DELAY_MS }: AssetsFoundationProps) {
   const assets = useMemo(() => createContextAssetSeeds(), []);
+  const initialFilters = buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters());
+  const initialFilteredAssets = applyContextAssetFilters(assets, initialFilters);
+  const initialSelectedAsset = resolveContextAssetSelection(initialFilteredAssets, handoff);
   const [filters, setFilters] = useState<ContextAssetFilters>(() =>
-    buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters())
+    initialFilters
   );
-  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+  const [selectedAssetId, setSelectedAssetId] = useState<string | null>(initialSelectedAsset?.id ?? null);
   const [activeHandoff, setActiveHandoff] = useState<AssetsHandoff | null>(handoff);
-  const [staleSelection, setStaleSelection] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [staleSelection, setStaleSelection] = useState(
+    Boolean(handoff) && Boolean(handoff?.assetId || handoff?.sessionId) && !initialSelectedAsset
+  );
+  const [isLoading, setIsLoading] = useState(loadingDelayMs > 0);
   const loadingTimeoutRef = useRef<number | null>(null);
 
   const clearLoadingTimeout = useCallback(() => {
@@ -120,11 +126,15 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
 
   const scheduleLoadingComplete = useCallback((callback: () => void) => {
     clearLoadingTimeout();
+    if (loadingDelayMs <= 0) {
+      callback();
+      return;
+    }
     loadingTimeoutRef.current = window.setTimeout(() => {
       loadingTimeoutRef.current = null;
       callback();
-    }, LOADING_DELAY_MS);
-  }, [clearLoadingTimeout]);
+    }, loadingDelayMs);
+  }, [clearLoadingTimeout, loadingDelayMs]);
 
   useEffect(() => {
     const nextFilters = buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters());
@@ -322,6 +332,8 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                       key={asset.id}
                       type="button"
                       onClick={() => handleSelectAsset(asset)}
+                      aria-pressed={selected}
+                      aria-label={`${selected ? "Selected asset" : "Select asset"}: ${asset.title}`}
                       className={[
                         "w-full rounded-xl border px-4 py-3 text-left transition-colors",
                         selected
