@@ -23,6 +23,11 @@ This file records shipped, merged changes for Agent Storage Manager.
   - Added local asset seed data, normalization helpers, subtype/scope/source/status filtering, selected asset detail, provenance, and in-effect/usage cues
   - Added routed handoff paths into `Assets` from Sessions, Project Overview, and Analysis without carrying full transcript or trajectory state
 
+- `2026-04-12` — Analysis foundation
+  - Replaced the `Analysis` placeholder with a bounded interpretation-and-routing surface for local context findings
+  - Added local analysis seed data, normalization helpers, issue/severity/object/status filtering, health summary, finding detail, evidence context, and route-only recommended actions
+  - Added routed handoff paths into `Analysis` from Assets, Project Overview, and Sessions without claiming complete automated analysis or inline remediation
+
 - `2026-04-10` — Session Backup foundation
   - Added canonical `session-record/v1` and `session-backup/v1` schemas plus managed backup storage under `~/.agent-storage-manager/backups`
   - Added create/import/verify APIs for session backups, with schema/integrity validation and stable user-facing diagnostics

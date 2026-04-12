@@ -3,12 +3,14 @@
 import Link from "next/link";
 import React, { useCallback, useEffect, useState } from "react";
 
+import AnalysisFoundation from "@/components/AnalysisFoundation";
 import AssetsFoundation from "@/components/AssetsFoundation";
-import HomeClient, { type HomeClientAssetHandoff, type HomeClientExternalSelection } from "@/components/HomeClient";
+import HomeClient, { type HomeClientAnalysisHandoff, type HomeClientAssetHandoff, type HomeClientExternalSelection } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import type { AnalysisFindingStatus, AnalysisHandoff, AnalysisIssueClass, AnalysisObjectType, AnalysisSeverity } from "@/lib/analysisFindings";
 import type { AssetsHandoff, ContextAssetScope, ContextAssetStatus, ContextAssetSubtype } from "@/lib/contextAssets";
 import { cancelPendingUrlSync } from "@/lib/urlState";
 import { cn } from "@/lib/utils";
@@ -107,6 +109,71 @@ export function buildAssetsHandoffFromAnalysis(input: {
   };
 }
 
+function mapAssetStatusToAnalysisIssueClass(status?: ContextAssetStatus): AnalysisIssueClass | undefined {
+  if (status === "stale") return "stale";
+  if (status === "conflicted") return "conflict";
+  if (status === "orphaned") return "provenance";
+  if (status === "unknown") return "unknown";
+  return undefined;
+}
+
+export function buildAnalysisHandoffFromAssets(input: {
+  issueLabel: string;
+  assetId?: string;
+  subtype?: ContextAssetSubtype;
+  status?: ContextAssetStatus;
+}): AnalysisHandoff {
+  const issueClass = mapAssetStatusToAnalysisIssueClass(input.status);
+
+  return {
+    origin: "assets",
+    subtitle: `Review issue context from Assets: ${input.issueLabel}.`,
+    continueLabel: "Interpret the affected asset issue, then route corrective work to the owning surface.",
+    returnLabel: "Return to Assets to continue object-level review.",
+    issueClass,
+    objectType: "asset",
+    assetId: input.assetId,
+    assetSubtype: input.subtype,
+    issueLabel: input.issueLabel,
+  };
+}
+
+export function buildAnalysisHandoffFromOverview(input: {
+  subtitle: string;
+  issueClass?: AnalysisIssueClass;
+  severity?: AnalysisSeverity;
+  objectType?: AnalysisObjectType;
+  status?: AnalysisFindingStatus;
+  findingId?: string;
+  issueLabel?: string;
+}): AnalysisHandoff {
+  return {
+    origin: "overview",
+    subtitle: input.subtitle,
+    continueLabel: "Start from the project-level issue framing, then inspect the matching finding or adjust filters.",
+    returnLabel: "Return to Project Overview when the broader project picture matters again.",
+    issueClass: input.issueClass,
+    severity: input.severity,
+    objectType: input.objectType,
+    status: input.status,
+    findingId: input.findingId,
+    issueLabel: input.issueLabel,
+  };
+}
+
+export function buildAnalysisHandoffFromSession(input: HomeClientAnalysisHandoff): AnalysisHandoff {
+  return {
+    origin: "sessions",
+    subtitle: "Review analysis findings related to the selected session evidence.",
+    continueLabel: "Keep the session evidence boundary visible while interpreting matching findings.",
+    returnLabel: "Return to the originating session if you need transcript or trajectory detail.",
+    issueClass: "preservation",
+    sessionId: input.sessionId,
+    source: input.source,
+    rootId: input.rootId,
+  };
+}
+
 const SESSION_VIEWER_QUERY_KEYS = [
   "source",
   "id",
@@ -152,6 +219,26 @@ export function buildAssetsFoundationInstanceKey(handoff: AssetsHandoff | null):
   ].join(":");
 }
 
+export function buildAnalysisFoundationInstanceKey(handoff: AnalysisHandoff | null): string {
+  if (!handoff) return "analysis:no-handoff";
+
+  return [
+    "analysis",
+    handoff.origin,
+    handoff.issueClass ?? "all-classes",
+    handoff.severity ?? "all-severities",
+    handoff.objectType ?? "all-objects",
+    handoff.status ?? "all-statuses",
+    handoff.findingId ?? "no-finding",
+    handoff.assetId ?? "no-asset",
+    handoff.assetSubtype ?? "no-subtype",
+    handoff.sessionId ?? "no-session",
+    handoff.source ?? "no-source",
+    handoff.rootId ?? "no-root",
+    handoff.issueLabel ?? "no-issue",
+  ].join(":");
+}
+
 function clearSessionViewerUrlState(): void {
   if (typeof window === "undefined") return;
 
@@ -167,6 +254,7 @@ function clearSessionViewerUrlState(): void {
 function ProjectOverviewSurface(props: {
   onNavigate(page: ProjectShellPage): void;
   onOpenAssets(handoff: AssetsHandoff): void;
+  onOpenAnalysis(handoff: AnalysisHandoff): void;
 }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -237,6 +325,25 @@ function ProjectOverviewSurface(props: {
             <Button className="mt-4" variant="outline" size="sm" onClick={() => props.onNavigate("sessions")}>
               Review Sessions
             </Button>
+            <Button
+              className="ml-2 mt-4"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                props.onOpenAnalysis(
+                  buildAnalysisHandoffFromOverview({
+                    subtitle: "Review preservation-sensitive findings from project attention context.",
+                    issueClass: "preservation",
+                    severity: "high",
+                    objectType: "backup",
+                    findingId: "finding-preserve-before-migration",
+                    issueLabel: "preservation",
+                  })
+                )
+              }
+            >
+              Review Analysis
+            </Button>
           </Card>
         </div>
       </div>
@@ -259,7 +366,19 @@ function ProjectOverviewSurface(props: {
           >
             Inspect context assets
           </Button>
-          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("analysis")}>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              props.onOpenAnalysis(
+                buildAnalysisHandoffFromOverview({
+                  subtitle: "Review open context findings across this local project.",
+                  issueLabel: "project attention",
+                })
+              )
+            }
+          >
             Review analysis
           </Button>
           <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("backup")}>
@@ -267,8 +386,8 @@ function ProjectOverviewSurface(props: {
           </Button>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          Assets is now a bounded foundation surface. Analysis and Backup / Migration remain placeholders, and working
-          session backup remains available from a selected session.
+          Assets and Analysis are now bounded foundation surfaces. Backup / Migration remains a placeholder, and
+          working session backup remains available from a selected session.
         </p>
       </Card>
     </div>
@@ -320,7 +439,7 @@ export default function ProjectShellClient() {
   const [activePage, setActivePage] = useState<ProjectShellPage>("overview");
   const [externalSelection, setExternalSelection] = useState<HomeClientExternalSelection | null>(null);
   const [assetsHandoff, setAssetsHandoff] = useState<AssetsHandoff | null>(null);
-  const [analysisCue, setAnalysisCue] = useState<PlaceholderCue | null>(null);
+  const [analysisHandoff, setAnalysisHandoff] = useState<AnalysisHandoff | null>(null);
   const [backupCue, setBackupCue] = useState<PlaceholderCue | null>(null);
 
   const leaveSessionsSurface = useCallback(() => {
@@ -334,7 +453,7 @@ export default function ProjectShellClient() {
 
   const handleSearchSelect = useCallback((sessionId: string, source: Source, rootId?: string) => {
     setAssetsHandoff(null);
-    setAnalysisCue(null);
+    setAnalysisHandoff(null);
     setBackupCue(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
@@ -350,7 +469,7 @@ export default function ProjectShellClient() {
   const handleNavigate = useCallback((page: ProjectShellPage) => {
     if (page !== "sessions") leaveSessionsSurface();
     setAssetsHandoff(null);
-    setAnalysisCue(null);
+    setAnalysisHandoff(null);
     setBackupCue(null);
     setActivePage(page);
   }, [leaveSessionsSurface]);
@@ -358,7 +477,7 @@ export default function ProjectShellClient() {
   const handleOpenAssets = useCallback((handoff: AssetsHandoff) => {
     leaveSessionsSurface();
     setAssetsHandoff(handoff);
-    setAnalysisCue(null);
+    setAnalysisHandoff(null);
     setBackupCue(null);
     setActivePage("assets");
   }, [leaveSessionsSurface]);
@@ -366,14 +485,22 @@ export default function ProjectShellClient() {
   const handleOpenAssetsFromSession = useCallback((handoff: HomeClientAssetHandoff) => {
     leaveSessionsSurface();
     setAssetsHandoff(buildAssetsHandoffFromSession({ sessionId: handoff.sessionId, subtype: handoff.subtype }));
-    setAnalysisCue(null);
+    setAnalysisHandoff(null);
     setBackupCue(null);
     setActivePage("assets");
   }, [leaveSessionsSurface]);
 
-  const handleOpenSessionFromAssets = useCallback((selection: { sessionId: string; source: Source; rootId?: string }) => {
+  const handleOpenAnalysisFromSession = useCallback((handoff: HomeClientAnalysisHandoff) => {
+    leaveSessionsSurface();
     setAssetsHandoff(null);
-    setAnalysisCue(null);
+    setAnalysisHandoff(buildAnalysisHandoffFromSession(handoff));
+    setBackupCue(null);
+    setActivePage("analysis");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenSessionFromContext = useCallback((selection: { sessionId: string; source: Source; rootId?: string }) => {
+    setAssetsHandoff(null);
+    setAnalysisHandoff(null);
     setBackupCue(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
@@ -395,20 +522,41 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setBackupCue(null);
-    setAnalysisCue({
-      title: "Routed from Assets",
-      body: `Issue focus: ${context.issueLabel}. ${context.subtype ? `Subtype: ${context.subtype}. ` : ""}${context.status ? `Status: ${context.status}.` : ""}`.trim(),
-    });
+    setAnalysisHandoff(buildAnalysisHandoffFromAssets(context));
     setActivePage("analysis");
   }, [leaveSessionsSurface]);
 
   const handleOpenBackupFromAssets = useCallback((context: { assetId?: string; subtype?: ContextAssetSubtype }) => {
     leaveSessionsSurface();
     setAssetsHandoff(null);
-    setAnalysisCue(null);
+    setAnalysisHandoff(null);
     setBackupCue({
       title: "Routed from Assets",
       body: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}. Workflow execution still belongs to Backup / Migration.`,
+    });
+    setActivePage("backup");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenAnalysis = useCallback((handoff: AnalysisHandoff) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setAnalysisHandoff(handoff);
+    setBackupCue(null);
+    setActivePage("analysis");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenBackupFromAnalysis = useCallback((context: {
+    findingId: string;
+    title: string;
+    preservationWarning?: string;
+    routeLabel?: string;
+  }) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setAnalysisHandoff(null);
+    setBackupCue({
+      title: "Routed from Analysis",
+      body: `${context.routeLabel ?? "Recommended route"} for ${context.title}. ${context.preservationWarning ?? "Backup / Migration owns workflow validation and execution."}`,
     });
     setActivePage("backup");
   }, [leaveSessionsSurface]);
@@ -470,46 +618,32 @@ export default function ProjectShellClient() {
             </div>
           ) : null}
 
-          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={handleNavigate} onOpenAssets={handleOpenAssets} /> : null}
+          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={handleNavigate} onOpenAssets={handleOpenAssets} onOpenAnalysis={handleOpenAnalysis} /> : null}
           {activePage === "sessions" ? (
             <HomeClient
               chrome="embedded"
               externalSelection={externalSelection}
               onOpenAssetsForSession={handleOpenAssetsFromSession}
+              onOpenAnalysisForSession={handleOpenAnalysisFromSession}
             />
           ) : null}
           {activePage === "assets" ? (
             <AssetsFoundation
               key={buildAssetsFoundationInstanceKey(assetsHandoff)}
               handoff={assetsHandoff}
-              onOpenSession={handleOpenSessionFromAssets}
+              onOpenSession={handleOpenSessionFromContext}
               onOpenAnalysis={handleOpenAnalysisFromAssets}
               onOpenBackup={handleOpenBackupFromAssets}
             />
           ) : null}
           {activePage === "analysis" ? (
-            <PlaceholderSurface
-              title="Analysis"
-              label="interpretation"
-              body="Analysis will summarize context issues and route each finding to a concrete object or workflow. This placeholder avoids creating a findings inventory before analysis contracts exist."
-              preservedPath="Use Sessions inspector and error center for current evidence-driven investigation."
-              onNavigateSessions={() => handleNavigate("sessions")}
-              cue={analysisCue ?? undefined}
-              {...(analysisCue
-                ? {
-                    actionLabel: "Review affected assets",
-                    onAction: () =>
-                      handleOpenAssets(
-                        buildAssetsHandoffFromAnalysis({
-                          subtitle: "Review the affected reusable asset class from Analysis.",
-                          subtype: "skill",
-                          status: "conflicted",
-                          assetId: "asset-skill-global-generated",
-                          issueLabel: "conflicted asset",
-                        })
-                      ),
-                  }
-                : {})}
+            <AnalysisFoundation
+              key={buildAnalysisFoundationInstanceKey(analysisHandoff)}
+              handoff={analysisHandoff}
+              onOpenAssets={handleOpenAssets}
+              onOpenBackup={handleOpenBackupFromAnalysis}
+              onOpenOverview={() => handleNavigate("overview")}
+              onOpenSession={handleOpenSessionFromContext}
             />
           ) : null}
           {activePage === "backup" ? (
