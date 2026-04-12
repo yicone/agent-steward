@@ -66,6 +66,23 @@ describe("buildAssetsFoundationInstanceKey", () => {
     expect(first).not.toBe(second);
   });
 
+  it("changes when routed source context changes", () => {
+    const first = buildAssetsFoundationInstanceKey({
+      origin: "overview",
+      subtitle: "Review project rules.",
+      subtype: "rule",
+      source: "codex",
+    });
+    const second = buildAssetsFoundationInstanceKey({
+      origin: "overview",
+      subtitle: "Review project rules.",
+      subtype: "rule",
+      source: "windsurf",
+    });
+
+    expect(first).not.toBe(second);
+  });
+
   it("keeps a stable non-routed key for normal browsing", () => {
     expect(buildAssetsFoundationInstanceKey(null)).toBe("assets:no-handoff");
   });
@@ -124,18 +141,18 @@ describe("buildExternalSessionSelection", () => {
 
 describe("assets handoff builders", () => {
   it("builds a bounded session handoff without carrying viewer-local state", () => {
-    expect(
-      buildAssetsHandoffFromSession({
-        sessionId: "session-1",
-        source: "codex",
-        rootId: "root-a",
-        subtype: "rule",
-      })
-    ).toMatchObject({
+    const handoff = buildAssetsHandoffFromSession({
+      sessionId: "session-1",
+      subtype: "rule",
+    });
+
+    expect(handoff).toMatchObject({
       origin: "sessions",
       sessionId: "session-1",
       subtype: "rule",
     });
+    expect(handoff).not.toHaveProperty("source");
+    expect(handoff).not.toHaveProperty("rootId");
   });
 
   it("builds an overview handoff with scope and object context", () => {

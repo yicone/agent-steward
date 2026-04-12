@@ -27,6 +27,8 @@ type PlaceholderCue = {
   body: string;
 };
 
+type SessionAssetsHandoffInput = Pick<HomeClientAssetHandoff, "sessionId" | "subtype">;
+
 const NAV_ITEMS: ProjectShellNavItem[] = [
   { id: "overview", label: "Project Overview", eyebrow: "govern" },
   { id: "sessions", label: "Sessions", eyebrow: "evidence" },
@@ -54,7 +56,7 @@ export function buildExternalSessionSelection(input: {
   };
 }
 
-export function buildAssetsHandoffFromSession(input: HomeClientAssetHandoff): AssetsHandoff {
+export function buildAssetsHandoffFromSession(input: SessionAssetsHandoffInput): AssetsHandoff {
   return {
     origin: "sessions",
     subtitle: "Continue reviewing reusable context from the selected session.",
@@ -142,6 +144,7 @@ export function buildAssetsFoundationInstanceKey(handoff: AssetsHandoff | null):
     handoff.origin,
     handoff.subtype ?? "all-subtypes",
     handoff.scope ?? "all-scopes",
+    handoff.source ?? "all-sources",
     handoff.status ?? "all-statuses",
     handoff.assetId ?? "no-asset",
     handoff.sessionId ?? "no-session",
@@ -362,7 +365,7 @@ export default function ProjectShellClient() {
 
   const handleOpenAssetsFromSession = useCallback((handoff: HomeClientAssetHandoff) => {
     leaveSessionsSurface();
-    setAssetsHandoff(buildAssetsHandoffFromSession(handoff));
+    setAssetsHandoff(buildAssetsHandoffFromSession({ sessionId: handoff.sessionId, subtype: handoff.subtype }));
     setAnalysisCue(null);
     setBackupCue(null);
     setActivePage("assets");
