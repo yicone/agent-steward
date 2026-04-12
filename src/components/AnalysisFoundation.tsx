@@ -51,13 +51,10 @@ export function resolveAnalysisNavigationHandoff(handoff: AnalysisHandoff | null
   return handoff?.sessionId && handoff.source ? handoff : null;
 }
 
-export function clearAnalysisRoutedCueState(input: {
-  activeHandoff: AnalysisHandoff | null;
-  navigationHandoff: AnalysisHandoff | null;
-}) {
+export function clearAnalysisRoutedCueState(navigationHandoff: AnalysisHandoff | null) {
   return {
     activeHandoff: null,
-    navigationHandoff: input.navigationHandoff,
+    navigationHandoff,
   };
 }
 
@@ -264,10 +261,7 @@ export function AnalysisFoundation({
 
   function acknowledgeRoutedContext() {
     if (!activeHandoff) return;
-    const nextState = clearAnalysisRoutedCueState({
-      activeHandoff,
-      navigationHandoff,
-    });
+    const nextState = clearAnalysisRoutedCueState(navigationHandoff);
     setActiveHandoff(nextState.activeHandoff);
     setNavigationHandoff(nextState.navigationHandoff);
   }

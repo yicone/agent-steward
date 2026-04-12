@@ -117,10 +117,7 @@ describe("AnalysisFoundation", () => {
     };
 
     const navigationHandoff = resolveAnalysisNavigationHandoff(handoff);
-    const nextState = clearAnalysisRoutedCueState({
-      activeHandoff: handoff,
-      navigationHandoff,
-    });
+    const nextState = clearAnalysisRoutedCueState(navigationHandoff);
 
     expect(nextState.activeHandoff).toBeNull();
     expect(nextState.navigationHandoff).toEqual(handoff);
