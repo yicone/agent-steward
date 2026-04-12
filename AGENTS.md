@@ -42,6 +42,20 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Keep diagnostics concrete: show exact source, failure mode, and actionable remediation.
 - Treat tokens, local ports, paths, and exported diagnostics as sensitive data.
 
+## Agent orchestration
+
+- When the user designates a conversation as the control thread, use it to coordinate scope, PR state, validation status, and next-step prompts.
+- Suggest a new conversation when an execution line becomes large, requires a separate context window, or can proceed independently with a focused prompt.
+- Use subagents only when explicitly authorized by the user. Prefer reusing an existing suitable subagent; when spawning a new one, do not fork the full conversation context unless the task requires it.
+- Prefer Codex-native branch/worktree handling. Do not use third-party worktree helpers unless the user explicitly asks.
+
+## Branching workflow
+
+- Open a draft PR for each coherent, validated feature slice.
+- If follow-up work depends on an unmerged PR, either wait for merge and branch from updated `main`, or explicitly create stacked work from the PR branch.
+- If follow-up work does not depend on an unmerged PR, it may proceed in parallel from updated `main`.
+- Research, QA, prompts, and OpenSpec proposals may proceed in parallel without waiting for implementation PRs to merge, as long as dependencies are stated.
+
 ## Documentation rules
 
 **Two-layer source of truth**:
@@ -71,6 +85,8 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Classify review feedback before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 - Do not automatically change product names, scope boundaries, or placeholder commitments without user confirmation.
 - After pushing review fixes, request Copilot re-review manually or with `gh` when available; do not assume Copilot re-reviews automatically after new commits.
+- Keep review-fix commits separate from process/documentation workflow changes when practical.
+- External QA reports should preserve original findings. If a blocker is fixed and retested, add a clear re-test result instead of deleting the original failure record.
 
 ## Before Ending a Session
 
