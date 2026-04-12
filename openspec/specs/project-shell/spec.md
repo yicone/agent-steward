@@ -94,14 +94,15 @@ foundation.
 - **THEN** the user can still opt into source copy for that session backup
 
 ### Requirement: Placeholder surfaces do not claim full behavior
-The system SHALL expose foundation surfaces for future top-level pages without
+The system SHALL expose foundation or placeholder surfaces for top-level pages without
 claiming unimplemented full behavior.
 
-#### Scenario: Assets placeholder is bounded
-- **WHEN** the user navigates to `Assets` before full asset inventory is
-  implemented
-- **THEN** the app communicates the intended assets role without presenting a
-  fake complete rules, memory, skills, or commands inventory
+#### Scenario: Assets foundation is bounded
+- **WHEN** the user navigates to `Assets`
+- **THEN** the app presents a bounded reusable context assets foundation for
+  rules, memory, skills, and commands
+- **AND** it does not present full editing, complete cross-agent normalization,
+  cloud sync, or runtime restore as implemented behavior
 
 #### Scenario: Analysis placeholder is bounded
 - **WHEN** the user navigates to `Analysis` before full findings behavior is
