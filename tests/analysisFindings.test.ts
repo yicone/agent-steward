@@ -174,11 +174,11 @@ describe("analysis handoff state derivation", () => {
     ).toBeNull();
   });
 
-  it("requires evidence to have source/rootId when handoff provides them", () => {
-    // Create a finding where evidence lacks source (handoff provides source)
-    const findingWithSourcelessEvidence = normalizeAnalysisFinding({
-      id: "finding-sourceless",
-      title: "Sourceless evidence test",
+  it("requires source match but treats missing rootId as wildcard", () => {
+    // Create a finding where evidence has source but lacks rootId
+    const findingWithSourceNoRootId = normalizeAnalysisFinding({
+      id: "finding-source-no-root",
+      title: "Evidence with source but no rootId",
       issueClass: "provenance",
       severity: "low",
       status: "open",
@@ -187,34 +187,81 @@ describe("analysis handoff state derivation", () => {
       whyItMatters: "Test",
       evidence: [
         {
-          label: "Session without source",
+          label: "Session with source, no rootId",
           target: "session",
           sessionId: "session-test-1",
-          // Note: no source field
+          source: "antigravity",
+          // Note: no rootId field - should be wildcard
         },
       ],
       routes: [],
     });
 
-    // When handoff provides source, evidence without source should NOT match
+    // Source is strict: handoff provides different source, no match
     expect(
-      resolveAnalysisFindingSelection([findingWithSourcelessEvidence], {
+      resolveAnalysisFindingSelection([findingWithSourceNoRootId], {
         origin: "sessions",
-        subtitle: "Test sourceless evidence.",
+        subtitle: "Test source mismatch.",
         sessionId: "session-test-1",
-        source: "antigravity",
+        source: "windsurf", // different from evidence's antigravity
       })
     ).toBeNull();
 
-    // But should match when handoff doesn't provide source
+    // rootId is wildcard: handoff provides rootId, evidence without rootId still matches
+    // (as long as source matches)
     expect(
-      resolveAnalysisFindingSelection([findingWithSourcelessEvidence], {
+      resolveAnalysisFindingSelection([findingWithSourceNoRootId], {
         origin: "sessions",
-        subtitle: "Test sourceless evidence without handoff source.",
+        subtitle: "Test rootId wildcard with matching source.",
         sessionId: "session-test-1",
-        // Note: no source field in handoff
+        source: "antigravity", // matches evidence
+        rootId: "root-a", // evidence lacks rootId but should still match (wildcard)
       })?.id
-    ).toBe("finding-sourceless");
+    ).toBe("finding-source-no-root");
+
+    // Create a finding where evidence has both source and rootId
+    const findingWithRootId = normalizeAnalysisFinding({
+      id: "finding-with-root",
+      title: "Evidence with rootId",
+      issueClass: "provenance",
+      severity: "low",
+      status: "open",
+      affectedObjectType: "session",
+      affectedObjectLabel: "Test session",
+      whyItMatters: "Test",
+      evidence: [
+        {
+          label: "Session with rootId",
+          target: "session",
+          sessionId: "session-test-2",
+          source: "antigravity",
+          rootId: "root-b",
+        },
+      ],
+      routes: [],
+    });
+
+    // Same rootId matches
+    expect(
+      resolveAnalysisFindingSelection([findingWithRootId], {
+        origin: "sessions",
+        subtitle: "Test matching rootId.",
+        sessionId: "session-test-2",
+        source: "antigravity",
+        rootId: "root-b",
+      })?.id
+    ).toBe("finding-with-root");
+
+    // Different rootId does not match (both have rootId, must match)
+    expect(
+      resolveAnalysisFindingSelection([findingWithRootId], {
+        origin: "sessions",
+        subtitle: "Test mismatched rootId.",
+        sessionId: "session-test-2",
+        source: "antigravity",
+        rootId: "root-c", // different from evidence's root-b
+      })
+    ).toBeNull();
   });
 
   it("degrades stale finding references to null while filters can remain valid", () => {

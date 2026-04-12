@@ -389,10 +389,9 @@ export function resolveAnalysisFindingSelection(
       if (handoff.source) {
         if (!item.source || item.source !== handoff.source) return false;
       }
-      // When handoff provides rootId, item must have the same rootId
-      if (handoff.rootId) {
-        if (!item.rootId || item.rootId !== handoff.rootId) return false;
-      }
+      // When both handoff and item provide rootId, they must match
+      // Item without rootId is treated as wildcard (matches any handoff rootId)
+      if (handoff.rootId && item.rootId && item.rootId !== handoff.rootId) return false;
       return true;
     };
 

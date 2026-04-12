@@ -98,7 +98,7 @@ describe("AnalysisFoundation", () => {
       findingId: "missing-finding",
     });
 
-    expect(html).toContain("The original finding could not be selected.");
+    expect(html).toContain("The original routed context could not be selected.");
     expect(html).toContain("Stale review preference memory");
   });
 
