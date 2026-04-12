@@ -113,7 +113,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(initialSelectedAsset?.id ?? null);
   const [activeHandoff, setActiveHandoff] = useState<AssetsHandoff | null>(handoff);
   const [staleSelection, setStaleSelection] = useState(
-    Boolean(handoff) && Boolean(handoff?.assetId || handoff?.sessionId) && !initialSelectedAsset
+    Boolean(handoff?.assetId) && !initialSelectedAsset
   );
   const [isLoading, setIsLoading] = useState(loadingDelayMs > 0);
   const loadingTimeoutRef = useRef<number | null>(null);
@@ -146,7 +146,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
       const filtered = applyContextAssetFilters(assets, nextFilters);
       const selected = resolveContextAssetSelection(filtered, handoff);
       setSelectedAssetId(selected?.id ?? null);
-      setStaleSelection(Boolean(handoff) && Boolean(handoff?.assetId || handoff?.sessionId) && !selected);
+      setStaleSelection(Boolean(handoff?.assetId) && !selected);
       setIsLoading(false);
     });
 
@@ -355,7 +355,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                           </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-2">
-                          {asset.usage?.state === "in_effect" ? <Badge variant="ok">in effect</Badge> : null}
+                          {asset.usage.state === "in_effect" ? <Badge variant="ok">in effect</Badge> : null}
                           {isIssueContextAsset(asset) ? <Badge variant="warn">needs attention</Badge> : null}
                         </div>
                       </div>
@@ -456,12 +456,12 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                   <div className="text-xs uppercase tracking-[0.18em] text-muted">In-Effect / Usage</div>
                   <div className="text-sm text-muted">Explain whether and how this asset matters in the current project.</div>
                 </div>
-                {selectedAsset.usage?.state === "in_effect" ? <Badge variant="ok">in effect</Badge> : null}
-                {selectedAsset.usage?.state === "not_in_effect" ? <Badge variant="warn">not in effect</Badge> : null}
-                {selectedAsset.usage?.state === "unknown" ? <Badge variant="default">unavailable</Badge> : null}
+                {selectedAsset.usage.state === "in_effect" ? <Badge variant="ok">in effect</Badge> : null}
+                {selectedAsset.usage.state === "not_in_effect" ? <Badge variant="warn">not in effect</Badge> : null}
+                {selectedAsset.usage.state === "unknown" ? <Badge variant="default">unavailable</Badge> : null}
               </div>
               <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm leading-6 text-muted">
-                {selectedAsset.usage?.summary ?? "In-effect data unavailable."}
+                {selectedAsset.usage.summary}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {selectedAsset.sourceReference?.target === "session" && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
@@ -484,7 +484,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                   variant="outline"
                   onClick={() =>
                     onOpenAnalysis({
-                      issueLabel: selectedAsset.usage?.analysisLabel ?? activeHandoff?.issueLabel ?? "Reusable asset usage",
+                      issueLabel: selectedAsset.usage.analysisLabel ?? activeHandoff?.issueLabel ?? "Reusable asset usage",
                       assetId: selectedAsset.id,
                       subtype: selectedAsset.subtype,
                       status: selectedAsset.status,

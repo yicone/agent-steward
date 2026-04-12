@@ -37,7 +37,7 @@ export type ContextAsset = {
   provenance: string;
   bodySummary?: string;
   sourceReference?: ContextAssetSourceReference;
-  usage?: ContextAssetUsage;
+  usage: ContextAssetUsage;
 };
 
 export type ContextAssetInput = {
@@ -288,7 +288,7 @@ export function summarizeContextAssets(assets: ContextAsset[]): ContextAssetSumm
   for (const asset of assets) {
     subtypeCounts[asset.subtype] += 1;
     statusCounts[asset.status] += 1;
-    if (asset.usage?.state === "in_effect") inEffect += 1;
+    if (asset.usage.state === "in_effect") inEffect += 1;
     if (ISSUE_STATUSES.has(asset.status)) issueCount += 1;
   }
 
@@ -335,11 +335,6 @@ export function resolveContextAssetSelection(assets: ContextAsset[], handoff: As
   if (handoff.assetId) {
     const byId = assets.find((asset) => asset.id === handoff.assetId);
     if (byId) return byId;
-  }
-
-  if (handoff.sessionId) {
-    const bySession = assets.find((asset) => asset.sourceReference?.sessionId === handoff.sessionId);
-    if (bySession) return bySession;
   }
 
   return null;

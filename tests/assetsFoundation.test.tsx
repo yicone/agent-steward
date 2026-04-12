@@ -63,4 +63,16 @@ describe("AssetsFoundation", () => {
     expect(html).toContain("Open Analysis");
     expect(html).toContain("Review in Analysis");
   });
+
+  it("keeps session handoff as origin context rather than stale object selection", () => {
+    const html = renderAssetsFoundation({
+      origin: "sessions",
+      subtitle: "Review reusable assets suggested by the selected session.",
+      subtype: "rule",
+      sessionId: "session-that-is-not-an-asset-id",
+    });
+
+    expect(html).toContain("routed context");
+    expect(html).not.toContain("The original object could not be selected.");
+  });
 });

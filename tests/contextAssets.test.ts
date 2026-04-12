@@ -134,6 +134,25 @@ describe("assets handoff state derivation", () => {
     expect(filtered.length).toBeGreaterThan(0);
   });
 
+  it("does not treat the origin session id as an asset selector", () => {
+    const assets = createContextAssetSeeds();
+    const filtered = applyContextAssetFilters(assets, {
+      subtype: "rule",
+      scope: "project",
+      source: "all",
+      status: "all",
+    });
+
+    expect(
+      resolveContextAssetSelection(filtered, {
+        origin: "sessions",
+        subtitle: "Review reusable assets suggested by the selected session.",
+        subtype: "rule",
+        sessionId: "session-rule-codex-1",
+      })
+    ).toBeNull();
+  });
+
   it("derives empty, selected, and issue states without replacing the page backbone", () => {
     const assets = createContextAssetSeeds();
     const ruleAssets = applyContextAssetFilters(assets, {
