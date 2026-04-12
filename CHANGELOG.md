@@ -5,8 +5,8 @@ This file records shipped, merged changes for Agent Storage Manager.
 **SSoT/DRY**
 
 - `README.md` describes the current product surface and runtime prerequisites.
-- `ROADMAP.md` tracks open and planned work only.
-- This file captures completed milestones so they do not remain duplicated in the roadmap.
+- GitHub Issues track active execution work (0-2 weeks) and mid-term planning with labels/milestones.
+- This file captures completed milestones so they are not duplicated elsewhere.
 - GitHub Issues / PRs are optional references. For older work or ad-hoc work, plain dated entries here are still valid.
 
 ## Unreleased

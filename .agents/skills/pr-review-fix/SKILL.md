@@ -1,6 +1,11 @@
 ---
 name: pr-review-fix
 description: Use when addressing GitHub PR review comments, Copilot review feedback, unresolved review threads, or review-fix follow-up work in this repository.
+license: MIT
+compatibility: Requires git and gh CLI.
+metadata:
+  author: yicone
+  version: "1.0"
 ---
 
 # PR Review Fix

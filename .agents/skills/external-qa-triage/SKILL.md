@@ -1,6 +1,11 @@
 ---
 name: external-qa-triage
 description: Use when an external QA agent, Agent Browser run, Playwright run, or manual QA report is provided for this repository.
+license: MIT
+compatibility: Requires git.
+metadata:
+  author: yicone
+  version: "1.0"
 ---
 
 # External QA Triage
