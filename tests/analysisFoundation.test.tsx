@@ -2,8 +2,12 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { AnalysisFoundation } from "@/components/AnalysisFoundation";
-import type { AnalysisHandoff } from "@/lib/analysisFindings";
+import {
+  AnalysisFoundation,
+  clearAnalysisRoutedCueState,
+  resolveAnalysisNavigationHandoff,
+} from "@/components/AnalysisFoundation";
+import { resolveAnalysisSessionRootId, type AnalysisHandoff } from "@/lib/analysisFindings";
 
 function renderAnalysisFoundation(handoff: AnalysisHandoff | null) {
   return renderToStaticMarkup(
@@ -100,6 +104,44 @@ describe("AnalysisFoundation", () => {
 
     expect(html).toContain("The original routed context could not be selected.");
     expect(html).toContain("Stale review preference memory");
+  });
+
+  it("retains session navigation handoff even after routed cue is cleared", () => {
+    const handoff: AnalysisHandoff = {
+      origin: "sessions",
+      subtitle: "Review session evidence.",
+      issueClass: "preservation",
+      sessionId: "session-command-antigravity-4",
+      source: "antigravity",
+      rootId: "root-a",
+    };
+
+    const navigationHandoff = resolveAnalysisNavigationHandoff(handoff);
+    const nextState = clearAnalysisRoutedCueState({
+      activeHandoff: handoff,
+      navigationHandoff,
+    });
+
+    expect(nextState.activeHandoff).toBeNull();
+    expect(nextState.navigationHandoff).toEqual(handoff);
+    expect(
+      resolveAnalysisSessionRootId({
+        handoff: nextState.navigationHandoff,
+        sessionId: "session-command-antigravity-4",
+        source: "antigravity",
+      })
+    ).toBe("root-a");
+  });
+
+  it("only retains navigation handoff for session-scoped routed context", () => {
+    expect(
+      resolveAnalysisNavigationHandoff({
+        origin: "assets",
+        subtitle: "Review issue context from Assets: conflicted asset.",
+        issueClass: "conflict",
+        assetId: "asset-skill-global-generated",
+      })
+    ).toBeNull();
   });
 
 });

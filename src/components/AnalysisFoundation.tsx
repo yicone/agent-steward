@@ -47,6 +47,20 @@ export type AnalysisFoundationProps = {
 
 const LOADING_DELAY_MS = 120;
 
+export function resolveAnalysisNavigationHandoff(handoff: AnalysisHandoff | null): AnalysisHandoff | null {
+  return handoff?.sessionId && handoff.source ? handoff : null;
+}
+
+export function clearAnalysisRoutedCueState(input: {
+  activeHandoff: AnalysisHandoff | null;
+  navigationHandoff: AnalysisHandoff | null;
+}) {
+  return {
+    activeHandoff: null,
+    navigationHandoff: input.navigationHandoff,
+  };
+}
+
 function FilterSelect<T extends string>(props: {
   label: string;
   value: T | "all";
@@ -109,7 +123,7 @@ function CueStrip(props: {
 function RouteButton(props: {
   finding: AnalysisFinding;
   route: AnalysisRoute;
-  handoff: AnalysisHandoff | null;
+  navigationHandoff: AnalysisHandoff | null;
   onOpenAssets(handoff: AssetsHandoff): void;
   onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string }): void;
   onOpenOverview(): void;
@@ -133,7 +147,7 @@ function RouteButton(props: {
             sessionId: props.route.sessionId!,
             source: props.route.source!,
             rootId: resolveAnalysisSessionRootId({
-              handoff: props.handoff,
+              handoff: props.navigationHandoff,
               sessionId: props.route.sessionId!,
               source: props.route.source!,
               explicitRootId: props.route.rootId,
@@ -195,6 +209,7 @@ export function AnalysisFoundation({
   const [filters, setFilters] = useState<AnalysisFilters>(() => initialFilters);
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(initialSelectedFinding?.id ?? null);
   const [activeHandoff, setActiveHandoff] = useState<AnalysisHandoff | null>(handoff);
+  const [navigationHandoff, setNavigationHandoff] = useState<AnalysisHandoff | null>(() => resolveAnalysisNavigationHandoff(handoff));
   const [staleSelection, setStaleSelection] = useState(Boolean(handoff?.findingId || handoff?.assetId || handoff?.sessionId) && !initialSelectedFinding);
   const [isLoading, setIsLoading] = useState(loadingDelayMs > 0);
   const loadingTimeoutRef = useRef<number | null>(null);
@@ -221,6 +236,7 @@ export function AnalysisFoundation({
     const nextFilters = buildFiltersFromAnalysisHandoff(handoff, createDefaultAnalysisFilters());
     setFilters(nextFilters);
     setActiveHandoff(handoff);
+    setNavigationHandoff(resolveAnalysisNavigationHandoff(handoff));
     setIsLoading(true);
 
     scheduleLoadingComplete(() => {
@@ -248,7 +264,12 @@ export function AnalysisFoundation({
 
   function acknowledgeRoutedContext() {
     if (!activeHandoff) return;
-    setActiveHandoff(null);
+    const nextState = clearAnalysisRoutedCueState({
+      activeHandoff,
+      navigationHandoff,
+    });
+    setActiveHandoff(nextState.activeHandoff);
+    setNavigationHandoff(nextState.navigationHandoff);
   }
 
   function updateFilter<K extends keyof AnalysisFilters>(key: K, value: AnalysisFilters[K]) {
@@ -483,7 +504,7 @@ export function AnalysisFoundation({
                                   sessionId: evidence.sessionId!,
                                   source: evidence.source!,
                                   rootId: resolveAnalysisSessionRootId({
-                                    handoff: activeHandoff,
+                                    handoff: navigationHandoff,
                                     sessionId: evidence.sessionId!,
                                     source: evidence.source!,
                                     explicitRootId: evidence.rootId,
@@ -539,7 +560,7 @@ export function AnalysisFoundation({
                           onOpenBackup={onOpenBackup}
                           onOpenOverview={onOpenOverview}
                           onOpenSession={onOpenSession}
-                          handoff={activeHandoff}
+                          navigationHandoff={navigationHandoff}
                         />
                       </div>
                     </div>
