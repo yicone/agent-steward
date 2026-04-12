@@ -385,10 +385,14 @@ export function resolveAnalysisFindingSelection(
       item: { sessionId?: string; source?: string; rootId?: string }
     ) => {
       if (item.sessionId !== handoff.sessionId) return false;
-      // When handoff provides source, require matching source
-      if (handoff.source && item.source && item.source !== handoff.source) return false;
-      // When both sides provide rootId, require matching rootId
-      if (handoff.rootId && item.rootId && item.rootId !== handoff.rootId) return false;
+      // When handoff provides source, item must have the same source
+      if (handoff.source) {
+        if (!item.source || item.source !== handoff.source) return false;
+      }
+      // When handoff provides rootId, item must have the same rootId
+      if (handoff.rootId) {
+        if (!item.rootId || item.rootId !== handoff.rootId) return false;
+      }
       return true;
     };
 

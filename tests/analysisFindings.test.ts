@@ -174,6 +174,49 @@ describe("analysis handoff state derivation", () => {
     ).toBeNull();
   });
 
+  it("requires evidence to have source/rootId when handoff provides them", () => {
+    // Create a finding where evidence lacks source (handoff provides source)
+    const findingWithSourcelessEvidence = normalizeAnalysisFinding({
+      id: "finding-sourceless",
+      title: "Sourceless evidence test",
+      issueClass: "provenance",
+      severity: "low",
+      status: "open",
+      affectedObjectType: "session",
+      affectedObjectLabel: "Test session",
+      whyItMatters: "Test",
+      evidence: [
+        {
+          label: "Session without source",
+          target: "session",
+          sessionId: "session-test-1",
+          // Note: no source field
+        },
+      ],
+      routes: [],
+    });
+
+    // When handoff provides source, evidence without source should NOT match
+    expect(
+      resolveAnalysisFindingSelection([findingWithSourcelessEvidence], {
+        origin: "sessions",
+        subtitle: "Test sourceless evidence.",
+        sessionId: "session-test-1",
+        source: "antigravity",
+      })
+    ).toBeNull();
+
+    // But should match when handoff doesn't provide source
+    expect(
+      resolveAnalysisFindingSelection([findingWithSourcelessEvidence], {
+        origin: "sessions",
+        subtitle: "Test sourceless evidence without handoff source.",
+        sessionId: "session-test-1",
+        // Note: no source field in handoff
+      })?.id
+    ).toBe("finding-sourceless");
+  });
+
   it("degrades stale finding references to null while filters can remain valid", () => {
     const findings = createAnalysisFindingSeeds();
     const filtered = applyAnalysisFilters(findings, {

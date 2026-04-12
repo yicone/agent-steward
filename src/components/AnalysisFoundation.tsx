@@ -94,7 +94,7 @@ function CueStrip(props: {
           <div className="text-sm font-medium">{props.handoff.subtitle}</div>
           <div className="text-xs leading-5 text-muted">
             {props.staleSelection
-              ? "The original finding could not be selected. Any still-valid issue or object filters are preserved so the routed task can degrade safely."
+              ? "The original routed context could not be selected. Any still-valid issue or object filters are preserved so the routed task can degrade safely."
               : props.filteredCount === 0
                 ? "No findings currently match the routed context. Filters stay visible so you can adjust without losing the original task framing."
                 : props.handoff.continueLabel ?? "Continue interpreting the routed issue context here."}
