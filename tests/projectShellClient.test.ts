@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolveRestoredSelection } from "@/components/HomeClient";
 import {
   buildAssetsHandoffFromAnalysis,
+  buildAssetsFoundationInstanceKey,
   buildAssetsHandoffFromOverview,
   buildAssetsHandoffFromSession,
   buildExternalSessionSelection,
@@ -43,6 +44,30 @@ describe("stripSessionViewerSearchParams", () => {
 
   it("leaves already-clean search strings untouched", () => {
     expect(stripSessionViewerSearchParams("?foo=bar")).toBe("?foo=bar");
+  });
+});
+
+describe("buildAssetsFoundationInstanceKey", () => {
+  it("changes when routed handoff context changes", () => {
+    const first = buildAssetsFoundationInstanceKey({
+      origin: "sessions",
+      subtitle: "Review session asset.",
+      subtype: "rule",
+      sessionId: "session-1",
+    });
+    const second = buildAssetsFoundationInstanceKey({
+      origin: "overview",
+      subtitle: "Review project asset.",
+      subtype: "rule",
+      scope: "project",
+      assetId: "asset-rule-project-codex",
+    });
+
+    expect(first).not.toBe(second);
+  });
+
+  it("keeps a stable non-routed key for normal browsing", () => {
+    expect(buildAssetsFoundationInstanceKey(null)).toBe("assets:no-handoff");
   });
 });
 

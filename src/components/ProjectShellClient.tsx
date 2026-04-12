@@ -134,6 +134,21 @@ export function stripSessionViewerSearchParams(search: string): string {
   return next ? `?${next}` : "";
 }
 
+export function buildAssetsFoundationInstanceKey(handoff: AssetsHandoff | null): string {
+  if (!handoff) return "assets:no-handoff";
+
+  return [
+    "assets",
+    handoff.origin,
+    handoff.subtype ?? "all-subtypes",
+    handoff.scope ?? "all-scopes",
+    handoff.status ?? "all-statuses",
+    handoff.assetId ?? "no-asset",
+    handoff.sessionId ?? "no-session",
+    handoff.issueLabel ?? "no-issue",
+  ].join(":");
+}
+
 function clearSessionViewerUrlState(): void {
   if (typeof window === "undefined") return;
 
@@ -462,6 +477,7 @@ export default function ProjectShellClient() {
           ) : null}
           {activePage === "assets" ? (
             <AssetsFoundation
+              key={buildAssetsFoundationInstanceKey(assetsHandoff)}
               handoff={assetsHandoff}
               onOpenSession={handleOpenSessionFromAssets}
               onOpenAnalysis={handleOpenAnalysisFromAssets}
@@ -476,18 +492,21 @@ export default function ProjectShellClient() {
               preservedPath="Use Sessions inspector and error center for current evidence-driven investigation."
               onNavigateSessions={() => handleNavigate("sessions")}
               cue={analysisCue ?? undefined}
-              actionLabel="Review affected assets"
-              onAction={() =>
-                handleOpenAssets(
-                  buildAssetsHandoffFromAnalysis({
-                    subtitle: "Review the affected reusable asset class from Analysis.",
-                    subtype: "skill",
-                    status: "conflicted",
-                    assetId: "asset-skill-global-generated",
-                    issueLabel: "conflicted asset",
-                  })
-                )
-              }
+              {...(analysisCue
+                ? {
+                    actionLabel: "Review affected assets",
+                    onAction: () =>
+                      handleOpenAssets(
+                        buildAssetsHandoffFromAnalysis({
+                          subtitle: "Review the affected reusable asset class from Analysis.",
+                          subtype: "skill",
+                          status: "conflicted",
+                          assetId: "asset-skill-global-generated",
+                          issueLabel: "conflicted asset",
+                        })
+                      ),
+                  }
+                : {})}
             />
           ) : null}
           {activePage === "backup" ? (
