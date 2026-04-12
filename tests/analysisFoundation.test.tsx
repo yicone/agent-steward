@@ -101,4 +101,5 @@ describe("AnalysisFoundation", () => {
     expect(html).toContain("The original finding could not be selected.");
     expect(html).toContain("Stale review preference memory");
   });
+
 });

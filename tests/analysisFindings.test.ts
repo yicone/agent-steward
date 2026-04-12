@@ -8,6 +8,7 @@ import {
   deriveAnalysisSurfaceState,
   normalizeAnalysisFinding,
   resolveAnalysisFindingSelection,
+  resolveAnalysisSessionRootId,
   summarizeAnalysisFindings,
 } from "@/lib/analysisFindings";
 
@@ -208,5 +209,40 @@ describe("analysis handoff state derivation", () => {
       assetId: "asset-skill-global-generated",
       issueLabel: "Conflict",
     });
+  });
+
+  it("preserves routed session root id only for matching session context", () => {
+    const handoff = {
+      origin: "sessions" as const,
+      subtitle: "Review selected session evidence.",
+      sessionId: "session-command-antigravity-4",
+      source: "antigravity" as const,
+      rootId: "root-a",
+    };
+
+    expect(
+      resolveAnalysisSessionRootId({
+        handoff,
+        sessionId: "session-command-antigravity-4",
+        source: "antigravity",
+      })
+    ).toBe("root-a");
+
+    expect(
+      resolveAnalysisSessionRootId({
+        handoff,
+        sessionId: "session-command-antigravity-4",
+        source: "antigravity",
+        explicitRootId: "explicit-root",
+      })
+    ).toBe("explicit-root");
+
+    expect(
+      resolveAnalysisSessionRootId({
+        handoff,
+        sessionId: "other-session",
+        source: "antigravity",
+      })
+    ).toBeUndefined();
   });
 });

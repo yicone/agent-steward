@@ -22,6 +22,7 @@ import {
   formatAnalysisObjectTypeLabel,
   formatAnalysisSeverityLabel,
   resolveAnalysisFindingSelection,
+  resolveAnalysisSessionRootId,
   summarizeAnalysisFindings,
   type AnalysisFinding,
   type AnalysisFindingStatus,
@@ -108,6 +109,7 @@ function CueStrip(props: {
 function RouteButton(props: {
   finding: AnalysisFinding;
   route: AnalysisRoute;
+  handoff: AnalysisHandoff | null;
   onOpenAssets(handoff: AssetsHandoff): void;
   onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string }): void;
   onOpenOverview(): void;
@@ -130,7 +132,12 @@ function RouteButton(props: {
           props.onOpenSession({
             sessionId: props.route.sessionId!,
             source: props.route.source!,
-            rootId: props.route.rootId,
+            rootId: resolveAnalysisSessionRootId({
+              handoff: props.handoff,
+              sessionId: props.route.sessionId!,
+              source: props.route.source!,
+              explicitRootId: props.route.rootId,
+            }),
           })
         }
       >
@@ -475,7 +482,12 @@ export function AnalysisFoundation({
                                 onOpenSession({
                                   sessionId: evidence.sessionId!,
                                   source: evidence.source!,
-                                  rootId: evidence.rootId,
+                                  rootId: resolveAnalysisSessionRootId({
+                                    handoff: activeHandoff,
+                                    sessionId: evidence.sessionId!,
+                                    source: evidence.source!,
+                                    explicitRootId: evidence.rootId,
+                                  }),
                                 })
                               }
                             >
@@ -527,6 +539,7 @@ export function AnalysisFoundation({
                           onOpenBackup={onOpenBackup}
                           onOpenOverview={onOpenOverview}
                           onOpenSession={onOpenSession}
+                          handoff={activeHandoff}
                         />
                       </div>
                     </div>

@@ -171,6 +171,7 @@ export function buildAnalysisHandoffFromSession(input: HomeClientAnalysisHandoff
     objectType: "session",
     sessionId: input.sessionId,
     source: input.source,
+    rootId: input.rootId,
   };
 }
 
@@ -234,6 +235,7 @@ export function buildAnalysisFoundationInstanceKey(handoff: AnalysisHandoff | nu
     handoff.assetSubtype ?? "no-subtype",
     handoff.sessionId ?? "no-session",
     handoff.source ?? "no-source",
+    handoff.rootId ?? "no-root",
     handoff.issueLabel ?? "no-issue",
   ].join(":");
 }

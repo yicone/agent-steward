@@ -5,17 +5,18 @@ Use this prompt with an external QA agent that can operate the local app through
 ```text
 You are QA-ing the `analysis-foundation` implementation for the local-first Agent Storage Manager project.
 
-Repository: /Users/tr/Workspace/agent-storage-manager
+Repository: <repo-path>
 Branch under test: feat/analysis-foundation
 
 Goal:
 Verify that the new Analysis foundation behaves as a bounded interpretation-and-routing surface. It should show local context findings, explain why they matter, and route users to owning pages without claiming complete automated analysis, automatic fixes, asset editing, session mutation, or backup execution inside Analysis.
 
 Setup:
-1. Run `pnpm install` if dependencies are missing.
-2. Start the app with `pnpm dev`.
-3. Open the local dev URL, usually `http://localhost:3000`.
-4. If the session list is empty, focus QA on the project shell, Assets, Analysis, and visible seeded/foundation states. Do not require real Antigravity/Windsurf/Codex sessions unless available locally.
+1. Use the QA agent's local checkout path for `<repo-path>`.
+2. Run `pnpm install` if dependencies are missing.
+3. Start the app with `pnpm dev`.
+4. Open the local dev URL, usually `http://localhost:3000`.
+5. If the session list is empty, focus QA on the project shell, Assets, Analysis, and visible seeded/foundation states. Do not require real Antigravity/Windsurf/Codex sessions unless available locally.
 
 Primary smoke checks:
 1. Open `Project Overview`.

@@ -245,6 +245,7 @@ describe("analysis handoff builders", () => {
       objectType: "session",
       sessionId: "session-command-antigravity-4",
       source: "antigravity",
+      rootId: "root-a",
     });
   });
 });
@@ -265,6 +266,30 @@ describe("buildAnalysisFoundationInstanceKey", () => {
       objectType: "session",
       sessionId: "session-command-antigravity-4",
       source: "antigravity",
+      rootId: "root-a",
+    });
+
+    expect(first).not.toBe(second);
+  });
+
+  it("changes when routed session root context changes", () => {
+    const first = buildAnalysisFoundationInstanceKey({
+      origin: "sessions",
+      subtitle: "Review session evidence.",
+      issueClass: "preservation",
+      objectType: "session",
+      sessionId: "session-command-antigravity-4",
+      source: "antigravity",
+      rootId: "root-a",
+    });
+    const second = buildAnalysisFoundationInstanceKey({
+      origin: "sessions",
+      subtitle: "Review session evidence.",
+      issueClass: "preservation",
+      objectType: "session",
+      sessionId: "session-command-antigravity-4",
+      source: "antigravity",
+      rootId: "root-b",
     });
 
     expect(first).not.toBe(second);

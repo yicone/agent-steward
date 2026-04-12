@@ -94,6 +94,7 @@ export type AnalysisHandoff = {
   assetSubtype?: ContextAssetSubtype;
   sessionId?: string;
   source?: Source;
+  rootId?: string;
   issueLabel?: string;
 };
 
@@ -464,4 +465,16 @@ export function buildAssetsHandoffFromAnalysisRoute(route: AnalysisRoute, findin
     assetId: route.assetId,
     issueLabel: formatAnalysisIssueClassLabel(finding.issueClass),
   };
+}
+
+export function resolveAnalysisSessionRootId(input: {
+  handoff: AnalysisHandoff | null;
+  sessionId: string;
+  source: Source;
+  explicitRootId?: string;
+}): string | undefined {
+  if (input.explicitRootId) return input.explicitRootId;
+  if (input.handoff?.sessionId !== input.sessionId) return undefined;
+  if (input.handoff.source && input.handoff.source !== input.source) return undefined;
+  return input.handoff.rootId;
 }
