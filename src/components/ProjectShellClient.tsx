@@ -387,8 +387,8 @@ function ProjectOverviewSurface(props: {
           </Button>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          Assets is now a bounded foundation surface. Analysis and Backup / Migration remain placeholders, and working
-          session backup remains available from a selected session.
+          Assets and Analysis are now bounded foundation surfaces. Backup / Migration remains a placeholder, and
+          working session backup remains available from a selected session.
         </p>
       </Card>
     </div>
