@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import { resolveRestoredSelection } from "@/components/HomeClient";
 import {
   buildAssetsHandoffFromAnalysis,
   buildAssetsHandoffFromOverview,
   buildAssetsHandoffFromSession,
   buildExternalSessionSelection,
   resolveInitialProjectShellPage,
+  stripSessionViewerSearchParams,
 } from "@/components/ProjectShellClient";
 
 describe("resolveInitialProjectShellPage", () => {
@@ -19,6 +21,47 @@ describe("resolveInitialProjectShellPage", () => {
 
   it("opens sessions when a source-scoped URL is present", () => {
     expect(resolveInitialProjectShellPage("?source=windsurf")).toBe("sessions");
+  });
+});
+
+describe("stripSessionViewerSearchParams", () => {
+  it("removes session viewer deep-link params when leaving sessions", () => {
+    expect(
+      stripSessionViewerSearchParams(
+        "?source=antigravity&id=session-1&rootId=root-a&expanded=group-1&row=row-1&inspector=event"
+      )
+    ).toBe("");
+  });
+
+  it("preserves unrelated query params", () => {
+    expect(
+      stripSessionViewerSearchParams(
+        "?foo=bar&source=codex&id=session-2&includeCleared=1&baz=qux"
+      )
+    ).toBe("?foo=bar&baz=qux");
+  });
+
+  it("leaves already-clean search strings untouched", () => {
+    expect(stripSessionViewerSearchParams("?foo=bar")).toBe("?foo=bar");
+  });
+});
+
+describe("resolveRestoredSelection", () => {
+  it("falls back to id-only matching when url rootId is stale", () => {
+    const restored = resolveRestoredSelection(
+      [
+        {
+          id: "session-1",
+          rootId: "root-a",
+        } as any,
+      ],
+      "session-1",
+      "stale-root"
+    );
+
+    expect(restored.match).toMatchObject({ id: "session-1", rootId: "root-a" });
+    expect(restored.effectiveRootId).toBe("root-a");
+    expect(JSON.parse(restored.selectedKey)).toEqual({ rootId: "root-a", id: "session-1" });
   });
 });
 

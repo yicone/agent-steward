@@ -116,6 +116,14 @@ export function shouldDeferSearchSelectionLoad(input: {
   return input.nextSource !== input.currentSource || input.itemCount === 0;
 }
 
+export function shouldBlockUrlSync(input: {
+  pendingUrlRestoreId?: string | null;
+  isUrlRestoring: boolean;
+  isRestorationInitiated: boolean;
+}): boolean {
+  return Boolean(input.pendingUrlRestoreId) || input.isUrlRestoring || input.isRestorationInitiated;
+}
+
 function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
@@ -2330,16 +2338,9 @@ export default function HomeClient({ chrome = "full", externalSelection = null, 
     }
 
     // Select the conversation
-    const match = items.find((it) => {
-      if (id == null) return false;
-      // When a rootId is present in the URL state, use it to disambiguate
-      if (typeof rootId !== "undefined" && rootId !== null) {
-        return it.id === id && it.rootId === rootId;
-      }
-      return it.id === id;
-    });
-    const effectiveRootId = match?.rootId ?? (rootId ?? undefined);
-    const key = toSelectionKey(effectiveRootId, id!);
+    const restoredSelection = resolveRestoredSelection(items, id!, rootId);
+    const effectiveRootId = restoredSelection.effectiveRootId ?? (rootId ?? undefined);
+    const key = restoredSelection.selectedKey;
     setSelectedKey(key);
     setSelectedId(id!);
 
@@ -2392,17 +2393,11 @@ export default function HomeClient({ chrome = "full", externalSelection = null, 
     // Skip while the deep-link restore effect has not yet consumed the initial URL state,
     // or while the async restore is still in progress, so replaceState never overwrites
     // the URL before restoration (including row/expanded state) is fully applied.
-    if (urlInitRef.current.id || urlRestoringRef.current || restorationInitiatedRef.current) return;
-    // Also skip if the actual browser URL has an id parameter that doesn't match selectedId
-    // This prevents URL sync from stripping the URL during hot reload before restoration runs
-    if (typeof window !== "undefined") {
-      const currentUrlParams = new URLSearchParams(window.location.search);
-      const urlId = currentUrlParams.get("id");
-      // Block sync if URL has an id but we haven't selected anything yet (restoration in progress)
-      if (urlId && !selectedId) return;
-      // Also block if the URL id doesn't match the selected id
-      if (urlId && urlId !== selectedId) return;
-    }
+    if (shouldBlockUrlSync({
+      pendingUrlRestoreId: urlInitRef.current.id ?? null,
+      isUrlRestoring: urlRestoringRef.current,
+      isRestorationInitiated: restorationInitiatedRef.current,
+    })) return;
     const currentView =
       source === "antigravity"
         ? antigravityView

@@ -4,6 +4,7 @@ import {
   buildSessionBackupRequest,
   resolveInitialSource,
   resolveRestoredSelection,
+  shouldBlockUrlSync,
   shouldDeferSearchSelectionLoad,
   shouldResetViewerSelectionOnSourceChange,
   supportsSessionSourceCopy,
@@ -152,6 +153,38 @@ describe("shouldDeferSearchSelectionLoad", () => {
         currentSource: "codex",
         nextSource: "codex",
         itemCount: 12,
+      })
+    ).toBe(false);
+  });
+});
+
+describe("shouldBlockUrlSync", () => {
+  it("blocks while an initial url restore id is still pending", () => {
+    expect(
+      shouldBlockUrlSync({
+        pendingUrlRestoreId: "session-1",
+        isUrlRestoring: false,
+        isRestorationInitiated: false,
+      })
+    ).toBe(true);
+  });
+
+  it("blocks while async restoration is still in progress", () => {
+    expect(
+      shouldBlockUrlSync({
+        pendingUrlRestoreId: null,
+        isUrlRestoring: true,
+        isRestorationInitiated: false,
+      })
+    ).toBe(true);
+  });
+
+  it("allows sync again after restoration is complete even if the browser url is stale", () => {
+    expect(
+      shouldBlockUrlSync({
+        pendingUrlRestoreId: null,
+        isUrlRestoring: false,
+        isRestorationInitiated: false,
       })
     ).toBe(false);
   });

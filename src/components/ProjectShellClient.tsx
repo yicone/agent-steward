@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { AssetsHandoff, ContextAssetScope, ContextAssetStatus, ContextAssetSubtype } from "@/lib/contextAssets";
+import { cancelPendingUrlSync } from "@/lib/urlState";
 import { cn } from "@/lib/utils";
 import type { Source } from "@/lib/types";
 
@@ -102,6 +103,47 @@ export function buildAssetsHandoffFromAnalysis(input: {
     assetId: input.assetId,
     issueLabel: input.issueLabel,
   };
+}
+
+const SESSION_VIEWER_QUERY_KEYS = [
+  "source",
+  "id",
+  "rootId",
+  "view",
+  "ft",
+  "stepType",
+  "expanded",
+  "row",
+  "inspector",
+  "includeCleared",
+] as const;
+
+export function stripSessionViewerSearchParams(search: string): string {
+  const params = new URLSearchParams(search);
+  let changed = false;
+
+  for (const key of SESSION_VIEWER_QUERY_KEYS) {
+    if (!params.has(key)) continue;
+    params.delete(key);
+    changed = true;
+  }
+
+  if (!changed) return search;
+
+  const next = params.toString();
+  return next ? `?${next}` : "";
+}
+
+function clearSessionViewerUrlState(): void {
+  if (typeof window === "undefined") return;
+
+  cancelPendingUrlSync();
+
+  const nextSearch = stripSessionViewerSearchParams(window.location.search);
+  if (nextSearch === window.location.search) return;
+
+  const url = `${window.location.pathname}${nextSearch}${window.location.hash}`;
+  window.history.replaceState(window.history.state, "", url);
 }
 
 function ProjectOverviewSurface(props: {
@@ -263,6 +305,11 @@ export default function ProjectShellClient() {
   const [analysisCue, setAnalysisCue] = useState<PlaceholderCue | null>(null);
   const [backupCue, setBackupCue] = useState<PlaceholderCue | null>(null);
 
+  const leaveSessionsSurface = useCallback(() => {
+    clearSessionViewerUrlState();
+    setExternalSelection(null);
+  }, []);
+
   useEffect(() => {
     setActivePage(resolveInitialProjectShellPage(window.location.search));
   }, []);
@@ -283,25 +330,28 @@ export default function ProjectShellClient() {
   }, []);
 
   const handleNavigate = useCallback((page: ProjectShellPage) => {
+    if (page !== "sessions") leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisCue(null);
     setBackupCue(null);
     setActivePage(page);
-  }, []);
+  }, [leaveSessionsSurface]);
 
   const handleOpenAssets = useCallback((handoff: AssetsHandoff) => {
+    leaveSessionsSurface();
     setAssetsHandoff(handoff);
     setAnalysisCue(null);
     setBackupCue(null);
     setActivePage("assets");
-  }, []);
+  }, [leaveSessionsSurface]);
 
   const handleOpenAssetsFromSession = useCallback((handoff: HomeClientAssetHandoff) => {
+    leaveSessionsSurface();
     setAssetsHandoff(buildAssetsHandoffFromSession(handoff));
     setAnalysisCue(null);
     setBackupCue(null);
     setActivePage("assets");
-  }, []);
+  }, [leaveSessionsSurface]);
 
   const handleOpenSessionFromAssets = useCallback((selection: { sessionId: string; source: Source; rootId?: string }) => {
     setAssetsHandoff(null);
@@ -324,6 +374,7 @@ export default function ProjectShellClient() {
     subtype?: ContextAssetSubtype;
     status?: ContextAssetStatus;
   }) => {
+    leaveSessionsSurface();
     setAssetsHandoff(null);
     setBackupCue(null);
     setAnalysisCue({
@@ -331,9 +382,10 @@ export default function ProjectShellClient() {
       body: `Issue focus: ${context.issueLabel}. ${context.subtype ? `Subtype: ${context.subtype}. ` : ""}${context.status ? `Status: ${context.status}.` : ""}`.trim(),
     });
     setActivePage("analysis");
-  }, []);
+  }, [leaveSessionsSurface]);
 
   const handleOpenBackupFromAssets = useCallback((context: { assetId?: string; subtype?: ContextAssetSubtype }) => {
+    leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisCue(null);
     setBackupCue({
@@ -341,7 +393,7 @@ export default function ProjectShellClient() {
       body: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}. Workflow execution still belongs to Backup / Migration.`,
     });
     setActivePage("backup");
-  }, []);
+  }, [leaveSessionsSurface]);
 
   const activeNav = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0]!;
 
