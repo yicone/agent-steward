@@ -62,11 +62,16 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - top-level surfaces for `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration`
   - `Sessions` contains the existing viewer, source diagnostics, URL deep links, search selection, and direct session backup behavior
   - `Assets` provides a bounded reusable context assets foundation for rules, memory, skills, commands, and unknown asset fragments
-  - `Analysis` and `Backup / Migration` remain bounded foundation surfaces until their full workflows are implemented
+  - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
+  - `Backup / Migration` remains a bounded foundation surface until full project-level workflows are implemented
 - Assets foundation:
   - local-first reusable context asset model with subtype, scope, source, status, provenance, optional body summary, and in-effect/usage metadata
   - subtype/scope/source/status filtering with asset summary, inventory, selected detail, provenance, and in-effect/usage regions
   - routed handoff into `Assets` from Sessions, Project Overview, and Analysis without carrying full transcript or trajectory state
+- Analysis foundation:
+  - local-first analysis finding model with issue class, severity, status, affected object, evidence references, route targets, and preservation warnings
+  - context health summary, findings inventory, selected finding detail, evidence context, and route-only recommended actions
+  - routed handoff into `Analysis` from Assets, Project Overview, and Sessions without claiming complete automated project analysis or inline remediation
 - Scan and list session files (default directories + custom roots from Settings)
   - Antigravity / Windsurf: `.pb` session files (flat directory)
   - Codex CLI: `.jsonl` session files (nested `YYYY/MM/DD/` directory structure)

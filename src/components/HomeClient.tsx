@@ -68,10 +68,17 @@ export type HomeClientAssetHandoff = {
   subtype: ContextAssetSubtype;
 };
 
+export type HomeClientAnalysisHandoff = {
+  sessionId: string;
+  source: Source;
+  rootId?: string;
+};
+
 export type HomeClientProps = {
   chrome?: "full" | "embedded";
   externalSelection?: HomeClientExternalSelection | null;
   onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
+  onOpenAnalysisForSession?(handoff: HomeClientAnalysisHandoff): void;
 };
 
 export function resolveInitialSource(input: {
@@ -1430,7 +1437,12 @@ function fromSelectionKey(key: string | null): { rootId?: string; id: string } |
   }
 }
 
-export default function HomeClient({ chrome = "full", externalSelection = null, onOpenAssetsForSession }: HomeClientProps = {}) {
+export default function HomeClient({
+  chrome = "full",
+  externalSelection = null,
+  onOpenAssetsForSession,
+  onOpenAnalysisForSession,
+}: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
   const [source, setSource] = useState<Source>("antigravity");
@@ -2685,6 +2697,22 @@ export default function HomeClient({ chrome = "full", externalSelection = null, 
                     title="Route to Assets with a bounded subtype handoff from the selected session"
                   >
                     Inspect in Assets
+                  </Button>
+                ) : null}
+                {onOpenAnalysisForSession ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenAnalysisForSession({
+                        sessionId: selectedId,
+                        source,
+                        ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                      })
+                    }
+                    title="Route to Analysis with bounded session evidence context"
+                  >
+                    Review in Analysis
                   </Button>
                 ) : null}
                 <Button

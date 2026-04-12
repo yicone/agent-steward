@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { resolveRestoredSelection } from "@/components/HomeClient";
 import {
+  buildAnalysisFoundationInstanceKey,
+  buildAnalysisHandoffFromAssets,
+  buildAnalysisHandoffFromOverview,
+  buildAnalysisHandoffFromSession,
   buildAssetsHandoffFromAnalysis,
   buildAssetsFoundationInstanceKey,
   buildAssetsHandoffFromOverview,
@@ -188,5 +192,85 @@ describe("assets handoff builders", () => {
       assetId: "asset-skill-global-generated",
       issueLabel: "conflicted asset",
     });
+  });
+});
+
+describe("analysis handoff builders", () => {
+  it("builds an Assets to Analysis handoff with issue and object context", () => {
+    expect(
+      buildAnalysisHandoffFromAssets({
+        issueLabel: "conflicted asset",
+        assetId: "asset-skill-global-generated",
+        subtype: "skill",
+        status: "conflicted",
+      })
+    ).toMatchObject({
+      origin: "assets",
+      issueClass: "conflict",
+      objectType: "asset",
+      assetId: "asset-skill-global-generated",
+      assetSubtype: "skill",
+      issueLabel: "conflicted asset",
+    });
+  });
+
+  it("builds a Project Overview to Analysis handoff without carrying overview state", () => {
+    expect(
+      buildAnalysisHandoffFromOverview({
+        subtitle: "Review preservation-sensitive findings.",
+        issueClass: "preservation",
+        severity: "high",
+        objectType: "backup",
+        findingId: "finding-preserve-before-migration",
+      })
+    ).toMatchObject({
+      origin: "overview",
+      issueClass: "preservation",
+      severity: "high",
+      objectType: "backup",
+      findingId: "finding-preserve-before-migration",
+    });
+  });
+
+  it("builds a Sessions to Analysis handoff without carrying transcript state", () => {
+    expect(
+      buildAnalysisHandoffFromSession({
+        sessionId: "session-command-antigravity-4",
+        source: "antigravity",
+        rootId: "root-a",
+      })
+    ).toMatchObject({
+      origin: "sessions",
+      issueClass: "preservation",
+      objectType: "session",
+      sessionId: "session-command-antigravity-4",
+      source: "antigravity",
+    });
+  });
+});
+
+describe("buildAnalysisFoundationInstanceKey", () => {
+  it("changes when routed Analysis context changes", () => {
+    const first = buildAnalysisFoundationInstanceKey({
+      origin: "assets",
+      subtitle: "Review conflicted asset.",
+      issueClass: "conflict",
+      objectType: "asset",
+      assetId: "asset-skill-global-generated",
+    });
+    const second = buildAnalysisFoundationInstanceKey({
+      origin: "sessions",
+      subtitle: "Review session evidence.",
+      issueClass: "preservation",
+      objectType: "session",
+      sessionId: "session-command-antigravity-4",
+      source: "antigravity",
+    });
+
+    expect(first).not.toBe(second);
+  });
+
+  it("keeps a stable non-routed key for normal Analysis browsing", () => {
+    expect(buildAnalysisFoundationInstanceKey(null)).toBe("analysis:no-handoff");
   });
 });
