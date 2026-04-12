@@ -97,7 +97,7 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Treat Copilot review comments as advisory input, not merge-blocking approval or requested changes.
 - Classify review feedback before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 - Do not automatically change product names, scope boundaries, or placeholder commitments without user confirmation.
-- After pushing review fixes, request Copilot re-review manually or with `gh` when available; do not assume Copilot re-reviews automatically after new commits.
+- After pushing review fixes, request Copilot re-review manually or with `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when available; do not assume Copilot re-reviews automatically after new commits.
 - Keep review-fix commits separate from process/documentation workflow changes when practical.
 - External QA reports should preserve original findings. If a blocker is fixed and retested, add a clear re-test result instead of deleting the original failure record.
 
