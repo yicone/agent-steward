@@ -1,11 +1,12 @@
 # Assets Foundation QA Report
 
 **Branch**: `feat/assets-foundation`  
-**Date**: 2026-04-11  
+**Date**: 2026-04-12  
 **QA Method**: `agent-browser` (Playwright CLI) on local dev server  
-**Overall Status**: ❌ **FAIL** — 存在阻塞问题需修复后方可转 ready-for-review
+**Overall Status**: ✅ **PASS (re-test)** — 阻塞问题已修复并完成手动复测，可继续推进 ready-for-review  
+**Original QA Finding**: 2026-04-11 结果为 ❌ **FAIL**，见下方原始记录
 
-> Resolution note (2026-04-12): The blocking `Sessions -> Assets` URL state leak was fixed after this QA run by clearing session-local query parameters when leaving the Sessions surface. Targeted tests, production build, and `openspec validate assets-foundation --strict` passed after the fix. The original report below is retained as the QA finding record.
+> Re-test note (2026-04-12): The blocking `Sessions -> Assets` URL state leak was fixed by clearing session-local query parameters when leaving the Sessions surface. Manual re-test passed. Targeted tests, production build, and `openspec validate assets-foundation --strict` passed after the fix. The original report below is retained as the historical QA finding record.
 
 ---
 

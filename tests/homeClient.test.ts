@@ -48,11 +48,11 @@ describe("resolveRestoredSelection", () => {
     expect(result.selectedKey).toBe(JSON.stringify({ rootId: "root-a", id: "session-1" }));
   });
 
-  it("does not keep an invalid rootId when no matching item exists", () => {
+  it("preserves the URL rootId when the selected item is not in the current list page", () => {
     const result = resolveRestoredSelection([], "session-1", "missing-root");
 
-    expect(result.effectiveRootId).toBeUndefined();
-    expect(result.selectedKey).toBe(JSON.stringify({ rootId: "unknown", id: "session-1" }));
+    expect(result.effectiveRootId).toBe("missing-root");
+    expect(result.selectedKey).toBe(JSON.stringify({ rootId: "missing-root", id: "session-1" }));
   });
 });
 

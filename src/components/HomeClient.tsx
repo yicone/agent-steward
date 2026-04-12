@@ -161,12 +161,12 @@ export function resolveRestoredSelection(
     ? items.find((it) => it.id === id && it.rootId === rootId)
     : undefined;
   const match = exactMatch ?? items.find((it) => it.id === id);
-  const effectiveRootId = match?.rootId;
+  const effectiveRootId = match?.rootId ?? rootId ?? undefined;
 
   return {
     match,
     effectiveRootId,
-    selectedKey: toSelectionKey(effectiveRootId ?? "unknown", id),
+    selectedKey: toSelectionKey(effectiveRootId, id),
   };
 }
 
