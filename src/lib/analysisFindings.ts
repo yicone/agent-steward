@@ -402,11 +402,14 @@ export function deriveAnalysisSurfaceState(input: {
   const selected = input.selectedFindingId
     ? input.filteredFindings.find((finding) => finding.id === input.selectedFindingId)
     : undefined;
+  const hasPreservationWarning = (finding: AnalysisFinding) =>
+    Boolean(finding.preservationWarning) || finding.routes.some((route) => route.preservationWarning);
+
   const issueHeavy = input.filteredFindings.some(
-    (finding) => finding.severity === "high" || Boolean(finding.preservationWarning)
+    (finding) => finding.severity === "high" || hasPreservationWarning(finding)
   );
 
-  if (selected && (selected.severity === "high" || selected.preservationWarning)) return "issue-heavy";
+  if (selected && (selected.severity === "high" || hasPreservationWarning(selected))) return "issue-heavy";
   if (issueHeavy) return "issue-heavy";
   if (selected) return "selected";
   return "normal";
