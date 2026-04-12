@@ -242,7 +242,6 @@ describe("analysis handoff builders", () => {
     ).toMatchObject({
       origin: "sessions",
       issueClass: "preservation",
-      objectType: "session",
       sessionId: "session-command-antigravity-4",
       source: "antigravity",
       rootId: "root-a",

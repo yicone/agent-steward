@@ -168,7 +168,6 @@ export function buildAnalysisHandoffFromSession(input: HomeClientAnalysisHandoff
     continueLabel: "Keep the session evidence boundary visible while interpreting matching findings.",
     returnLabel: "Return to the originating session if you need transcript or trajectory detail.",
     issueClass: "preservation",
-    objectType: "session",
     sessionId: input.sessionId,
     source: input.source,
     rootId: input.rootId,

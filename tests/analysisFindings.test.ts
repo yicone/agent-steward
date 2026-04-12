@@ -149,6 +149,31 @@ describe("analysis handoff state derivation", () => {
     ).toBe("finding-preserve-before-migration");
   });
 
+  it("selects by session with source-aware matching for precise identity", () => {
+    const findings = createAnalysisFindingSeeds();
+
+    // Matches when source aligns with evidence
+    expect(
+      resolveAnalysisFindingSelection(findings, {
+        origin: "sessions",
+        subtitle: "Review session evidence.",
+        sessionId: "session-command-antigravity-4",
+        source: "antigravity",
+      })?.id
+    ).toBe("finding-preserve-before-migration");
+
+    // Cross-source: same sessionId but different source should not match
+    // (the finding has source: "antigravity", handoff has source: "windsurf")
+    expect(
+      resolveAnalysisFindingSelection(findings, {
+        origin: "sessions",
+        subtitle: "Cross-source session check.",
+        sessionId: "session-command-antigravity-4",
+        source: "windsurf",
+      })
+    ).toBeNull();
+  });
+
   it("degrades stale finding references to null while filters can remain valid", () => {
     const findings = createAnalysisFindingSeeds();
     const filtered = applyAnalysisFilters(findings, {

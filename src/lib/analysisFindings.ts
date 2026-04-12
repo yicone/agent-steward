@@ -381,9 +381,20 @@ export function resolveAnalysisFindingSelection(
   }
 
   if (handoff.sessionId) {
+    const matchesSessionIdentity = (
+      item: { sessionId?: string; source?: string; rootId?: string }
+    ) => {
+      if (item.sessionId !== handoff.sessionId) return false;
+      // When handoff provides source, require matching source
+      if (handoff.source && item.source && item.source !== handoff.source) return false;
+      // When both sides provide rootId, require matching rootId
+      if (handoff.rootId && item.rootId && item.rootId !== handoff.rootId) return false;
+      return true;
+    };
+
     const bySession = findings.find((finding) =>
-      finding.evidence.some((evidence) => evidence.sessionId === handoff.sessionId) ||
-      finding.routes.some((route) => route.sessionId === handoff.sessionId)
+      finding.evidence.some(matchesSessionIdentity) ||
+      finding.routes.some(matchesSessionIdentity)
     );
     if (bySession) return bySession;
   }
