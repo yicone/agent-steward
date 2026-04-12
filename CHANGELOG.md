@@ -5,8 +5,8 @@ This file records shipped, merged changes for Agent Storage Manager.
 **SSoT/DRY**
 
 - `README.md` describes the current product surface and runtime prerequisites.
-- `ROADMAP.md` tracks open and planned work only.
-- This file captures completed milestones so they do not remain duplicated in the roadmap.
+- GitHub Issues track active execution work (0-2 weeks) and mid-term planning with labels/milestones.
+- This file captures completed milestones so they are not duplicated elsewhere.
 - GitHub Issues / PRs are optional references. For older work or ad-hoc work, plain dated entries here are still valid.
 
 ## Unreleased
@@ -17,6 +17,11 @@ This file records shipped, merged changes for Agent Storage Manager.
   - Added a project-first shell with `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration` surfaces
   - Preserved the existing session viewer under `Sessions`, including source diagnostics, URL deep links, search selection, and direct session backup
   - Added bounded foundation placeholders for future asset, analysis, backup, and migration work without claiming unavailable inventory or analysis behavior
+
+- `2026-04-11` — Assets foundation
+  - Replaced the `Assets` placeholder with a bounded reusable context assets surface for rules, memory, skills, commands, and unknown asset fragments
+  - Added local asset seed data, normalization helpers, subtype/scope/source/status filtering, selected asset detail, provenance, and in-effect/usage cues
+  - Added routed handoff paths into `Assets` from Sessions, Project Overview, and Analysis without carrying full transcript or trajectory state
 
 - `2026-04-10` — Session Backup foundation
   - Added canonical `session-record/v1` and `session-backup/v1` schemas plus managed backup storage under `~/.agent-storage-manager/backups`

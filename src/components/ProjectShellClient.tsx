@@ -3,11 +3,14 @@
 import Link from "next/link";
 import React, { useCallback, useEffect, useState } from "react";
 
-import HomeClient, { type HomeClientExternalSelection } from "@/components/HomeClient";
+import AssetsFoundation from "@/components/AssetsFoundation";
+import HomeClient, { type HomeClientAssetHandoff, type HomeClientExternalSelection } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import type { AssetsHandoff, ContextAssetScope, ContextAssetStatus, ContextAssetSubtype } from "@/lib/contextAssets";
+import { cancelPendingUrlSync } from "@/lib/urlState";
 import { cn } from "@/lib/utils";
 import type { Source } from "@/lib/types";
 
@@ -18,6 +21,13 @@ type ProjectShellNavItem = {
   label: string;
   eyebrow: string;
 };
+
+type PlaceholderCue = {
+  title: string;
+  body: string;
+};
+
+type SessionAssetsHandoffInput = Pick<HomeClientAssetHandoff, "sessionId" | "subtype">;
 
 const NAV_ITEMS: ProjectShellNavItem[] = [
   { id: "overview", label: "Project Overview", eyebrow: "govern" },
@@ -46,7 +56,118 @@ export function buildExternalSessionSelection(input: {
   };
 }
 
-function ProjectOverviewSurface({ onNavigate }: { onNavigate(page: ProjectShellPage): void }) {
+export function buildAssetsHandoffFromSession(input: SessionAssetsHandoffInput): AssetsHandoff {
+  return {
+    origin: "sessions",
+    subtitle: "Continue reviewing reusable context from the selected session.",
+    continueLabel: "Inspect the routed subtype, then refine scope or selection if you need a different reusable asset.",
+    returnLabel: "Return to the originating session if you need more evidence.",
+    subtype: input.subtype,
+    sessionId: input.sessionId,
+  };
+}
+
+export function buildAssetsHandoffFromOverview(input: {
+  subtitle: string;
+  subtype?: ContextAssetSubtype;
+  scope?: ContextAssetScope;
+  status?: ContextAssetStatus;
+  assetId?: string;
+  issueLabel?: string;
+}): AssetsHandoff {
+  return {
+    origin: "overview",
+    subtitle: input.subtitle,
+    continueLabel: "Start from the overview context, then inspect the matching reusable asset or adjust filters without losing the project-level framing.",
+    returnLabel: "Return to Project Overview when the broader project picture matters again.",
+    subtype: input.subtype,
+    scope: input.scope,
+    status: input.status,
+    assetId: input.assetId,
+    issueLabel: input.issueLabel,
+  };
+}
+
+export function buildAssetsHandoffFromAnalysis(input: {
+  subtitle: string;
+  subtype?: ContextAssetSubtype;
+  status?: ContextAssetStatus;
+  assetId?: string;
+  issueLabel: string;
+}): AssetsHandoff {
+  return {
+    origin: "analysis",
+    subtitle: input.subtitle,
+    continueLabel: "Keep the issue framing visible until you intentionally change subtype, scope, or object focus.",
+    returnLabel: "Return to Analysis to continue grouped interpretation after object review.",
+    subtype: input.subtype,
+    status: input.status,
+    assetId: input.assetId,
+    issueLabel: input.issueLabel,
+  };
+}
+
+const SESSION_VIEWER_QUERY_KEYS = [
+  "source",
+  "id",
+  "rootId",
+  "view",
+  "ft",
+  "stepType",
+  "expanded",
+  "row",
+  "inspector",
+  "includeCleared",
+] as const;
+
+export function stripSessionViewerSearchParams(search: string): string {
+  const params = new URLSearchParams(search);
+  let changed = false;
+
+  for (const key of SESSION_VIEWER_QUERY_KEYS) {
+    if (!params.has(key)) continue;
+    params.delete(key);
+    changed = true;
+  }
+
+  if (!changed) return search;
+
+  const next = params.toString();
+  return next ? `?${next}` : "";
+}
+
+export function buildAssetsFoundationInstanceKey(handoff: AssetsHandoff | null): string {
+  if (!handoff) return "assets:no-handoff";
+
+  return [
+    "assets",
+    handoff.origin,
+    handoff.subtype ?? "all-subtypes",
+    handoff.scope ?? "all-scopes",
+    handoff.source ?? "all-sources",
+    handoff.status ?? "all-statuses",
+    handoff.assetId ?? "no-asset",
+    handoff.sessionId ?? "no-session",
+    handoff.issueLabel ?? "no-issue",
+  ].join(":");
+}
+
+function clearSessionViewerUrlState(): void {
+  if (typeof window === "undefined") return;
+
+  cancelPendingUrlSync();
+
+  const nextSearch = stripSessionViewerSearchParams(window.location.search);
+  if (nextSearch === window.location.search) return;
+
+  const url = `${window.location.pathname}${nextSearch}${window.location.hash}`;
+  window.history.replaceState(window.history.state, "", url);
+}
+
+function ProjectOverviewSurface(props: {
+  onNavigate(page: ProjectShellPage): void;
+  onOpenAssets(handoff: AssetsHandoff): void;
+}) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="space-y-4">
@@ -65,26 +186,56 @@ function ProjectOverviewSurface({ onNavigate }: { onNavigate(page: ProjectShellP
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="p-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted">In-Effect Assets</div>
+            <h3 className="mt-2 font-semibold">Project-level reusable assets route into a bounded object view</h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Start from in-effect or scope-oriented asset context without turning the overview into a hidden inventory.
+              The Assets page keeps subtype, scope, provenance, and usage visible while you inspect the routed object.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                onClick={() =>
+                  props.onOpenAssets(
+                    buildAssetsHandoffFromOverview({
+                      subtitle: "Review project-scoped rules that are currently in effect.",
+                      subtype: "rule",
+                      scope: "project",
+                      assetId: "asset-rule-project-codex",
+                    })
+                  )
+                }
+              >
+                Review In-Effect Rules
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  props.onOpenAssets(
+                    buildAssetsHandoffFromOverview({
+                      subtitle: "Inspect stale memory items that may need cleanup.",
+                      subtype: "memory",
+                      status: "stale",
+                      issueLabel: "stale asset",
+                    })
+                  )
+                }
+              >
+                Review Stale Memory
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-4">
             <div className="text-xs uppercase tracking-[0.2em] text-muted">Attention Needed</div>
             <h3 className="mt-2 font-semibold">Diagnostics and unresolved context issues stay routed</h3>
             <p className="mt-2 text-sm leading-6 text-muted">
               Use the Sessions page for current source diagnostics and session evidence. Future analysis summaries will
               appear here only after they can route to a concrete object or workflow.
             </p>
-            <Button className="mt-4" size="sm" onClick={() => onNavigate("sessions")}>
+            <Button className="mt-4" variant="outline" size="sm" onClick={() => props.onNavigate("sessions")}>
               Review Sessions
-            </Button>
-          </Card>
-
-          <Card className="p-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-muted">Recent Evidence</div>
-            <h3 className="mt-2 font-semibold">Session viewer remains the active evidence workbench</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Existing transcript, trajectory, inspector, error center, diagnostics, and direct session backup behavior
-              are preserved under Sessions while the project shell is introduced.
-            </p>
-            <Button className="mt-4" variant="outline" size="sm" onClick={() => onNavigate("sessions")}>
-              Open Evidence Workbench
             </Button>
           </Card>
         </div>
@@ -93,19 +244,31 @@ function ProjectOverviewSurface({ onNavigate }: { onNavigate(page: ProjectShellP
       <Card className="p-4">
         <div className="text-xs uppercase tracking-[0.2em] text-muted">Quick Routes</div>
         <div className="mt-4 space-y-2">
-          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => onNavigate("assets")}>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              props.onOpenAssets(
+                buildAssetsHandoffFromOverview({
+                  subtitle: "Inspect reusable context assets across the current project scope.",
+                  subtype: "rule",
+                })
+              )
+            }
+          >
             Inspect context assets
           </Button>
-          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => onNavigate("analysis")}>
+          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("analysis")}>
             Review analysis
           </Button>
-          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => onNavigate("backup")}>
+          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("backup")}>
             Start backup / migration
           </Button>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          These routes are bounded placeholders in this change. Working session backup remains available from a selected
-          session.
+          Assets is now a bounded foundation surface. Analysis and Backup / Migration remain placeholders, and working
+          session backup remains available from a selected session.
         </p>
       </Card>
     </div>
@@ -118,9 +281,18 @@ function PlaceholderSurface(props: {
   body: string;
   preservedPath: string;
   onNavigateSessions: () => void;
+  cue?: PlaceholderCue;
+  actionLabel?: string;
+  onAction?(): void;
 }) {
   return (
     <Card className="p-5">
+      {props.cue ? (
+        <div className="mb-4 rounded-xl border border-accent/30 bg-accent/8 p-4 text-sm text-muted">
+          <div className="font-medium text-foreground">{props.cue.title}</div>
+          <div className="mt-1 leading-6">{props.cue.body}</div>
+        </div>
+      ) : null}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Badge variant="default">{props.label}</Badge>
         <Badge variant="warn">foundation placeholder</Badge>
@@ -130,9 +302,16 @@ function PlaceholderSurface(props: {
       <div className="mt-5 rounded-lg border border-border/70 bg-background/35 p-4 text-sm text-muted">
         Current working path: {props.preservedPath}
       </div>
-      <Button className="mt-5" variant="outline" size="sm" onClick={props.onNavigateSessions}>
-        Return to Sessions
-      </Button>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {props.onAction && props.actionLabel ? (
+          <Button variant="outline" size="sm" onClick={props.onAction}>
+            {props.actionLabel}
+          </Button>
+        ) : null}
+        <Button variant="outline" size="sm" onClick={props.onNavigateSessions}>
+          Return to Sessions
+        </Button>
+      </div>
     </Card>
   );
 }
@@ -140,12 +319,23 @@ function PlaceholderSurface(props: {
 export default function ProjectShellClient() {
   const [activePage, setActivePage] = useState<ProjectShellPage>("overview");
   const [externalSelection, setExternalSelection] = useState<HomeClientExternalSelection | null>(null);
+  const [assetsHandoff, setAssetsHandoff] = useState<AssetsHandoff | null>(null);
+  const [analysisCue, setAnalysisCue] = useState<PlaceholderCue | null>(null);
+  const [backupCue, setBackupCue] = useState<PlaceholderCue | null>(null);
+
+  const leaveSessionsSurface = useCallback(() => {
+    clearSessionViewerUrlState();
+    setExternalSelection(null);
+  }, []);
 
   useEffect(() => {
     setActivePage(resolveInitialProjectShellPage(window.location.search));
   }, []);
 
   const handleSearchSelect = useCallback((sessionId: string, source: Source, rootId?: string) => {
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
       buildExternalSessionSelection({
@@ -156,6 +346,72 @@ export default function ProjectShellClient() {
       })
     );
   }, []);
+
+  const handleNavigate = useCallback((page: ProjectShellPage) => {
+    if (page !== "sessions") leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue(null);
+    setActivePage(page);
+  }, [leaveSessionsSurface]);
+
+  const handleOpenAssets = useCallback((handoff: AssetsHandoff) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(handoff);
+    setAnalysisCue(null);
+    setBackupCue(null);
+    setActivePage("assets");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenAssetsFromSession = useCallback((handoff: HomeClientAssetHandoff) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(buildAssetsHandoffFromSession({ sessionId: handoff.sessionId, subtype: handoff.subtype }));
+    setAnalysisCue(null);
+    setBackupCue(null);
+    setActivePage("assets");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenSessionFromAssets = useCallback((selection: { sessionId: string; source: Source; rootId?: string }) => {
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue(null);
+    setActivePage("sessions");
+    setExternalSelection((prev) =>
+      buildExternalSessionSelection({
+        requestId: (prev?.requestId ?? 0) + 1,
+        sessionId: selection.sessionId,
+        source: selection.source,
+        rootId: selection.rootId,
+      })
+    );
+  }, []);
+
+  const handleOpenAnalysisFromAssets = useCallback((context: {
+    issueLabel: string;
+    assetId?: string;
+    subtype?: ContextAssetSubtype;
+    status?: ContextAssetStatus;
+  }) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setBackupCue(null);
+    setAnalysisCue({
+      title: "Routed from Assets",
+      body: `Issue focus: ${context.issueLabel}. ${context.subtype ? `Subtype: ${context.subtype}. ` : ""}${context.status ? `Status: ${context.status}.` : ""}`.trim(),
+    });
+    setActivePage("analysis");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenBackupFromAssets = useCallback((context: { assetId?: string; subtype?: ContextAssetSubtype }) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setAnalysisCue(null);
+    setBackupCue({
+      title: "Routed from Assets",
+      body: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}. Workflow execution still belongs to Backup / Migration.`,
+    });
+    setActivePage("backup");
+  }, [leaveSessionsSurface]);
 
   const activeNav = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0]!;
 
@@ -187,7 +443,7 @@ export default function ProjectShellClient() {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActivePage(item.id)}
+                onClick={() => handleNavigate(item.id)}
                 className={cn(
                   "min-w-fit rounded-xl border px-3 py-2 text-left transition-colors",
                   item.id === activePage
@@ -214,17 +470,21 @@ export default function ProjectShellClient() {
             </div>
           ) : null}
 
-          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={setActivePage} /> : null}
+          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={handleNavigate} onOpenAssets={handleOpenAssets} /> : null}
           {activePage === "sessions" ? (
-            <HomeClient chrome="embedded" externalSelection={externalSelection} />
+            <HomeClient
+              chrome="embedded"
+              externalSelection={externalSelection}
+              onOpenAssetsForSession={handleOpenAssetsFromSession}
+            />
           ) : null}
           {activePage === "assets" ? (
-            <PlaceholderSurface
-              title="Assets"
-              label="context inventory"
-              body="Rules, memory, skills, and commands will be organized here by scope, source, status, provenance, and in-effect usage. This placeholder does not claim inventory completeness yet."
-              preservedPath="Use Sessions for source evidence and session-level extraction until asset contracts are implemented."
-              onNavigateSessions={() => setActivePage("sessions")}
+            <AssetsFoundation
+              key={buildAssetsFoundationInstanceKey(assetsHandoff)}
+              handoff={assetsHandoff}
+              onOpenSession={handleOpenSessionFromAssets}
+              onOpenAnalysis={handleOpenAnalysisFromAssets}
+              onOpenBackup={handleOpenBackupFromAssets}
             />
           ) : null}
           {activePage === "analysis" ? (
@@ -233,7 +493,23 @@ export default function ProjectShellClient() {
               label="interpretation"
               body="Analysis will summarize context issues and route each finding to a concrete object or workflow. This placeholder avoids creating a findings inventory before analysis contracts exist."
               preservedPath="Use Sessions inspector and error center for current evidence-driven investigation."
-              onNavigateSessions={() => setActivePage("sessions")}
+              onNavigateSessions={() => handleNavigate("sessions")}
+              cue={analysisCue ?? undefined}
+              {...(analysisCue
+                ? {
+                    actionLabel: "Review affected assets",
+                    onAction: () =>
+                      handleOpenAssets(
+                        buildAssetsHandoffFromAnalysis({
+                          subtitle: "Review the affected reusable asset class from Analysis.",
+                          subtype: "skill",
+                          status: "conflicted",
+                          assetId: "asset-skill-global-generated",
+                          issueLabel: "conflicted asset",
+                        })
+                      ),
+                  }
+                : {})}
             />
           ) : null}
           {activePage === "backup" ? (
@@ -242,7 +518,8 @@ export default function ProjectShellClient() {
               label="restricted workflow"
               body="Project-level backup and migration workflows will live here once bundle and migration contracts are implemented. Existing direct session backup remains inside selected Sessions."
               preservedPath="Open a session and use its Backup Session action for current supported backup behavior."
-              onNavigateSessions={() => setActivePage("sessions")}
+              onNavigateSessions={() => handleNavigate("sessions")}
+              cue={backupCue ?? undefined}
             />
           ) : null}
         </main>

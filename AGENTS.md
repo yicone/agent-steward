@@ -7,6 +7,19 @@ Repository guidance for coding agents working in `agent-storage-manager`.
 - This file applies to the whole repository.
 - Keep edits focused. Do not mix unrelated cleanup into feature or bugfix work.
 
+## Agent terminology
+
+This file is read by multiple coding agents. To avoid ambiguity:
+
+| Product | Agent name | Notes |
+|---------|-----------|-------|
+| Windsurf IDE | **Cascade** | The agentic AI inside Windsurf |
+| GitHub Copilot | **Copilot** | Family: Local Agent (VS Code / CLI), Cloud Agent (coding agent), Code Review, Chat |
+| OpenAI Codex | **Codex** | CLI and App; **Codex Web** is the cloud agent variant |
+| Google Antigravity | **Antigravity** | IDE; also shares skills ecosystem with Gemini CLI |
+
+When this file says "Windsurf", it means the Cascade agent running inside the Windsurf IDE.
+
 ## Source of truth
 
 - `README.md`: current product scope, user-facing setup, and runtime prerequisites
@@ -42,6 +55,25 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Keep diagnostics concrete: show exact source, failure mode, and actionable remediation.
 - Treat tokens, local ports, paths, and exported diagnostics as sensitive data.
 
+## Validation
+
+- Run targeted tests for the code you change when feasible.
+- If you touch parsing, attach, normalization, or diagnostics logic, prefer adding or updating unit tests in the same area.
+
+## Agent orchestration
+
+- When the user designates a conversation as the control thread, use it to coordinate scope, PR state, validation status, and next-step prompts.
+- Suggest a new conversation when an execution line becomes large, requires a separate context window, or can proceed independently with a focused prompt.
+- Use subagents only when explicitly authorized by the user. Prefer reusing an existing suitable subagent; when spawning a new one, do not fork the full conversation context unless the task requires it.
+- Prefer the agent's native branch/worktree handling. Do not use third-party worktree helpers unless the user explicitly asks.
+
+## Branching workflow
+
+- Open a draft PR for each coherent, validated feature slice.
+- If follow-up work depends on an unmerged PR, either wait for merge and branch from updated `main`, or explicitly create stacked work from the PR branch.
+- If follow-up work does not depend on an unmerged PR, it may proceed in parallel from updated `main`.
+- Research, QA, prompts, and OpenSpec proposals may proceed in parallel without waiting for implementation PRs to merge, as long as dependencies are stated.
+
 ## Documentation rules
 
 **Two-layer source of truth**:
@@ -59,11 +91,6 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - If work changes long-lived architectural direction, update the relevant ADR.
 - Mid-term planning (2 weeks-3 months) lives in GitHub Issues with appropriate labels/milestones, or in your personal notes — not in a separate ROADMAP file.
 
-## Validation
-
-- Run targeted tests for the code you change when feasible.
-- If you touch parsing, attach, normalization, or diagnostics logic, prefer adding or updating unit tests in the same area.
-
 ## PR Review Workflow
 
 - For PR review triage and agent-assisted fixes, follow `docs/dev/pr-review-agent-workflow.md`.
@@ -71,14 +98,51 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - Classify review feedback before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 - Do not automatically change product names, scope boundaries, or placeholder commitments without user confirmation.
 - After pushing review fixes, request Copilot re-review manually or with `gh` when available; do not assume Copilot re-reviews automatically after new commits.
+- Keep review-fix commits separate from process/documentation workflow changes when practical.
+- External QA reports should preserve original findings. If a blocker is fixed and retested, add a clear re-test result instead of deleting the original failure record.
+
+## Available automations
+
+| Action | Cascade / Codex / Copilot | Location |
+|--------|---------------------------|----------|
+| Release version | `release` skill | `.agents/skills/release/` |
+| Session wrap-up | `wrap-up` skill | `.agents/skills/wrap-up/` |
+| PR review fix | `pr-review-fix` skill | `.agents/skills/pr-review-fix/` |
+| External QA triage | `external-qa-triage` skill | `.agents/skills/external-qa-triage/` |
+
+OpenSpec lifecycle skills (`explore`, `propose`, `apply`, `archive`, `backfill`) are managed separately — see `openspec/` and agent-specific skill/workflow directories.
+
+## Skill and instruction directories
+
+Cross-platform skills live in `.agents/skills/` — the canonical location for project-level skills.
+
+| Directory | Purpose | Discovered by |
+|-----------|---------|---------------|
+| `.agents/skills/` | Cross-platform project skills | Cascade, Codex, Copilot (VS Code / CLI / Cloud Agent), Gemini CLI |
+| `.agent/skills/` | Antigravity-compatible alias (singular) | Antigravity |
+| `.windsurf/skills/` | Cascade-only skills and OpenSpec integrations | Cascade |
+| `.windsurf/workflows/` | Cascade slash-command workflows | Cascade |
+| `.windsurf/rules/` | Always-on Cascade project rules | Cascade |
+| `.windsurf/hooks.json` | Cascade policy hooks (pre/post actions) | Cascade |
+| `.github/copilot-instructions.md` | Always-on Copilot review and chat guidance | Copilot (all variants) |
+| `.github/instructions/` | Path-scoped Copilot instructions | Copilot (all variants) |
+| `.github/agents/` | Copilot custom agent personas | Copilot Local Agent + Cloud Agent |
+| `.github/hooks/` | Copilot policy hooks | Copilot Cloud Agent + CLI |
+| `.codex/agents/` | Codex custom agent personas | Codex CLI + Codex Web |
+| `.codex/hooks.json` | Codex policy hooks (experimental) | Codex CLI |
+
+Do not duplicate a skill across directories unless it must differ per agent. Prefer `.agents/skills/` for new cross-platform skills.
+
+**Antigravity symlink strategy**: Antigravity reads from `.agent/skills/` (singular), not `.agents/skills/`. Cross-platform skills are symlinked into `.agent/skills/` pointing to their canonical source in `.agents/skills/`. When adding a new cross-platform skill, create a matching symlink: `ln -s ../../.agents/skills/<name> .agent/skills/<name>`.
 
 ## Before Ending a Session
 
 When wrapping up work, verify documentation is current.
 
 **How to trigger**:
-- **Windsurf**: Invoke `wrap-up` skill (e.g., "/wrap-up" or "执行 wrap-up")
+- **Cascade (Windsurf)**: Invoke `wrap-up` skill (e.g., "/wrap-up" or "执行 wrap-up")
 - **Codex**: Invoke `wrap-up` skill (e.g., "执行 wrap-up skill")
+- **Copilot**: Invoke `/wrap-up` in agent mode or chat
 - **Manual**: Run through the checklist below
 
 **Note**: Agent cannot detect session end automatically. You must explicitly request wrap-up.

@@ -19,6 +19,16 @@ This document defines the recommended human + agent workflow for pull request re
 | QA agent | Performs browser QA for UI flows that need real runtime verification. |
 | GitHub PR | Serves as the execution boundary for the current change. |
 
+## Control Thread Coordination
+
+When the user designates a conversation as the control thread, keep it responsible for:
+
+- PR status, validation state, and merge readiness.
+- Deciding whether work should continue in the current thread, a focused new conversation, a subagent, or an external coding agent.
+- Producing concise prompts for external agents and folding their reports back into the PR workflow.
+
+Do not treat "control thread" as a permanent repository role. It is active only when the user explicitly chooses that coordination style.
+
 ## Copilot Setup
 
 Recommended repository setup:
@@ -51,6 +61,12 @@ Not recommended:
 8. Codex pushes the fix commit to the PR branch.
 9. Human or Codex requests Copilot re-review manually.
 10. Merge only after local/CI validation, QA evidence when needed, and human acceptance.
+
+Keep commits easy to review:
+
+- Use review-fix commits for code and tests that address review threads.
+- Use separate process/documentation commits for workflow changes such as `AGENTS.md`, skills, or review playbooks.
+- Do not combine follow-up feature scope with review-fix scope.
 
 ## Re-Review Trigger
 
@@ -128,6 +144,18 @@ Recommended automation is semi-automatic:
 | Merge PR | Human decision |
 
 Do not implement this with Git hooks. Hooks run on local commit/push boundaries, while review state lives in GitHub and requires network access, permissions, PR context, and product-scope judgment.
+
+## External QA Reports
+
+Use external QA agents for UI/runtime flows that local unit tests cannot fully cover.
+
+QA report handling:
+
+- Store reports under `docs/viewer/` or another feature-appropriate docs folder when they are relevant to PR acceptance.
+- Preserve the original finding record, including FAIL results.
+- If a blocker is fixed, add a dated re-test result or resolution note at the top instead of rewriting history.
+- Treat QA blockers like review comments: classify, fix, validate, push, and request re-review when appropriate.
+- Do not commit browser runner artifacts such as `.playwright-cli/` unless they are intentionally part of the product documentation or test fixtures.
 
 ## Suggested Codex Prompt
 
