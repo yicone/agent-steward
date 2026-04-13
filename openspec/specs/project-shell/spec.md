@@ -104,11 +104,13 @@ claiming unimplemented full behavior.
 - **AND** it does not present full editing, complete cross-agent normalization,
   cloud sync, or runtime restore as implemented behavior
 
-#### Scenario: Analysis placeholder is bounded
-- **WHEN** the user navigates to `Analysis` before full findings behavior is
-  implemented
-- **THEN** the app communicates the intended interpretation and routing role
-  without presenting fake findings or corrective workflow behavior
+#### Scenario: Analysis foundation is bounded
+- **WHEN** the user navigates to `Analysis`
+- **THEN** the app presents a bounded interpretation and routing foundation for
+  context health, findings, selected finding detail, and recommended outbound
+  actions
+- **AND** it does not present complete automated analysis, fake findings,
+  automatic remediation, or workflow execution as implemented behavior
 
 #### Scenario: Backup Migration placeholder is bounded
 - **WHEN** the user navigates to `Backup / Migration` before full workflow
