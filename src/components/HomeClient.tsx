@@ -68,7 +68,7 @@ export type HomeClientAssetHandoff = {
   subtype: ContextAssetSubtype;
 };
 
-export type HomeClientAnalysisHandoff = {
+export type HomeClientSessionHandoff = {
   sessionId: string;
   source: Source;
   rootId?: string;
@@ -78,7 +78,8 @@ export type HomeClientProps = {
   chrome?: "full" | "embedded";
   externalSelection?: HomeClientExternalSelection | null;
   onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
-  onOpenAnalysisForSession?(handoff: HomeClientAnalysisHandoff): void;
+  onOpenAnalysisForSession?(handoff: HomeClientSessionHandoff): void;
+  onOpenBackupForSession?(handoff: HomeClientSessionHandoff): void;
 };
 
 export function resolveInitialSource(input: {
@@ -1442,6 +1443,7 @@ export default function HomeClient({
   externalSelection = null,
   onOpenAssetsForSession,
   onOpenAnalysisForSession,
+  onOpenBackupForSession,
 }: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -2713,6 +2715,22 @@ export default function HomeClient({
                     title="Route to Analysis with bounded session evidence context"
                   >
                     Review in Analysis
+                  </Button>
+                ) : null}
+                {onOpenBackupForSession ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenBackupForSession({
+                        sessionId: selectedId,
+                        source,
+                        ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                      })
+                    }
+                    title="Route to Backup / Migration with bounded session backup context"
+                  >
+                    Open in Backup / Migration
                   </Button>
                 ) : null}
                 <Button

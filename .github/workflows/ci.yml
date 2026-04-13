@@ -44,5 +44,5 @@ jobs:
           for change_dir in openspec/changes/*; do
             [ -d "$change_dir" ] || continue
             [ "$(basename "$change_dir")" = "archive" ] && continue
-            npx -y @fission-ai/openspec validate "$(basename "$change_dir")" --strict
+            npx -y @fission-ai/openspec validate "$(basename "$change_dir")" --type change --strict
           done

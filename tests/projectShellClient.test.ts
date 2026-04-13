@@ -10,6 +10,10 @@ import {
   buildAssetsFoundationInstanceKey,
   buildAssetsHandoffFromOverview,
   buildAssetsHandoffFromSession,
+  buildBackupHandoffFromAnalysis,
+  buildBackupHandoffFromAssets,
+  buildBackupHandoffFromOverview,
+  buildBackupHandoffFromSessions,
   buildExternalSessionSelection,
   resolveInitialProjectShellPage,
   stripSessionViewerSearchParams,
@@ -296,5 +300,66 @@ describe("buildAnalysisFoundationInstanceKey", () => {
 
   it("keeps a stable non-routed key for normal Analysis browsing", () => {
     expect(buildAnalysisFoundationInstanceKey(null)).toBe("analysis:no-handoff");
+  });
+});
+
+describe("backup handoff builders", () => {
+  it("builds a sessions handoff with session identity and workflow type", () => {
+    const handoff = buildBackupHandoffFromSessions({
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-a",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "sessions",
+      workflowType: "session-backup",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-a",
+    });
+    expect(handoff.subtitle).toContain("session-1");
+  });
+
+  it("builds an assets handoff without carrying asset-viewer state", () => {
+    const handoff = buildBackupHandoffFromAssets({
+      assetId: "asset-skill-global-generated",
+      subtype: "skill",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "assets",
+      assetId: "asset-skill-global-generated",
+      assetSubtype: "skill",
+    });
+    expect(handoff).not.toHaveProperty("workflowType");
+  });
+
+  it("builds an analysis handoff with preservation warning and finding context", () => {
+    const handoff = buildBackupHandoffFromAnalysis({
+      findingId: "finding-preserve-before-migration",
+      title: "Preserve session evidence before migration cleanup",
+      preservationWarning: "Preserve before risky migration or cleanup work.",
+      routeLabel: "Preserve in Backup / Migration",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "analysis",
+      workflowType: "session-backup",
+      findingId: "finding-preserve-before-migration",
+      preservationWarning: "Preserve before risky migration or cleanup work.",
+    });
+    expect(handoff.subtitle).toContain("Preserve in Backup / Migration");
+  });
+
+  it("builds an overview handoff with an explicit workflow type", () => {
+    const handoff = buildBackupHandoffFromOverview("import-backup");
+
+    expect(handoff).toMatchObject({
+      origin: "overview",
+      workflowType: "import-backup",
+    });
+    expect(handoff).not.toHaveProperty("sessionId");
+    expect(handoff.subtitle).toContain("import workflow");
   });
 });
