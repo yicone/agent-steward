@@ -77,9 +77,11 @@ The system SHALL consume routed handoff context from `Project Overview`, `Sessio
 - **WHEN** `Project Overview` hands off workflow context for backup, import, or validation
 - **THEN** `Backup / Migration` opens the requested workflow with any available context summary
 
-#### Scenario: Assets routes to preservation-oriented workflow
+#### Scenario: Assets preserves handoff context when workflow cannot be inferred
 - **WHEN** `Assets` hands off workflow context with preservation intent
-- **THEN** `Backup / Migration` opens the relevant workflow and shows the asset context
+- **THEN** `Backup / Migration` opens the relevant workflow when the handoff resolves one
+- **AND** otherwise degrades to the workflow selector idle state instead of opening a broken workflow
+- **AND** the page still shows the asset context and origin cue from `Assets`
 
 ### Requirement: Validation and warnings SHALL be explicit about preservation risk
 The system SHALL include explicit warnings at validation gates for preservation risk, destructive potential, and trust boundaries.

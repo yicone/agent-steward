@@ -7,7 +7,7 @@ import AnalysisFoundation from "@/components/AnalysisFoundation";
 import AssetsFoundation from "@/components/AssetsFoundation";
 import BackupMigrationFoundation from "@/components/BackupMigrationFoundation";
 import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff } from "@/lib/backupMigration";
-import HomeClient, { type HomeClientAnalysisHandoff, type HomeClientAssetHandoff, type HomeClientExternalSelection } from "@/components/HomeClient";
+import HomeClient, { type HomeClientAssetHandoff, type HomeClientExternalSelection, type HomeClientSessionHandoff } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -163,7 +163,7 @@ export function buildAnalysisHandoffFromOverview(input: {
   };
 }
 
-export function buildAnalysisHandoffFromSession(input: HomeClientAnalysisHandoff): AnalysisHandoff {
+export function buildAnalysisHandoffFromSession(input: HomeClientSessionHandoff): AnalysisHandoff {
   return {
     origin: "sessions",
     subtitle: "Review analysis findings related to the selected session evidence.",
@@ -581,7 +581,7 @@ export default function ProjectShellClient() {
     setActivePage("assets");
   }, [leaveSessionsSurface]);
 
-  const handleOpenAnalysisFromSession = useCallback((handoff: HomeClientAnalysisHandoff) => {
+  const handleOpenAnalysisFromSession = useCallback((handoff: HomeClientSessionHandoff) => {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(buildAnalysisHandoffFromSession(handoff));

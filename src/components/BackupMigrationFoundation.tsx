@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   addRecentOperation,
+  buildSessionBackupExecutionRequest,
   canProceedFromValidation,
   createOperationResult,
   deriveValidationResult,
@@ -328,15 +329,17 @@ export function BackupMigrationFoundation({
     setWorkflowState("execution");
 
     try {
+      const requestBody = buildSessionBackupExecutionRequest({
+        source: selectedSource,
+        sessionId: selectedSessionId,
+        rootId: selectedRootId,
+        includeSourceCopy,
+      });
+
       const response = await fetch("/api/session-backups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          source: selectedSource,
-          sessionId: selectedSessionId,
-          rootId: selectedRootId ?? undefined,
-          includeSourceCopy,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -385,8 +388,18 @@ export function BackupMigrationFoundation({
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-        throw new Error(errorData.error ?? `HTTP ${response.status}`);
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" })) as {
+          error?: string;
+          title?: string;
+          hint?: string;
+          code?: string;
+        };
+        const detail = errorData.title
+          ? `${errorData.title}: ${errorData.error ?? `HTTP ${response.status}`}`
+          : errorData.error ?? `HTTP ${response.status}`;
+        const hint = errorData.hint ? ` Hint: ${errorData.hint}` : "";
+        const code = errorData.code ? ` (${errorData.code})` : "";
+        throw new Error(`${detail}${code}${hint}`);
       }
 
       const data = await response.json();

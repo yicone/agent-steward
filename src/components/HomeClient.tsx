@@ -68,7 +68,7 @@ export type HomeClientAssetHandoff = {
   subtype: ContextAssetSubtype;
 };
 
-export type HomeClientAnalysisHandoff = {
+export type HomeClientSessionHandoff = {
   sessionId: string;
   source: Source;
   rootId?: string;
@@ -78,8 +78,8 @@ export type HomeClientProps = {
   chrome?: "full" | "embedded";
   externalSelection?: HomeClientExternalSelection | null;
   onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
-  onOpenAnalysisForSession?(handoff: HomeClientAnalysisHandoff): void;
-  onOpenBackupForSession?(handoff: HomeClientAnalysisHandoff): void;
+  onOpenAnalysisForSession?(handoff: HomeClientSessionHandoff): void;
+  onOpenBackupForSession?(handoff: HomeClientSessionHandoff): void;
 };
 
 export function resolveInitialSource(input: {

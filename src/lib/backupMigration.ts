@@ -48,6 +48,13 @@ export type BackupOperationResult = {
   warnings?: string[];
 };
 
+export type SessionBackupExecutionRequest = {
+  source: Source;
+  sessionId: string;
+  rootId?: string;
+  includeSourceCopy?: boolean;
+};
+
 // ── Recent operations ───────────────────────────────────────────────────────
 
 export type RecentOperation = BackupOperationResult;
@@ -205,6 +212,28 @@ export function createOperationResult(input: {
     sessionCount: input.sessionCount,
     warnings: input.warnings,
   };
+}
+
+export function buildSessionBackupExecutionRequest(input: {
+  source: Source;
+  sessionId: string;
+  rootId?: string | null;
+  includeSourceCopy: boolean;
+}): SessionBackupExecutionRequest {
+  const request: SessionBackupExecutionRequest = {
+    source: input.source,
+    sessionId: input.sessionId,
+  };
+
+  if (input.rootId) {
+    request.rootId = input.rootId;
+  }
+
+  if (input.source === "codex" && input.includeSourceCopy) {
+    request.includeSourceCopy = true;
+  }
+
+  return request;
 }
 
 // ── Recent operations ───────────────────────────────────────────────────────

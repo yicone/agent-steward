@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addRecentOperation,
   buildBackupHandoffInstanceKey,
+  buildSessionBackupExecutionRequest,
   canProceedFromValidation,
   createOperationResult,
   deriveValidationResult,
@@ -163,6 +164,39 @@ describe("createOperationResult", () => {
     const r1 = createOperationResult({ workflowType: "session-backup", status: "success", summary: "A" });
     const r2 = createOperationResult({ workflowType: "import-backup", status: "failed", summary: "B" });
     expect(r1.id).not.toBe(r2.id);
+  });
+});
+
+describe("buildSessionBackupExecutionRequest", () => {
+  it("includes rootId and source-copy flag for codex when requested", () => {
+    expect(
+      buildSessionBackupExecutionRequest({
+        source: "codex",
+        sessionId: "session-1",
+        rootId: "root-a",
+        includeSourceCopy: true,
+      })
+    ).toEqual({
+      source: "codex",
+      sessionId: "session-1",
+      rootId: "root-a",
+      includeSourceCopy: true,
+    });
+  });
+
+  it("drops unsupported source-copy requests for non-codex sources", () => {
+    expect(
+      buildSessionBackupExecutionRequest({
+        source: "windsurf",
+        sessionId: "session-2",
+        rootId: "root-b",
+        includeSourceCopy: true,
+      })
+    ).toEqual({
+      source: "windsurf",
+      sessionId: "session-2",
+      rootId: "root-b",
+    });
   });
 });
 
