@@ -15,7 +15,9 @@ import {
   getStepsForWorkflow,
   getWorkflowDescriptor,
   isTerminalState,
+  normalizeBackupId,
   resolveWorkflowFromHandoff,
+  validateBackupPackageRemote,
   BACKUP_WORKFLOW_TYPES,
   type BackupMigrationHandoff,
   type BackupValidationItem,
@@ -201,6 +203,13 @@ describe("buildSessionBackupExecutionRequest", () => {
   });
 });
 
+describe("normalizeBackupId", () => {
+  it("trims surrounding whitespace", () => {
+    expect(normalizeBackupId("  backup-1  ")).toBe("backup-1");
+    expect(normalizeBackupId("\nbackup-2\t")).toBe("backup-2");
+  });
+});
+
 describe("buildPackageValidationItems", () => {
   it("returns blocking diagnostics when verify fails", () => {
     expect(
@@ -262,6 +271,45 @@ describe("buildPackageValidationItems", () => {
         label: "No vendor-runtime restore",
         severity: "warning",
         detail: "Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime.",
+      },
+    ]);
+  });
+});
+
+describe("validateBackupPackageRemote", () => {
+  it("returns a blocking validation item when remote verification reports a missing package", async () => {
+    const fetchMock = async () =>
+      ({
+        ok: false,
+        json: async () => ({
+          title: "Backup not found",
+          error: "The requested backup package could not be found in the managed backup store.",
+          code: "BACKUP_NOT_FOUND",
+          hint: "Check the backup ID and retry verification.",
+        }),
+      }) as Response;
+
+    await expect(validateBackupPackageRemote(fetchMock as typeof fetch, " bad-package-id ")).resolves.toEqual([
+      {
+        id: "v-package-invalid",
+        label: "Backup not found",
+        severity: "block",
+        detail: "The requested backup package could not be found in the managed backup store. Code: BACKUP_NOT_FOUND Check the backup ID and retry verification.",
+      },
+    ]);
+  });
+
+  it("returns a blocking validation item when the verification request itself fails", async () => {
+    const fetchMock = async () => {
+      throw new Error("network down");
+    };
+
+    await expect(validateBackupPackageRemote(fetchMock as typeof fetch, "backup-1")).resolves.toEqual([
+      {
+        id: "v-verify-request-failed",
+        label: "Package verification request failed",
+        severity: "block",
+        detail: "Unable to verify backup backup-1. network down",
       },
     ]);
   });

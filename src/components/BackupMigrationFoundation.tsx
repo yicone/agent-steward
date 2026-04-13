@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   addRecentOperation,
-  buildPackageValidationItems,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
   createOperationResult,
@@ -19,7 +18,9 @@ import {
   getStepsForWorkflow,
   getWorkflowDescriptor,
   isTerminalState,
+  normalizeBackupId,
   resolveWorkflowFromHandoff,
+  validateBackupPackageRemote,
   WORKFLOW_DESCRIPTORS,
   type BackupMigrationHandoff,
   type BackupOperationResult,
@@ -261,6 +262,7 @@ export function BackupMigrationFoundation({
 
   // ── Derived ──
   const descriptor = activeWorkflow ? getWorkflowDescriptor(activeWorkflow) : null;
+  const normalizedBackupId = normalizeBackupId(backupIdInput);
 
   // ── Actions ──
   const resetWorkflow = useCallback(() => {
@@ -309,42 +311,18 @@ export function BackupMigrationFoundation({
     if (activeWorkflow === "session-backup") {
       items = buildSessionBackupValidation(selectedSessionId);
     } else {
-      const targetBackupId = backupIdInput.trim();
-
-      if (!targetBackupId) {
+      if (!normalizedBackupId) {
         items = activeWorkflow === "import-backup"
           ? buildImportValidation(null)
           : buildValidatePackageValidation(null);
       } else {
-        try {
-          const response = await fetch(`/api/session-backups/${encodeURIComponent(targetBackupId)}`, {
-            method: "GET",
-          });
-          const payload = (await response.json().catch(() => ({ error: "Unknown verification error" }))) as
-            | { backupId: string; verified: true; manifest?: { schemaVersion?: string; createdBy?: string } }
-            | { verified?: false; error?: string; title?: string; hint?: string; code?: string };
-          items = buildPackageValidationItems({
-            backupId: targetBackupId,
-            responseOk: response.ok,
-            payload,
-          });
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          items = [
-            {
-              id: "v-verify-request-failed",
-              label: "Package verification request failed",
-              severity: "block",
-              detail: `Unable to verify backup ${targetBackupId}. ${message}`,
-            },
-          ];
-        }
+        items = await validateBackupPackageRemote(fetch, normalizedBackupId);
       }
     }
     const result = deriveValidationResult(items);
     setValidationResult(result);
     setWorkflowState("validation");
-  }, [activeWorkflow, selectedSessionId, backupIdInput]);
+  }, [activeWorkflow, normalizedBackupId, selectedSessionId]);
 
   const executeSessionBackup = useCallback(async () => {
     if (!selectedSessionId || !selectedSource) return;
@@ -399,7 +377,7 @@ export function BackupMigrationFoundation({
   }, [selectedSessionId, selectedSource, selectedRootId, includeSourceCopy]);
 
   const executeImport = useCallback(async () => {
-    if (!backupIdInput) return;
+    if (!normalizedBackupId) return;
     setIsExecuting(true);
     setExecutionError(null);
     setWorkflowState("execution");
@@ -408,7 +386,7 @@ export function BackupMigrationFoundation({
       const response = await fetch("/api/session-backups/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ backupId: backupIdInput }),
+        body: JSON.stringify({ backupId: normalizedBackupId }),
       });
 
       if (!response.ok) {
@@ -430,7 +408,7 @@ export function BackupMigrationFoundation({
       const result = createOperationResult({
         workflowType: "import-backup",
         status: "success",
-        summary: `Backup ${backupIdInput} imported successfully.`,
+        summary: `Backup ${normalizedBackupId} imported successfully.`,
         backupId: data.backupId,
         sessionCount: data.sessions?.length,
         warnings: ["Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime."],
@@ -452,7 +430,7 @@ export function BackupMigrationFoundation({
     } finally {
       setIsExecuting(false);
     }
-  }, [backupIdInput]);
+  }, [normalizedBackupId]);
 
   const finishValidateOnly = useCallback(() => {
     if (!validationResult) return;
@@ -628,7 +606,7 @@ export function BackupMigrationFoundation({
                     className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
                   />
                 </label>
-                <Button size="sm" disabled={!backupIdInput} onClick={runValidation}>
+                <Button size="sm" disabled={!normalizedBackupId} onClick={runValidation}>
                   Validate
                 </Button>
               </div>
@@ -717,7 +695,7 @@ export function BackupMigrationFoundation({
                 ) : null}
                 {activeWorkflow === "import-backup" ? (
                   <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
-                    <div className="font-medium">Import backup package {backupIdInput}</div>
+                    <div className="font-medium">Import backup package {normalizedBackupId}</div>
                   </div>
                 ) : null}
                 <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 px-3 py-3 text-sm text-muted">
@@ -781,10 +759,10 @@ export function BackupMigrationFoundation({
                   {selectedSource ? <div className="text-xs text-muted">{selectedSource}</div> : null}
                 </div>
               ) : null}
-              {backupIdInput && activeWorkflow !== "session-backup" ? (
+              {normalizedBackupId && activeWorkflow !== "session-backup" ? (
                 <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-2">
                   <div className="text-xs text-muted">Backup ID</div>
-                  <div className="font-medium">{backupIdInput}</div>
+                  <div className="font-medium">{normalizedBackupId}</div>
                 </div>
               ) : null}
             </div>

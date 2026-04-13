@@ -50,6 +50,8 @@ export type BackupPackageVerifyFailure = {
   code?: string;
 };
 
+export type BackupPackageVerifyResponse = BackupPackageVerifySuccess | BackupPackageVerifyFailure;
+
 // ── Operation result ────────────────────────────────────────────────────────
 
 export type BackupOperationStatus = "success" | "success-with-warnings" | "failed";
@@ -305,6 +307,50 @@ export function buildSessionBackupExecutionRequest(input: {
   }
 
   return request;
+}
+
+export function normalizeBackupId(input: string): string {
+  return input.trim();
+}
+
+export async function validateBackupPackageRemote(
+  fetchImpl: typeof fetch,
+  backupId: string
+): Promise<BackupValidationItem[]> {
+  const targetBackupId = normalizeBackupId(backupId);
+
+  if (!targetBackupId) {
+    return [
+      {
+        id: "v-no-pkg",
+        label: "No package selected",
+        severity: "block",
+        detail: "Choose a backup package to import.",
+      },
+    ];
+  }
+
+  try {
+    const response = await fetchImpl(`/api/session-backups/${encodeURIComponent(targetBackupId)}`, {
+      method: "GET",
+    });
+    const payload = (await response.json().catch(() => ({ error: "Unknown verification error" }))) as BackupPackageVerifyResponse;
+    return buildPackageValidationItems({
+      backupId: targetBackupId,
+      responseOk: response.ok,
+      payload,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return [
+      {
+        id: "v-verify-request-failed",
+        label: "Package verification request failed",
+        severity: "block",
+        detail: `Unable to verify backup ${targetBackupId}. ${message}`,
+      },
+    ];
+  }
 }
 
 // ── Recent operations ───────────────────────────────────────────────────────

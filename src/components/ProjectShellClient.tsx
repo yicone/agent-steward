@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import AnalysisFoundation from "@/components/AnalysisFoundation";
 import AssetsFoundation from "@/components/AssetsFoundation";
 import BackupMigrationFoundation from "@/components/BackupMigrationFoundation";
-import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff } from "@/lib/backupMigration";
+import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff, type BackupWorkflowType } from "@/lib/backupMigration";
 import HomeClient, { type HomeClientAssetHandoff, type HomeClientExternalSelection, type HomeClientSessionHandoff } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
@@ -269,12 +269,12 @@ export function buildBackupHandoffFromSessions(context: {
   };
 }
 
-export function buildBackupHandoffFromOverview(workflowType: "session-backup" | "import-backup" | "validate-package"): BackupMigrationHandoff {
+export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType): BackupMigrationHandoff {
   const subtitles = {
     "session-backup": "Start a bounded session backup workflow from Project Overview.",
     "import-backup": "Start a bounded import workflow from Project Overview.",
     "validate-package": "Start a bounded package validation workflow from Project Overview.",
-  } satisfies Record<"session-backup" | "import-backup" | "validate-package", string>;
+  } satisfies Record<BackupWorkflowType, string>;
 
   return {
     origin: "overview",
