@@ -5,6 +5,8 @@ import React, { useCallback, useEffect, useState } from "react";
 
 import AnalysisFoundation from "@/components/AnalysisFoundation";
 import AssetsFoundation from "@/components/AssetsFoundation";
+import BackupMigrationFoundation from "@/components/BackupMigrationFoundation";
+import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff } from "@/lib/backupMigration";
 import HomeClient, { type HomeClientAnalysisHandoff, type HomeClientAssetHandoff, type HomeClientExternalSelection } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
@@ -219,6 +221,70 @@ export function buildAssetsFoundationInstanceKey(handoff: AssetsHandoff | null):
   ].join(":");
 }
 
+export function buildBackupHandoffFromAssets(context: {
+  assetId?: string;
+  subtype?: ContextAssetSubtype;
+}): BackupMigrationHandoff {
+  return {
+    origin: "assets",
+    subtitle: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}.`,
+    continueLabel: "Workflow execution belongs to Backup / Migration.",
+    returnLabel: "Return to Assets for object-level review.",
+    assetId: context.assetId,
+    assetSubtype: context.subtype,
+  };
+}
+
+export function buildBackupHandoffFromAnalysis(context: {
+  findingId: string;
+  title: string;
+  preservationWarning?: string;
+  routeLabel?: string;
+}): BackupMigrationHandoff {
+  return {
+    origin: "analysis",
+    subtitle: `${context.routeLabel ?? "Recommended route"} for ${context.title}.`,
+    continueLabel: context.preservationWarning ?? "Backup / Migration owns workflow validation and execution.",
+    returnLabel: "Return to Analysis for grouped interpretation.",
+    findingId: context.findingId,
+    preservationWarning: context.preservationWarning,
+    workflowType: "session-backup",
+  };
+}
+
+export function buildBackupHandoffFromSessions(context: {
+  sessionId: string;
+  source: Source;
+  rootId?: string;
+}): BackupMigrationHandoff {
+  return {
+    origin: "sessions",
+    subtitle: `Back up session ${context.sessionId} from Sessions.`,
+    continueLabel: "Use the session backup workflow to preserve this session record.",
+    returnLabel: "Return to the originating session for evidence review.",
+    workflowType: "session-backup",
+    sessionId: context.sessionId,
+    source: context.source,
+    rootId: context.rootId,
+  };
+}
+
+export function buildBackupHandoffFromOverview(workflowType: "session-backup" | "import-backup" | "validate-package"): BackupMigrationHandoff {
+  const subtitles = {
+    "session-backup": "Start a bounded session backup workflow from Project Overview.",
+    "import-backup": "Start a bounded import workflow from Project Overview.",
+    "validate-package": "Start a bounded package validation workflow from Project Overview.",
+  } satisfies Record<"session-backup" | "import-backup" | "validate-package", string>;
+
+  return {
+    origin: "overview",
+    subtitle: subtitles[workflowType],
+    continueLabel: "Workflow execution belongs to Backup / Migration.",
+    returnLabel: "Return to Project Overview.",
+    workflowType,
+  };
+}
+
 export function buildAnalysisFoundationInstanceKey(handoff: AnalysisHandoff | null): string {
   if (!handoff) return "analysis:no-handoff";
 
@@ -255,6 +321,7 @@ function ProjectOverviewSurface(props: {
   onNavigate(page: ProjectShellPage): void;
   onOpenAssets(handoff: AssetsHandoff): void;
   onOpenAnalysis(handoff: AnalysisHandoff): void;
+  onOpenBackup(handoff: BackupMigrationHandoff): void;
 }) {
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -381,13 +448,37 @@ function ProjectOverviewSurface(props: {
           >
             Review analysis
           </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("session-backup"))}
+          >
+            Start session backup
+          </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("import-backup"))}
+          >
+            Import backup package
+          </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("validate-package"))}
+          >
+            Validate backup package
+          </Button>
           <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("backup")}>
-            Start backup / migration
+            Browse backup workflows
           </Button>
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          Assets and Analysis are now bounded foundation surfaces. Backup / Migration remains a placeholder, and
-          working session backup remains available from a selected session.
+          Assets, Analysis, and Backup / Migration are now bounded foundation surfaces.
+          Working session backup also remains available from a selected session.
         </p>
       </Card>
     </div>
@@ -440,7 +531,7 @@ export default function ProjectShellClient() {
   const [externalSelection, setExternalSelection] = useState<HomeClientExternalSelection | null>(null);
   const [assetsHandoff, setAssetsHandoff] = useState<AssetsHandoff | null>(null);
   const [analysisHandoff, setAnalysisHandoff] = useState<AnalysisHandoff | null>(null);
-  const [backupCue, setBackupCue] = useState<PlaceholderCue | null>(null);
+  const [backupHandoff, setBackupHandoff] = useState<BackupMigrationHandoff | null>(null);
 
   const leaveSessionsSurface = useCallback(() => {
     clearSessionViewerUrlState();
@@ -454,7 +545,7 @@ export default function ProjectShellClient() {
   const handleSearchSelect = useCallback((sessionId: string, source: Source, rootId?: string) => {
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
       buildExternalSessionSelection({
@@ -470,7 +561,7 @@ export default function ProjectShellClient() {
     if (page !== "sessions") leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage(page);
   }, [leaveSessionsSurface]);
 
@@ -478,7 +569,7 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(handoff);
     setAnalysisHandoff(null);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage("assets");
   }, [leaveSessionsSurface]);
 
@@ -486,7 +577,7 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(buildAssetsHandoffFromSession({ sessionId: handoff.sessionId, subtype: handoff.subtype }));
     setAnalysisHandoff(null);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage("assets");
   }, [leaveSessionsSurface]);
 
@@ -494,14 +585,14 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(buildAnalysisHandoffFromSession(handoff));
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage("analysis");
   }, [leaveSessionsSurface]);
 
   const handleOpenSessionFromContext = useCallback((selection: { sessionId: string; source: Source; rootId?: string }) => {
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage("sessions");
     setExternalSelection((prev) =>
       buildExternalSessionSelection({
@@ -521,7 +612,7 @@ export default function ProjectShellClient() {
   }) => {
     leaveSessionsSurface();
     setAssetsHandoff(null);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setAnalysisHandoff(buildAnalysisHandoffFromAssets(context));
     setActivePage("analysis");
   }, [leaveSessionsSurface]);
@@ -530,10 +621,7 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
-    setBackupCue({
-      title: "Routed from Assets",
-      body: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}. Workflow execution still belongs to Backup / Migration.`,
-    });
+    setBackupHandoff(buildBackupHandoffFromAssets(context));
     setActivePage("backup");
   }, [leaveSessionsSurface]);
 
@@ -541,7 +629,7 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(handoff);
-    setBackupCue(null);
+    setBackupHandoff(null);
     setActivePage("analysis");
   }, [leaveSessionsSurface]);
 
@@ -554,10 +642,15 @@ export default function ProjectShellClient() {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
-    setBackupCue({
-      title: "Routed from Analysis",
-      body: `${context.routeLabel ?? "Recommended route"} for ${context.title}. ${context.preservationWarning ?? "Backup / Migration owns workflow validation and execution."}`,
-    });
+    setBackupHandoff(buildBackupHandoffFromAnalysis(context));
+    setActivePage("backup");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenBackup = useCallback((handoff: BackupMigrationHandoff) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setAnalysisHandoff(null);
+    setBackupHandoff(handoff);
     setActivePage("backup");
   }, [leaveSessionsSurface]);
 
@@ -618,13 +711,21 @@ export default function ProjectShellClient() {
             </div>
           ) : null}
 
-          {activePage === "overview" ? <ProjectOverviewSurface onNavigate={handleNavigate} onOpenAssets={handleOpenAssets} onOpenAnalysis={handleOpenAnalysis} /> : null}
+          {activePage === "overview" ? (
+            <ProjectOverviewSurface
+              onNavigate={handleNavigate}
+              onOpenAssets={handleOpenAssets}
+              onOpenAnalysis={handleOpenAnalysis}
+              onOpenBackup={handleOpenBackup}
+            />
+          ) : null}
           {activePage === "sessions" ? (
             <HomeClient
               chrome="embedded"
               externalSelection={externalSelection}
               onOpenAssetsForSession={handleOpenAssetsFromSession}
               onOpenAnalysisForSession={handleOpenAnalysisFromSession}
+              onOpenBackupForSession={(handoff) => handleOpenBackup(buildBackupHandoffFromSessions(handoff))}
             />
           ) : null}
           {activePage === "assets" ? (
@@ -647,13 +748,11 @@ export default function ProjectShellClient() {
             />
           ) : null}
           {activePage === "backup" ? (
-            <PlaceholderSurface
-              title="Backup / Migration"
-              label="restricted workflow"
-              body="Project-level backup and migration workflows will live here once bundle and migration contracts are implemented. Existing direct session backup remains inside selected Sessions."
-              preservedPath="Open a session and use its Backup Session action for current supported backup behavior."
+            <BackupMigrationFoundation
+              key={buildBackupHandoffInstanceKey(backupHandoff)}
+              handoff={backupHandoff}
               onNavigateSessions={() => handleNavigate("sessions")}
-              cue={backupCue ?? undefined}
+              onNavigateOverview={() => handleNavigate("overview")}
             />
           ) : null}
         </main>

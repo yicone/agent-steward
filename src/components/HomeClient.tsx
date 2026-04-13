@@ -79,6 +79,7 @@ export type HomeClientProps = {
   externalSelection?: HomeClientExternalSelection | null;
   onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
   onOpenAnalysisForSession?(handoff: HomeClientAnalysisHandoff): void;
+  onOpenBackupForSession?(handoff: HomeClientAnalysisHandoff): void;
 };
 
 export function resolveInitialSource(input: {
@@ -1442,6 +1443,7 @@ export default function HomeClient({
   externalSelection = null,
   onOpenAssetsForSession,
   onOpenAnalysisForSession,
+  onOpenBackupForSession,
 }: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -2713,6 +2715,22 @@ export default function HomeClient({
                     title="Route to Analysis with bounded session evidence context"
                   >
                     Review in Analysis
+                  </Button>
+                ) : null}
+                {onOpenBackupForSession ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onOpenBackupForSession({
+                        sessionId: selectedId,
+                        source,
+                        ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                      })
+                    }
+                    title="Route to Backup / Migration with bounded session backup context"
+                  >
+                    Open in Backup / Migration
                   </Button>
                 ) : null}
                 <Button
