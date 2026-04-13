@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -453,6 +453,12 @@ export function BackupMigrationFoundation({
 
   // ── Auto-prefill from handoff ──
   const prefillSessionId = useMemo(() => handoff?.sessionId ?? null, [handoff]);
+
+  useEffect(() => {
+    if (selectedSource !== "codex" && includeSourceCopy) {
+      setIncludeSourceCopy(false);
+    }
+  }, [includeSourceCopy, selectedSource]);
 
   // ── Render: idle ──
   if (workflowState === "idle" && !activeWorkflow) {
