@@ -347,7 +347,10 @@ export function buildBackupHandoffInstanceKey(handoff: BackupMigrationHandoff | 
     handoff.source ?? "no-source",
     handoff.rootId ?? "no-root",
     handoff.assetId ?? "no-asset",
+    handoff.assetSubtype ?? "no-asset-subtype",
     handoff.findingId ?? "no-finding",
     handoff.issueLabel ?? "no-issue",
+    handoff.preservationWarning ?? "no-preservation-warning",
+    handoff.subtitle,
   ].join(":");
 }

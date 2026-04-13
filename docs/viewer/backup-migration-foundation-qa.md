@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-13  
 **Branch:** `feat/backup-migration-foundation`  
-**Repository:** `/Users/tr/Workspace/agent-storage-manager`
+**Repository:** `<repo-path>`
 
 ---
 

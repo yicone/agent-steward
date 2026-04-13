@@ -647,15 +647,26 @@ export function BackupMigrationFoundation({
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={includeSourceCopy}
-                    onChange={(e) => setIncludeSourceCopy(e.target.checked)}
+                    checked={selectedSource === "codex" ? includeSourceCopy : false}
+                    disabled={selectedSource !== "codex"}
+                    onChange={(e) => {
+                      if (selectedSource !== "codex") return;
+                      setIncludeSourceCopy(e.target.checked);
+                    }}
                   />
-                  <span>Include source copy (advanced, opt-in)</span>
+                  <span className={selectedSource !== "codex" ? "text-muted" : undefined}>
+                    Include source copy (advanced, opt-in)
+                  </span>
                 </label>
                 <div className="text-xs leading-5 text-muted">
                   Source backup is an optional advanced option. The default backup preserves the canonical session record only.
                   Source copy stores a separate copy of the original source material without modifying the upstream session source.
                 </div>
+                {selectedSource !== "codex" ? (
+                  <div className="text-xs leading-5 text-muted">
+                    Include source copy is only available for Codex session backups and is unavailable for this source.
+                  </div>
+                ) : null}
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={retreatState}>
                     Back
