@@ -33,6 +33,23 @@ export type BackupValidationResult = {
   items: BackupValidationItem[];
 };
 
+export type BackupPackageVerifySuccess = {
+  backupId: string;
+  verified: true;
+  manifest?: {
+    schemaVersion?: string;
+    createdBy?: string;
+  };
+};
+
+export type BackupPackageVerifyFailure = {
+  verified?: false;
+  error?: string;
+  title?: string;
+  hint?: string;
+  code?: string;
+};
+
 // ── Operation result ────────────────────────────────────────────────────────
 
 export type BackupOperationStatus = "success" | "success-with-warnings" | "failed";
@@ -187,6 +204,60 @@ export function deriveValidationResult(items: BackupValidationItem[]): BackupVal
 
 export function canProceedFromValidation(result: BackupValidationResult): boolean {
   return result.status !== "invalid";
+}
+
+export function buildPackageValidationItems(input: {
+  backupId: string;
+  responseOk: boolean;
+  payload: BackupPackageVerifySuccess | BackupPackageVerifyFailure;
+}): BackupValidationItem[] {
+  if (!input.responseOk) {
+    const failure = input.payload as BackupPackageVerifyFailure;
+    const title = failure.title ?? "Package validation failed";
+    const detailParts = [failure.error ?? `Backup ${input.backupId} could not be verified.`];
+    if (failure.code) detailParts.push(`Code: ${failure.code}`);
+    if (failure.hint) detailParts.push(failure.hint);
+
+    return [
+      {
+        id: "v-package-invalid",
+        label: title,
+        severity: "block",
+        detail: detailParts.join(" "),
+      },
+    ];
+  }
+
+  const success = input.payload as BackupPackageVerifySuccess;
+
+  return [
+    {
+      id: "v-schema",
+      label: "Schema version",
+      severity: "ok",
+      detail: `${success.manifest?.schemaVersion ?? "session-backup/v1"} is supported.`,
+    },
+    {
+      id: "v-integrity",
+      label: "Package integrity",
+      severity: "ok",
+      detail: `Backup ${input.backupId} passed manifest and record verification.`,
+    },
+    {
+      id: "v-provenance",
+      label: "Provenance",
+      severity: "ok",
+      detail: success.manifest?.createdBy
+        ? `Created by ${success.manifest.createdBy}.`
+        : "Backup provenance is present and readable.",
+    },
+    {
+      id: "v-no-runtime",
+      label: "No vendor-runtime restore",
+      severity: "warning",
+      detail: "Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime.",
+    },
+  ];
 }
 
 // ── Operation result helpers ────────────────────────────────────────────────

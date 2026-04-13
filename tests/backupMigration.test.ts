@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   addRecentOperation,
+  buildPackageValidationItems,
   buildBackupHandoffInstanceKey,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
@@ -197,6 +198,72 @@ describe("buildSessionBackupExecutionRequest", () => {
       sessionId: "session-2",
       rootId: "root-b",
     });
+  });
+});
+
+describe("buildPackageValidationItems", () => {
+  it("returns blocking diagnostics when verify fails", () => {
+    expect(
+      buildPackageValidationItems({
+        backupId: "missing-backup",
+        responseOk: false,
+        payload: {
+          title: "Backup package not found",
+          error: "The requested backup package could not be found in the managed backup store.",
+          code: "BACKUP_NOT_FOUND",
+          hint: "Check the backup ID and retry verification.",
+        },
+      })
+    ).toEqual([
+      {
+        id: "v-package-invalid",
+        label: "Backup package not found",
+        severity: "block",
+        detail: "The requested backup package could not be found in the managed backup store. Code: BACKUP_NOT_FOUND Check the backup ID and retry verification.",
+      },
+    ]);
+  });
+
+  it("returns validation-first success items when verify succeeds", () => {
+    expect(
+      buildPackageValidationItems({
+        backupId: "backup-1",
+        responseOk: true,
+        payload: {
+          backupId: "backup-1",
+          verified: true,
+          manifest: {
+            schemaVersion: "session-backup/v1",
+            createdBy: "agent-storage-manager",
+          },
+        },
+      })
+    ).toEqual([
+      {
+        id: "v-schema",
+        label: "Schema version",
+        severity: "ok",
+        detail: "session-backup/v1 is supported.",
+      },
+      {
+        id: "v-integrity",
+        label: "Package integrity",
+        severity: "ok",
+        detail: "Backup backup-1 passed manifest and record verification.",
+      },
+      {
+        id: "v-provenance",
+        label: "Provenance",
+        severity: "ok",
+        detail: "Created by agent-storage-manager.",
+      },
+      {
+        id: "v-no-runtime",
+        label: "No vendor-runtime restore",
+        severity: "warning",
+        detail: "Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime.",
+      },
+    ]);
   });
 });
 

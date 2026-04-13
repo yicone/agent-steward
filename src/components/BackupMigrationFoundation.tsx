@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   addRecentOperation,
+  buildPackageValidationItems,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
   createOperationResult,
@@ -55,12 +56,7 @@ function buildImportValidation(backupId: string | null): BackupValidationItem[] 
   if (!backupId) {
     return [{ id: "v-no-pkg", label: "No package selected", severity: "block", detail: "Choose a backup package to import." }];
   }
-  return [
-    { id: "v-schema", label: "Schema version", severity: "ok", detail: "session-backup/v1 is supported." },
-    { id: "v-integrity", label: "Package integrity", severity: "ok", detail: "Manifest and records are consistent." },
-    { id: "v-provenance", label: "Provenance", severity: "ok", detail: "Created by agent-storage-manager." },
-    { id: "v-no-runtime", label: "No vendor-runtime restore", severity: "warning", detail: "Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime." },
-  ];
+  return [{ id: "v-await-verify", label: "Ready to verify", severity: "ok", detail: `Backup ${backupId} is ready for verification.` }];
 }
 
 function buildValidatePackageValidation(backupId: string | null): BackupValidationItem[] {
@@ -307,15 +303,43 @@ export function BackupMigrationFoundation({
     }
   }, [activeWorkflow, workflowState]);
 
-  const runValidation = useCallback(() => {
+  const runValidation = useCallback(async () => {
     if (!activeWorkflow) return;
     let items: BackupValidationItem[];
     if (activeWorkflow === "session-backup") {
       items = buildSessionBackupValidation(selectedSessionId);
-    } else if (activeWorkflow === "import-backup") {
-      items = buildImportValidation(backupIdInput || null);
     } else {
-      items = buildValidatePackageValidation(backupIdInput || null);
+      const targetBackupId = backupIdInput.trim();
+
+      if (!targetBackupId) {
+        items = activeWorkflow === "import-backup"
+          ? buildImportValidation(null)
+          : buildValidatePackageValidation(null);
+      } else {
+        try {
+          const response = await fetch(`/api/session-backups/${encodeURIComponent(targetBackupId)}`, {
+            method: "GET",
+          });
+          const payload = (await response.json().catch(() => ({ error: "Unknown verification error" }))) as
+            | { backupId: string; verified: true; manifest?: { schemaVersion?: string; createdBy?: string } }
+            | { verified?: false; error?: string; title?: string; hint?: string; code?: string };
+          items = buildPackageValidationItems({
+            backupId: targetBackupId,
+            responseOk: response.ok,
+            payload,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          items = [
+            {
+              id: "v-verify-request-failed",
+              label: "Package verification request failed",
+              severity: "block",
+              detail: `Unable to verify backup ${targetBackupId}. ${message}`,
+            },
+          ];
+        }
+      }
     }
     const result = deriveValidationResult(items);
     setValidationResult(result);
