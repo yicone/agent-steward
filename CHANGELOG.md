@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-15` — Bulk session backup
+  - Added a bounded `bulk session backup` workflow to `Backup / Migration` with explicit multi-session selection, per-session validation, batch confirmation, and aggregate plus per-session result reporting
+  - Reused the existing single-session backup execution path for batch fan-out and kept recent operations compact with one entry per bulk run
+  - Preserved existing `Sessions` direct single-session backup behavior and retained `import backup` / `validate package` workflows without regression
+
 - `2026-04-11` — Project shell foundation
   - Added a project-first shell with `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration` surfaces
   - Preserved the existing session viewer under `Sessions`, including source diagnostics, URL deep links, search selection, and direct session backup

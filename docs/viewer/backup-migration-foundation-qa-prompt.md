@@ -3,14 +3,15 @@
 Use this prompt with an external QA agent that can operate the local app through a browser.
 
 ```text
-You are QA-ing the `backup-migration-foundation` implementation for the local-first Agent Storage Manager project.
+You are QA-ing the `bulk-session-backup` implementation for the local-first Agent Storage Manager project.
 
 Repository: <repo-path>
-Branch under test: feat/backup-migration-foundation
+Branch under test: feat/bulk-session-backup
 
 Goal:
 Verify that the new `Backup / Migration` page behaves as a bounded workflow-first foundation surface. It should support:
 - single session backup
+- bulk session backup
 - import backup
 - validate package
 - routed handoff from `Project Overview`, `Sessions`, `Assets`, and `Analysis`
@@ -18,7 +19,6 @@ Verify that the new `Backup / Migration` page behaves as a bounded workflow-firs
 
 It must not behave like:
 - a generic tools drawer
-- a bulk backup surface
 - a migration preview surface
 - a project bundle implementation
 - a vendor runtime restore UI
@@ -50,9 +50,10 @@ Workflow selector / idle checks:
 1. In top-level entry with no routed context, confirm the page lands in an idle workflow selection state.
 2. Confirm only these workflows are present in foundation:
    - session backup
+   - bulk session backup
    - import backup
    - validate package
-3. Confirm `migration preview`, `project bundle`, and `bulk backup` are not presented as active workflows.
+3. Confirm `migration preview` and `project bundle` are not presented as active workflows.
 
 Session backup workflow checks:
 1. Enter the `session backup` workflow from `Backup / Migration`.
@@ -65,6 +66,30 @@ Session backup workflow checks:
 3. Confirm `source backup` is explicit opt-in rather than default.
 4. Confirm warnings are shown before destructive-adjacent or trust-sensitive steps when applicable.
 5. Confirm the existing direct `Back Up Session` action still remains available under `Sessions` and was not removed.
+
+Bulk session backup workflow checks:
+1. Enter the `bulk session backup` workflow from `Backup / Migration`.
+2. Confirm the workflow starts in explicit session selection and does not invent a session set automatically.
+3. Add or verify multiple selected sessions and confirm the workflow shows:
+   - explicit selected-session rows
+   - per-session source / root context when available
+   - per-session source-copy configuration
+4. Validate the batch and confirm:
+   - canonical record availability is checked per selected session
+   - provenance is checked per selected session
+   - source-copy readiness is checked per selected session
+   - warning-level items stay visible into confirmation
+   - block-level items prevent confirmation until removed or repaired
+5. Confirm batch confirmation shows:
+   - selected count
+   - source-copy configuration summary
+   - warning count
+   - sequential fan-out semantics using existing single-session backup behavior
+6. Execute or simulate a mixed run if possible and confirm result states distinguish:
+   - full success
+   - partial failure / success with warnings
+   - full failure
+7. Confirm batch result detail shows aggregate status plus per-session rows, including backup IDs and actionable errors when available.
 
 Import backup workflow checks:
 1. Enter the `import backup` workflow.
@@ -87,12 +112,14 @@ Validate package workflow checks:
 Routed handoff checks:
 1. From `Sessions`, if available, route into `Backup / Migration` for a selected session.
 2. Confirm `Backup / Migration` opens the `session backup` workflow with the session prefilled and a compact origin cue.
-3. From `Assets`, trigger a route into `Backup / Migration` if available.
-4. Confirm the destination page preserves bounded asset context but does not embed the full Assets page.
-5. From `Analysis`, trigger a preservation-oriented route into `Backup / Migration` if available.
-6. Confirm issue context is preserved and workflow identity remains primary.
-7. From `Project Overview`, trigger a route into backup/import/validation if available.
-8. Confirm routed context opens the correct workflow and degrades safely if context is incomplete.
+3. If `Sessions` exposes explicit multi-selection under this branch, route that selection into `Backup / Migration`.
+4. Confirm the destination opens `bulk session backup` with the selected sessions prefilled and no silently dropped entries.
+5. From `Assets`, trigger a route into `Backup / Migration` if available.
+6. Confirm the destination page preserves bounded asset context but does not embed the full Assets page.
+7. From `Analysis`, trigger a preservation-oriented route into `Backup / Migration` if available.
+8. Confirm issue context is preserved and workflow identity remains primary.
+9. From `Project Overview`, trigger a route into single backup, bulk backup, import, and validation if available.
+10. Confirm routed context opens the correct workflow and degrades safely if context is incomplete.
 
 Recent operations checks:
 1. After completing or simulating at least one workflow, confirm a compact recent-operations region appears.
@@ -101,13 +128,15 @@ Recent operations checks:
    - result identity
    - timestamp or recency indicator
    - status
+   - session count for bulk runs
 3. Confirm it reads as a secondary result/history strip, not a persistent audit console.
+4. Confirm a bulk run produces one recent-operation entry for the batch, not one entry per selected session.
 
 Regression checks:
 1. `Sessions` still works as before, including existing viewer behavior and direct session backup.
 2. `Assets` and `Analysis` routing into `Backup / Migration` does not break their own page roles.
 3. Top-level navigation away from `Backup / Migration` clears stale routed workflow context when appropriate.
-4. `Backup / Migration` does not expose bulk backup, migration preview, or project bundle execution accidentally through copy or buttons.
+4. `Backup / Migration` does not expose migration preview or project bundle execution accidentally through copy or buttons.
 
 Boundary checks:
 1. No button or copy should imply:

@@ -6,7 +6,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import AnalysisFoundation from "@/components/AnalysisFoundation";
 import AssetsFoundation from "@/components/AssetsFoundation";
 import BackupMigrationFoundation from "@/components/BackupMigrationFoundation";
-import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff, type BackupWorkflowType } from "@/lib/backupMigration";
+import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff, type BackupWorkflowType, type BackupSessionSelection } from "@/lib/backupMigration";
 import HomeClient, { type HomeClientAssetHandoff, type HomeClientExternalSelection, type HomeClientSessionHandoff } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
@@ -253,10 +253,22 @@ export function buildBackupHandoffFromAnalysis(context: {
 }
 
 export function buildBackupHandoffFromSessions(context: {
-  sessionId: string;
-  source: Source;
+  sessionId?: string;
+  source?: Source;
   rootId?: string;
+  sessions?: BackupSessionSelection[];
 }): BackupMigrationHandoff {
+  if ((context.sessions?.length ?? 0) > 0) {
+    return {
+      origin: "sessions",
+      subtitle: `Back up ${context.sessions!.length} selected session${context.sessions!.length === 1 ? "" : "s"} from Sessions.`,
+      continueLabel: "Use the bulk session backup workflow to preserve the selected session set.",
+      returnLabel: "Return to Sessions for evidence review.",
+      workflowType: "bulk-session-backup",
+      sessions: context.sessions,
+    };
+  }
+
   return {
     origin: "sessions",
     subtitle: `Back up session ${context.sessionId} from Sessions.`,
@@ -272,6 +284,7 @@ export function buildBackupHandoffFromSessions(context: {
 export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType): BackupMigrationHandoff {
   const subtitles = {
     "session-backup": "Start a bounded session backup workflow from Project Overview.",
+    "bulk-session-backup": "Start a bounded bulk session backup workflow from Project Overview.",
     "import-backup": "Start a bounded import workflow from Project Overview.",
     "validate-package": "Start a bounded package validation workflow from Project Overview.",
   } satisfies Record<BackupWorkflowType, string>;
@@ -455,6 +468,14 @@ function ProjectOverviewSurface(props: {
             onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("session-backup"))}
           >
             Start session backup
+          </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("bulk-session-backup"))}
+          >
+            Start bulk session backup
           </Button>
           <Button
             className="w-full justify-start"
