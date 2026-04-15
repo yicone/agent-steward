@@ -77,7 +77,7 @@ The system SHALL execute eligible selected sessions as one batch workflow and re
 
 #### Scenario: Execution partially fails
 - **WHEN** at least one selected session succeeds and at least one selected session fails during execution
-- **THEN** the aggregate result status is `success-with-warnings` or another explicit partial-success status
+- **THEN** the aggregate result status is `success-with-warnings`
 - **AND** failed sessions are identified with actionable error detail
 - **AND** successful sessions remain visible rather than being hidden behind a generic failure message
 
