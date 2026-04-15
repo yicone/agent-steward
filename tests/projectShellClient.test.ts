@@ -321,6 +321,25 @@ describe("backup handoff builders", () => {
     expect(handoff.subtitle).toContain("session-1");
   });
 
+  it("builds a sessions handoff for explicit multi-session selection", () => {
+    const handoff = buildBackupHandoffFromSessions({
+      sessions: [
+        { sessionId: "session-1", source: "codex", rootId: "root-a" },
+        { sessionId: "session-2", source: "windsurf" },
+      ],
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "sessions",
+      workflowType: "bulk-session-backup",
+      sessions: [
+        { sessionId: "session-1", source: "codex", rootId: "root-a" },
+        { sessionId: "session-2", source: "windsurf" },
+      ],
+    });
+    expect(handoff.subtitle).toContain("2 selected sessions");
+  });
+
   it("builds an assets handoff without carrying asset-viewer state", () => {
     const handoff = buildBackupHandoffFromAssets({
       assetId: "asset-skill-global-generated",
@@ -361,5 +380,17 @@ describe("backup handoff builders", () => {
     });
     expect(handoff).not.toHaveProperty("sessionId");
     expect(handoff.subtitle).toContain("import workflow");
+  });
+
+  it("builds an overview handoff for bulk session backup without invented sessions", () => {
+    const handoff = buildBackupHandoffFromOverview("bulk-session-backup");
+
+    expect(handoff).toMatchObject({
+      origin: "overview",
+      workflowType: "bulk-session-backup",
+    });
+    expect(handoff).not.toHaveProperty("sessionId");
+    expect(handoff).not.toHaveProperty("sessions");
+    expect(handoff.subtitle).toContain("bulk session backup workflow");
   });
 });

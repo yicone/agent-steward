@@ -108,6 +108,11 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - backup packages use canonical `session-record/v1` inside `session-backup/v1`
   - verify/import flows are available through `/api/session-backups`, `/api/session-backups/import`, and `/api/session-backups/[backupId]`
   - v1 `Source Backup` is opt-in and currently supports copy-only source preservation for Codex sessions only
+- Backup / Migration workflows:
+  - `Backup / Migration` now provides bounded `session backup`, `bulk session backup`, `import backup`, and `validate package` workflows
+  - bulk session backup requires explicit session selection, validates each selected session independently, and fans out through the existing single-session backup execution path
+  - bulk results show aggregate status plus per-session detail, while recent operations record one compact batch entry instead of one entry per session
+  - the foundation still does not implement migration preview, project bundle packaging, vendor-runtime restore, or cloud sync
 
 For detailed view semantics and cross-source alignment notes, see `docs/viewer/trajectory-view.md`.
 

@@ -7,12 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   addRecentOperation,
+  buildBulkSessionValidationResult,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
+  createBulkOperationSummary,
   createOperationResult,
+  dedupeSessionSelections,
+  deriveAggregateOperationStatus,
   deriveValidationResult,
   formatWorkflowStateLabel,
   formatWorkflowTypeLabel,
+  getBlockedSessionSelections,
   getNextState,
   getPreviousState,
   getStepsForWorkflow,
@@ -20,14 +25,17 @@ import {
   isTerminalState,
   normalizeBackupId,
   resolveWorkflowFromHandoff,
+  summarizeSourceCopyConfiguration,
   validateBackupPackageRemote,
   WORKFLOW_DESCRIPTORS,
+  type BackupSessionSelection,
   type BackupMigrationHandoff,
   type BackupOperationResult,
   type BackupValidationItem,
   type BackupValidationResult,
   type BackupWorkflowState,
   type BackupWorkflowType,
+  type BulkSessionExecutionResult,
   type RecentOperation,
 } from "@/lib/backupMigration";
 import type { Source } from "@/lib/types";
@@ -62,6 +70,40 @@ function buildImportValidation(backupId: string | null): BackupValidationItem[] 
 
 function buildValidatePackageValidation(backupId: string | null): BackupValidationItem[] {
   return buildImportValidation(backupId);
+}
+
+export function resolveInitialBulkSelections(handoff: BackupMigrationHandoff | null): BackupSessionSelection[] {
+  if (!handoff) return [];
+  if (handoff.sessions?.length) return dedupeSessionSelections(handoff.sessions);
+  if (handoff.workflowType === "bulk-session-backup" && handoff.sessionId) {
+    return dedupeSessionSelections([
+      {
+        sessionId: handoff.sessionId,
+        source: handoff.source,
+        rootId: handoff.rootId,
+      },
+    ]);
+  }
+  return [];
+}
+
+export function buildBulkConfirmationDetails(input: {
+  selections: BackupSessionSelection[];
+  validationResult: BackupValidationResult | null;
+}): {
+  selectedCount: number;
+  warningCount: number;
+  sourceCopySummary: string;
+  executionSemantics: string;
+} {
+  const selections = dedupeSessionSelections(input.selections);
+  return {
+    selectedCount: selections.length,
+    warningCount: input.validationResult?.warningCount ?? input.validationResult?.items.filter((item) => item.severity === "warning").length ?? 0,
+    sourceCopySummary: summarizeSourceCopyConfiguration(selections),
+    executionSemantics:
+      "This workflow executes the existing session-backup behavior once per selected session. It does not create a batch backend API or grouped package format.",
+  };
 }
 
 // ── Subcomponents ───────────────────────────────────────────────────────────
@@ -117,7 +159,7 @@ function WorkflowStepsIndicator(props: {
   );
 }
 
-function ValidationPanel(props: { result: BackupValidationResult }) {
+export function ValidationPanel(props: { result: BackupValidationResult }) {
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -153,7 +195,9 @@ function ValidationPanel(props: { result: BackupValidationResult }) {
   );
 }
 
-function OperationResultPanel(props: { result: BackupOperationResult; onNewWorkflow(): void }) {
+export function OperationResultPanel(props: { result: BackupOperationResult; onNewWorkflow(): void }) {
+  const hasSessionResults = (props.result.sessionResults?.length ?? 0) > 0;
+
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -180,6 +224,45 @@ function OperationResultPanel(props: { result: BackupOperationResult; onNewWorkf
             {props.result.warnings.map((warning, index) => (
               <div key={index} className="mt-1 text-xs leading-5">{warning}</div>
             ))}
+          </div>
+        ) : null}
+        {props.result.sourceCopySummary ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <div className="font-medium text-foreground">Source-copy configuration</div>
+            <div className="mt-1 text-xs leading-5">{props.result.sourceCopySummary}</div>
+          </div>
+        ) : null}
+        {hasSessionResults ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <div className="font-medium text-foreground">Per-session results</div>
+            <div className="mt-3 space-y-2">
+              {props.result.sessionResults!.map((sessionResult) => (
+                <div key={`${sessionResult.sessionId}:${sessionResult.rootId ?? "no-root"}`} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={sessionResult.status === "success" ? "ok" : sessionResult.status === "failed" ? "warn" : "default"}>
+                        {sessionResult.status}
+                      </Badge>
+                      <span className="font-medium">{sessionResult.sessionId}</span>
+                    </div>
+                    <span className="text-xs text-muted">
+                      {sessionResult.source ?? "unknown-source"}
+                      {sessionResult.rootId ? ` / ${sessionResult.rootId}` : ""}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs leading-5">{sessionResult.summary}</div>
+                  {sessionResult.backupId ? <div className="mt-1 text-xs">Backup ID: {sessionResult.backupId}</div> : null}
+                  {sessionResult.error ? <div className="mt-1 text-xs text-foreground">Error: {sessionResult.error}</div> : null}
+                  {sessionResult.warnings?.length ? (
+                    <div className="mt-1 space-y-1 text-xs leading-5">
+                      {sessionResult.warnings.map((warning, index) => (
+                        <div key={index}>{warning}</div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
         <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
@@ -220,6 +303,7 @@ function RecentOperationsPanel(props: { operations: RecentOperation[]; onSelectO
               <span className="text-xs text-muted">{new Date(op.timestamp).toLocaleTimeString()}</span>
             </div>
             <div className="mt-1 text-xs text-muted">{op.summary}</div>
+            {op.sessionCount != null ? <div className="mt-1 text-[11px] text-muted">Sessions: {op.sessionCount}</div> : null}
           </button>
         ))}
       </div>
@@ -246,6 +330,12 @@ export function BackupMigrationFoundation({
   const [selectedRootId, setSelectedRootId] = useState<string | null>(handoff?.rootId ?? null);
   const [includeSourceCopy, setIncludeSourceCopy] = useState(false);
 
+  // Bulk session backup state
+  const [bulkSelections, setBulkSelections] = useState<BackupSessionSelection[]>(() => resolveInitialBulkSelections(handoff));
+  const [bulkDraftSessionId, setBulkDraftSessionId] = useState("");
+  const [bulkDraftSource, setBulkDraftSource] = useState<Source | "">("");
+  const [bulkDraftRootId, setBulkDraftRootId] = useState("");
+
   // Import / validate state
   const [backupIdInput, setBackupIdInput] = useState("");
 
@@ -263,6 +353,11 @@ export function BackupMigrationFoundation({
   // ── Derived ──
   const descriptor = activeWorkflow ? getWorkflowDescriptor(activeWorkflow) : null;
   const normalizedBackupId = normalizeBackupId(backupIdInput);
+  const dedupedBulkSelections = useMemo(() => dedupeSessionSelections(bulkSelections), [bulkSelections]);
+  const bulkConfirmationDetails = useMemo(
+    () => buildBulkConfirmationDetails({ selections: dedupedBulkSelections, validationResult }),
+    [dedupedBulkSelections, validationResult]
+  );
 
   // ── Actions ──
   const resetWorkflow = useCallback(() => {
@@ -273,6 +368,10 @@ export function BackupMigrationFoundation({
     setSelectedSource(null);
     setSelectedRootId(null);
     setIncludeSourceCopy(false);
+    setBulkSelections([]);
+    setBulkDraftSessionId("");
+    setBulkDraftSource("");
+    setBulkDraftRootId("");
     setBackupIdInput("");
     setValidationResult(null);
     setIsExecuting(false);
@@ -287,7 +386,10 @@ export function BackupMigrationFoundation({
     setOperationResult(null);
     setExecutionError(null);
     setIsExecuting(false);
-  }, []);
+    if (type === "bulk-session-backup") {
+      setBulkSelections(resolveInitialBulkSelections(activeHandoff));
+    }
+  }, [activeHandoff]);
 
   const advanceState = useCallback(() => {
     if (!activeWorkflow) return;
@@ -307,22 +409,75 @@ export function BackupMigrationFoundation({
 
   const runValidation = useCallback(async () => {
     if (!activeWorkflow) return;
-    let items: BackupValidationItem[];
     if (activeWorkflow === "session-backup") {
-      items = buildSessionBackupValidation(selectedSessionId);
+      const result = deriveValidationResult(buildSessionBackupValidation(selectedSessionId));
+      setValidationResult(result);
+      setWorkflowState("validation");
+      return;
+    }
+
+    if (activeWorkflow === "bulk-session-backup") {
+      const result = buildBulkSessionValidationResult(dedupedBulkSelections);
+      setValidationResult(result);
+      setWorkflowState("validation");
+      return;
+    }
+
+    let items: BackupValidationItem[];
+    if (!normalizedBackupId) {
+      items = activeWorkflow === "import-backup"
+        ? buildImportValidation(null)
+        : buildValidatePackageValidation(null);
     } else {
-      if (!normalizedBackupId) {
-        items = activeWorkflow === "import-backup"
-          ? buildImportValidation(null)
-          : buildValidatePackageValidation(null);
-      } else {
-        items = await validateBackupPackageRemote(fetch, normalizedBackupId);
-      }
+      items = await validateBackupPackageRemote(fetch, normalizedBackupId);
     }
     const result = deriveValidationResult(items);
     setValidationResult(result);
     setWorkflowState("validation");
-  }, [activeWorkflow, normalizedBackupId, selectedSessionId]);
+  }, [activeWorkflow, dedupedBulkSelections, normalizedBackupId, selectedSessionId]);
+
+  const addBulkSelection = useCallback(() => {
+    if (!bulkDraftSessionId.trim() || !bulkDraftSource) return;
+    setBulkSelections((prev) =>
+      dedupeSessionSelections([
+        ...prev,
+        {
+          sessionId: bulkDraftSessionId,
+          source: bulkDraftSource,
+          rootId: bulkDraftRootId || undefined,
+        },
+      ])
+    );
+    setBulkDraftSessionId("");
+    setBulkDraftSource("");
+    setBulkDraftRootId("");
+  }, [bulkDraftRootId, bulkDraftSessionId, bulkDraftSource]);
+
+  const removeBulkSelection = useCallback((selection: BackupSessionSelection) => {
+    const target = `${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`;
+    setBulkSelections((prev) =>
+      prev.filter((item) => `${item.sessionId}:${item.source ?? ""}:${item.rootId ?? ""}` !== target)
+    );
+  }, []);
+
+  const updateBulkSelectionSourceCopy = useCallback((selection: BackupSessionSelection, includeSourceCopy: boolean) => {
+    const target = `${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`;
+    setBulkSelections((prev) =>
+      prev.map((item) =>
+        `${item.sessionId}:${item.source ?? ""}:${item.rootId ?? ""}` === target
+          ? { ...item, includeSourceCopy }
+          : item
+      )
+    );
+  }, []);
+
+  const removeBlockedSelections = useCallback(() => {
+    if (!validationResult) return;
+    const blocked = new Set(getBlockedSessionSelections(validationResult).map((selection) => `${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`));
+    setBulkSelections((prev) => prev.filter((selection) => !blocked.has(`${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`)));
+    setValidationResult(null);
+    setWorkflowState("selection");
+  }, [validationResult]);
 
   const executeSessionBackup = useCallback(async () => {
     if (!selectedSessionId || !selectedSource) return;
@@ -375,6 +530,115 @@ export function BackupMigrationFoundation({
       setIsExecuting(false);
     }
   }, [selectedSessionId, selectedSource, selectedRootId, includeSourceCopy]);
+
+  const executeBulkSessionBackup = useCallback(async () => {
+    if (dedupedBulkSelections.length === 0) return;
+
+    setIsExecuting(true);
+    setExecutionError(null);
+    setWorkflowState("execution");
+
+    const validationWarningsBySelection = new Map<string, string[]>();
+    for (const entry of validationResult?.sessionResults ?? []) {
+      validationWarningsBySelection.set(
+        `${entry.session.sessionId}:${entry.session.source ?? ""}:${entry.session.rootId ?? ""}`,
+        entry.result.items.filter((item) => item.severity === "warning").map((item) => item.detail)
+      );
+    }
+
+    try {
+      const sessionResults: BulkSessionExecutionResult[] = [];
+
+      for (const selection of dedupedBulkSelections) {
+        const warningKey = `${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`;
+        const validationWarnings = validationWarningsBySelection.get(warningKey) ?? [];
+
+        if (!selection.sessionId || !selection.source) {
+          sessionResults.push({
+            sessionId: selection.sessionId || "unresolved-session",
+            source: selection.source,
+            rootId: selection.rootId,
+            status: "failed",
+            summary: "Selected session cannot be backed up because canonical identity or provenance is missing.",
+            error: "Missing canonical session ID or source provenance.",
+          });
+          continue;
+        }
+
+        try {
+          const requestBody = buildSessionBackupExecutionRequest({
+            source: selection.source,
+            sessionId: selection.sessionId,
+            rootId: selection.rootId,
+            includeSourceCopy: selection.includeSourceCopy === true,
+          });
+
+          const response = await fetch("/api/session-backups", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+            throw new Error(errorData.error ?? `HTTP ${response.status}`);
+          }
+
+          const data = await response.json();
+          sessionResults.push({
+            sessionId: selection.sessionId,
+            source: selection.source,
+            rootId: selection.rootId,
+            status: validationWarnings.length ? "success-with-warnings" : "success",
+            summary: `Session ${selection.sessionId} backed up successfully.`,
+            backupId: data.backupId,
+            warnings: validationWarnings.length ? validationWarnings : undefined,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          sessionResults.push({
+            sessionId: selection.sessionId,
+            source: selection.source,
+            rootId: selection.rootId,
+            status: "failed",
+            summary: `Session ${selection.sessionId} backup failed.`,
+            warnings: validationWarnings.length ? validationWarnings : undefined,
+            error: message,
+          });
+        }
+      }
+
+      const aggregateStatus = deriveAggregateOperationStatus(sessionResults);
+      const result = createOperationResult({
+        workflowType: "bulk-session-backup",
+        status: aggregateStatus,
+        summary: createBulkOperationSummary(sessionResults),
+        sessionCount: sessionResults.length,
+        sourceCopySummary: summarizeSourceCopyConfiguration(dedupedBulkSelections),
+        warnings: sessionResults.flatMap((entry) => entry.warnings ?? []),
+        sessionResults,
+      });
+
+      setOperationResult(result);
+      setRecentOperations((prev) => addRecentOperation(prev, result));
+      setWorkflowState(aggregateStatus === "failed" ? "failed" : "result");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExecutionError(message);
+      const result = createOperationResult({
+        workflowType: "bulk-session-backup",
+        status: "failed",
+        summary: `Bulk session backup failed: ${message}`,
+        sessionCount: dedupedBulkSelections.length,
+        sourceCopySummary: summarizeSourceCopyConfiguration(dedupedBulkSelections),
+      });
+      setOperationResult(result);
+      setRecentOperations((prev) => addRecentOperation(prev, result));
+      setWorkflowState("failed");
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [dedupedBulkSelections, validationResult]);
 
   const executeImport = useCallback(async () => {
     if (!normalizedBackupId) return;
@@ -475,7 +739,7 @@ export function BackupMigrationFoundation({
             <h2 className="text-xl font-semibold">Backup / Migration</h2>
             <p className="max-w-3xl text-sm leading-6 text-muted">
               Choose a bounded workflow below. Each workflow follows explicit selection, validation, and result steps.
-              This foundation does not support bulk backup, migration execution, project bundle packaging, vendor-runtime restore, or cloud sync.
+              This foundation does not support migration preview, project bundle packaging, vendor-runtime restore, or cloud sync.
             </p>
           </div>
         </Card>
@@ -598,6 +862,90 @@ export function BackupMigrationFoundation({
             </Card>
           ) : null}
 
+          {workflowState === "selection" && activeWorkflow === "bulk-session-backup" ? (
+            <Card className="p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Select Sessions</div>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Select one or more sessions explicitly before validation. This workflow does not invent a session set from overview, analysis, or asset context.
+                </div>
+                <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_180px_minmax(0,1fr)_auto]">
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs uppercase tracking-[0.18em] text-muted">Session ID</span>
+                    <input
+                      type="text"
+                      value={bulkDraftSessionId}
+                      onChange={(e) => setBulkDraftSessionId(e.target.value)}
+                      placeholder="Enter session ID"
+                      className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs uppercase tracking-[0.18em] text-muted">Source</span>
+                    <select
+                      value={bulkDraftSource}
+                      onChange={(e) => setBulkDraftSource((e.target.value as Source | "") ?? "")}
+                      className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose source</option>
+                      <option value="antigravity">Antigravity</option>
+                      <option value="windsurf">Windsurf</option>
+                      <option value="codex">Codex</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1 text-sm">
+                    <span className="text-xs uppercase tracking-[0.18em] text-muted">Root ID (optional)</span>
+                    <input
+                      type="text"
+                      value={bulkDraftRootId}
+                      onChange={(e) => setBulkDraftRootId(e.target.value)}
+                      placeholder="Optional root ID"
+                      className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <div className="flex items-end">
+                    <Button size="sm" onClick={addBulkSelection} disabled={!bulkDraftSessionId.trim() || !bulkDraftSource}>
+                      Add session
+                    </Button>
+                  </div>
+                </div>
+                {dedupedBulkSelections.length > 0 ? (
+                  <div className="space-y-2">
+                    {dedupedBulkSelections.map((selection) => (
+                      <div key={`${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium">{selection.sessionId || "unresolved-session"}</div>
+                            <div className="text-xs text-muted">
+                              {selection.source ?? "unknown-source"}
+                              {selection.rootId ? ` / ${selection.rootId}` : ""}
+                            </div>
+                            {selection.unresolvedReason ? (
+                              <div className="mt-1 text-xs text-muted">{selection.unresolvedReason}</div>
+                            ) : null}
+                          </div>
+                          <Button size="sm" variant="outline" onClick={() => removeBulkSelection(selection)}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-amber-400/25 bg-amber-400/8 px-3 py-3 text-sm text-muted">
+                    No sessions selected yet.
+                  </div>
+                )}
+                {activeHandoff?.origin === "sessions" && dedupedBulkSelections.length > 0 ? (
+                  <div className="text-xs text-muted">Pre-selected from routed handoff.</div>
+                ) : null}
+                <Button size="sm" disabled={dedupedBulkSelections.length === 0} onClick={advanceState}>
+                  Continue to Configuration
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
           {workflowState === "selection" && (activeWorkflow === "import-backup" || activeWorkflow === "validate-package") ? (
             <Card className="p-4">
               <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Select Package</div>
@@ -663,10 +1011,87 @@ export function BackupMigrationFoundation({
             </Card>
           ) : null}
 
+          {workflowState === "configuration" && activeWorkflow === "bulk-session-backup" ? (
+            <Card className="p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Configure Batch</div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Configure source copy per selected session. Source copy remains opt-in and only eligible sessions can actually include it.
+                </div>
+                <div className="space-y-2">
+                  {dedupedBulkSelections.map((selection) => {
+                    const canSourceCopy = selection.source === "codex";
+                    return (
+                      <div key={`${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div>
+                            <div className="font-medium">{selection.sessionId}</div>
+                            <div className="text-xs text-muted">
+                              {selection.source ?? "unknown-source"}
+                              {selection.rootId ? ` / ${selection.rootId}` : ""}
+                            </div>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={canSourceCopy ? selection.includeSourceCopy === true : false}
+                              disabled={!canSourceCopy}
+                              onChange={(e) => updateBulkSelectionSourceCopy(selection, e.target.checked)}
+                            />
+                            <span className={!canSourceCopy ? "text-muted" : undefined}>Include source copy</span>
+                          </label>
+                        </div>
+                        {!canSourceCopy ? (
+                          <div className="mt-2 text-xs text-muted">
+                            Source copy is unavailable for this source. Backup will preserve the canonical record only.
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  {bulkConfirmationDetails.sourceCopySummary}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={retreatState}>
+                    Back
+                  </Button>
+                  <Button size="sm" onClick={runValidation}>
+                    Validate
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
           {/* Validation */}
           {workflowState === "validation" && validationResult ? (
             <div className="space-y-4">
               <ValidationPanel result={validationResult} />
+              {activeWorkflow === "bulk-session-backup" && (validationResult.sessionResults?.length ?? 0) > 0 ? (
+                <Card className="p-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Per-session eligibility</div>
+                  <div className="space-y-2">
+                    {validationResult.sessionResults!.map((entry) => (
+                      <div key={`${entry.session.sessionId}:${entry.session.source ?? ""}:${entry.session.rootId ?? ""}`} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="font-medium">{entry.session.sessionId || "unresolved-session"}</div>
+                            <div className="text-xs text-muted">
+                              {entry.session.source ?? "unknown-source"}
+                              {entry.session.rootId ? ` / ${entry.session.rootId}` : ""}
+                            </div>
+                          </div>
+                          <Badge variant={entry.result.status === "valid" ? "ok" : entry.result.status === "invalid" ? "warn" : "default"}>
+                            {entry.result.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="outline" onClick={retreatState}>
                   Back
@@ -679,6 +1104,13 @@ export function BackupMigrationFoundation({
                   <Button size="sm" onClick={advanceState}>
                     Proceed to Confirmation
                   </Button>
+                ) : activeWorkflow === "bulk-session-backup" ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={removeBlockedSelections}>
+                      Remove blocked selections
+                    </Button>
+                    <div className="text-sm text-muted">Resolve blocking sessions before proceeding.</div>
+                  </>
                 ) : (
                   <div className="text-sm text-muted">Resolve blocking issues before proceeding.</div>
                 )}
@@ -704,6 +1136,30 @@ export function BackupMigrationFoundation({
                     <div className="font-medium">Import backup package {normalizedBackupId}</div>
                   </div>
                 ) : null}
+                {activeWorkflow === "bulk-session-backup" ? (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                        <div className="text-xs text-muted">Selected count</div>
+                        <div className="mt-1 font-medium">{bulkConfirmationDetails.selectedCount}</div>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                        <div className="text-xs text-muted">Warnings</div>
+                        <div className="mt-1 font-medium">{bulkConfirmationDetails.warningCount}</div>
+                      </div>
+                      <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                        <div className="text-xs text-muted">Execution</div>
+                        <div className="mt-1 font-medium">Sequential fan-out</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                      {bulkConfirmationDetails.sourceCopySummary}
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                      {bulkConfirmationDetails.executionSemantics}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 px-3 py-3 text-sm text-muted">
                   <span className="font-medium text-foreground">Preservation notice:</span>{" "}
                   {activeWorkflow === "import-backup"
@@ -722,7 +1178,7 @@ export function BackupMigrationFoundation({
                   <Button
                     size="sm"
                     disabled={isExecuting}
-                    onClick={activeWorkflow === "session-backup" ? executeSessionBackup : executeImport}
+                    onClick={activeWorkflow === "session-backup" ? executeSessionBackup : activeWorkflow === "bulk-session-backup" ? executeBulkSessionBackup : executeImport}
                   >
                     {isExecuting ? "Executing…" : "Execute"}
                   </Button>
@@ -763,6 +1219,13 @@ export function BackupMigrationFoundation({
                   <div className="text-xs text-muted">Session</div>
                   <div className="font-medium">{selectedSessionId}</div>
                   {selectedSource ? <div className="text-xs text-muted">{selectedSource}</div> : null}
+                </div>
+              ) : null}
+              {activeWorkflow === "bulk-session-backup" ? (
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-2">
+                  <div className="text-xs text-muted">Selected sessions</div>
+                  <div className="font-medium">{dedupedBulkSelections.length}</div>
+                  <div className="mt-1 text-xs text-muted">{bulkConfirmationDetails.sourceCopySummary}</div>
                 </div>
               ) : null}
               {normalizedBackupId && activeWorkflow !== "session-backup" ? (

@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   addRecentOperation,
+  buildBulkSessionValidationResult,
   buildPackageValidationItems,
   buildBackupHandoffInstanceKey,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
+  createBulkOperationSummary,
   createOperationResult,
+  dedupeSessionSelections,
+  deriveAggregateOperationStatus,
   deriveValidationResult,
   formatWorkflowStateLabel,
   formatWorkflowTypeLabel,
@@ -38,6 +42,7 @@ describe("getWorkflowDescriptor", () => {
 describe("formatWorkflowTypeLabel", () => {
   it("returns a human-readable label", () => {
     expect(formatWorkflowTypeLabel("session-backup")).toBe("Session Backup");
+    expect(formatWorkflowTypeLabel("bulk-session-backup")).toBe("Bulk Session Backup");
     expect(formatWorkflowTypeLabel("import-backup")).toBe("Import Backup");
     expect(formatWorkflowTypeLabel("validate-package")).toBe("Validate Package");
   });
@@ -55,6 +60,11 @@ describe("formatWorkflowStateLabel", () => {
 describe("getStepsForWorkflow", () => {
   it("returns steps for session-backup", () => {
     const steps = getStepsForWorkflow("session-backup");
+    expect(steps).toEqual(["selection", "configuration", "validation", "confirmation", "execution", "result"]);
+  });
+
+  it("returns steps for bulk-session-backup", () => {
+    const steps = getStepsForWorkflow("bulk-session-backup");
     expect(steps).toEqual(["selection", "configuration", "validation", "confirmation", "execution", "result"]);
   });
 
@@ -167,6 +177,99 @@ describe("createOperationResult", () => {
     const r1 = createOperationResult({ workflowType: "session-backup", status: "success", summary: "A" });
     const r2 = createOperationResult({ workflowType: "import-backup", status: "failed", summary: "B" });
     expect(r1.id).not.toBe(r2.id);
+  });
+
+  it("retains bulk metadata when provided", () => {
+    const result = createOperationResult({
+      workflowType: "bulk-session-backup",
+      status: "success-with-warnings",
+      summary: "Backed up 2 of 3 selected sessions.",
+      sessionCount: 3,
+      sourceCopySummary: "Source copy requested for 1 of 3 selected sessions.",
+      sessionResults: [
+        {
+          sessionId: "session-1",
+          source: "codex",
+          status: "success",
+          summary: "Session session-1 backed up successfully.",
+        },
+      ],
+    });
+
+    expect(result.workflowType).toBe("bulk-session-backup");
+    expect(result.sessionCount).toBe(3);
+    expect(result.sourceCopySummary).toContain("Source copy requested");
+    expect(result.sessionResults).toHaveLength(1);
+  });
+});
+
+describe("bulk session backup helpers", () => {
+  it("dedupes repeated session selections", () => {
+    expect(
+      dedupeSessionSelections([
+        { sessionId: "session-1", source: "codex", rootId: "root-a" },
+        { sessionId: "session-1", source: "codex", rootId: "root-a" },
+        { sessionId: "session-2", source: "windsurf" },
+      ])
+    ).toEqual([
+      { sessionId: "session-1", source: "codex", rootId: "root-a", includeSourceCopy: false, unresolvedReason: undefined },
+      { sessionId: "session-2", source: "windsurf", rootId: undefined, includeSourceCopy: false, unresolvedReason: undefined },
+    ]);
+  });
+
+  it("builds invalid validation result when no sessions are selected", () => {
+    const result = buildBulkSessionValidationResult([]);
+    expect(result.status).toBe("invalid");
+    expect(result.selectedCount).toBe(0);
+    expect(result.blockCount).toBe(1);
+  });
+
+  it("surfaces warnings and blocks per selected session", () => {
+    const result = buildBulkSessionValidationResult([
+      { sessionId: "session-1", source: "codex", includeSourceCopy: true },
+      { sessionId: "session-2", source: "windsurf", includeSourceCopy: true },
+      { sessionId: "", unresolvedReason: "Canonical record is missing." },
+    ]);
+
+    expect(result.status).toBe("invalid");
+    expect(result.selectedCount).toBe(3);
+    expect(result.warningCount).toBeGreaterThan(0);
+    expect(result.blockCount).toBeGreaterThan(0);
+    expect(result.sessionResults).toHaveLength(3);
+  });
+
+  it("derives aggregate success-with-warnings for mixed batch results", () => {
+    expect(
+      deriveAggregateOperationStatus([
+        { sessionId: "session-1", status: "success", summary: "ok" },
+        { sessionId: "session-2", status: "failed", summary: "failed" },
+      ])
+    ).toBe("success-with-warnings");
+  });
+
+  it("derives full failure when every session fails", () => {
+    expect(
+      deriveAggregateOperationStatus([
+        { sessionId: "session-1", status: "failed", summary: "failed" },
+        { sessionId: "session-2", status: "failed", summary: "failed" },
+      ])
+    ).toBe("failed");
+  });
+
+  it("creates aggregate batch summaries", () => {
+    expect(
+      createBulkOperationSummary([
+        { sessionId: "session-1", status: "success", summary: "ok" },
+        { sessionId: "session-2", status: "success", summary: "ok" },
+      ])
+    ).toContain("2 selected sessions successfully");
+
+    expect(
+      createBulkOperationSummary([
+        { sessionId: "session-1", status: "success", summary: "ok" },
+        { sessionId: "session-2", status: "failed", summary: "failed" },
+      ])
+    ).toContain("1 of 2 selected sessions");
   });
 });
 
@@ -361,6 +464,18 @@ describe("resolveWorkflowFromHandoff", () => {
     expect(resolveWorkflowFromHandoff(handoff)).toBe("session-backup");
   });
 
+  it("infers bulk-session-backup when routed sessions are present", () => {
+    const handoff: BackupMigrationHandoff = {
+      origin: "sessions",
+      subtitle: "Bulk backup routed from Sessions.",
+      sessions: [
+        { sessionId: "session-1", source: "codex" },
+        { sessionId: "session-2", source: "windsurf" },
+      ],
+    };
+    expect(resolveWorkflowFromHandoff(handoff)).toBe("bulk-session-backup");
+  });
+
   it("infers session-backup from preservation finding", () => {
     const handoff: BackupMigrationHandoff = {
       origin: "analysis",
@@ -396,6 +511,23 @@ describe("buildBackupHandoffInstanceKey", () => {
       origin: "analysis",
       subtitle: "Test",
       findingId: "finding-1",
+    });
+
+    expect(first).not.toBe(second);
+  });
+
+  it("changes when bulk routed session sets change", () => {
+    const first = buildBackupHandoffInstanceKey({
+      origin: "sessions",
+      subtitle: "Bulk backup routed from Sessions.",
+      workflowType: "bulk-session-backup",
+      sessions: [{ sessionId: "session-1", source: "codex" }],
+    });
+    const second = buildBackupHandoffInstanceKey({
+      origin: "sessions",
+      subtitle: "Bulk backup routed from Sessions.",
+      workflowType: "bulk-session-backup",
+      sessions: [{ sessionId: "session-2", source: "codex" }],
     });
 
     expect(first).not.toBe(second);
