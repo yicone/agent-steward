@@ -8,13 +8,21 @@ import { Card } from "@/components/ui/card";
 import {
   addRecentOperation,
   buildBulkSessionValidationResult,
+  buildMigrationPreviewItems,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
+  createMigrationPreviewOperationResult,
   createBulkOperationSummary,
   createOperationResult,
   dedupeSessionSelections,
   deriveAggregateOperationStatus,
+  deriveMigrationPreviewValidationResult,
   deriveValidationResult,
+  formatMigrationPreviewClassificationLabel,
+  formatMigrationPreviewScopeLabel,
+  formatMigrationPreviewSourceKindLabel,
+  formatMigrationPreviewSourceProductLabel,
+  formatMigrationPreviewTargetProfileLabel,
   formatWorkflowStateLabel,
   formatWorkflowTypeLabel,
   getBlockedSessionSelections,
@@ -36,6 +44,13 @@ import {
   type BackupWorkflowState,
   type BackupWorkflowType,
   type BulkSessionExecutionResult,
+  type MigrationPreviewScope,
+  type MigrationPreviewScopeKind,
+  type MigrationPreviewSourceContext,
+  type MigrationPreviewSourceKind,
+  type MigrationPreviewSourceProduct,
+  type MigrationPreviewTargetContext,
+  type MigrationPreviewTargetProfile,
   type RecentOperation,
 } from "@/lib/backupMigration";
 import type { Source } from "@/lib/types";
@@ -70,6 +85,33 @@ function buildImportValidation(backupId: string | null): BackupValidationItem[] 
 
 function buildValidatePackageValidation(backupId: string | null): BackupValidationItem[] {
   return buildImportValidation(backupId);
+}
+
+function deriveInitialPreviewSourceContext(handoff: BackupMigrationHandoff | null): MigrationPreviewSourceContext {
+  return handoff?.migrationPreviewSourceContext ?? {};
+}
+
+function deriveInitialPreviewTargetContext(handoff: BackupMigrationHandoff | null): MigrationPreviewTargetContext {
+  return handoff?.migrationPreviewTargetContext ?? {};
+}
+
+function deriveInitialPreviewScope(handoff: BackupMigrationHandoff | null): MigrationPreviewScope {
+  return handoff?.migrationPreviewScope ?? { itemRefs: [] };
+}
+
+function buildPreviewRepairLabel(target?: string): string {
+  if (target === "sessions") return "Inspect source sessions";
+  if (target === "assets") return "Inspect source assets";
+  if (target === "analysis") return "Review analysis context";
+  return "Return to overview context";
+}
+
+function isPreviewReadyForResult(input: {
+  sourceContext: MigrationPreviewSourceContext;
+  targetContext: MigrationPreviewTargetContext;
+  scope: MigrationPreviewScope;
+}): boolean {
+  return Boolean(input.sourceContext.product && input.sourceContext.kind && input.targetContext.profile && input.scope.kind);
 }
 
 export function resolveInitialBulkSelections(handoff: BackupMigrationHandoff | null): BackupSessionSelection[] {
@@ -195,8 +237,9 @@ export function ValidationPanel(props: { result: BackupValidationResult }) {
   );
 }
 
-export function OperationResultPanel(props: { result: BackupOperationResult; onNewWorkflow(): void }) {
+export function OperationResultPanel(props: { result: BackupOperationResult; onNewWorkflow(): void; onReconfigurePreview?(): void }) {
   const hasSessionResults = (props.result.sessionResults?.length ?? 0) > 0;
+  const hasPreviewItems = (props.result.previewItems?.length ?? 0) > 0;
 
   return (
     <Card className="p-4">
@@ -232,6 +275,40 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
             <div className="mt-1 text-xs leading-5">{props.result.sourceCopySummary}</div>
           </div>
         ) : null}
+        {props.result.workflowType === "migration-preview" ? (
+          <div className="rounded-xl border border-accent/35 bg-accent/8 px-3 py-3 text-sm text-muted">
+            <span className="font-medium text-foreground">Preview only.</span>{" "}
+            This result compares explicit source, target, and bounded scope without applying migration, generating bundles, or writing migrated objects.
+          </div>
+        ) : null}
+        {props.result.previewCounts ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {(["portable", "degraded", "unsupported", "blocked"] as const).map((classification) => (
+              <div key={classification} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                <div className="text-xs text-muted">{formatMigrationPreviewClassificationLabel(classification)}</div>
+                <div className="mt-1 font-medium">{props.result.previewCounts?.[classification] ?? 0}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {props.result.previewSourceContext || props.result.previewTargetContext || props.result.previewScope ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <div className="font-medium text-foreground">Preview context</div>
+            {props.result.previewSourceContext?.product && props.result.previewSourceContext.kind ? (
+              <div className="mt-1 text-xs leading-5">
+                Source: {formatMigrationPreviewSourceProductLabel(props.result.previewSourceContext.product)} / {formatMigrationPreviewSourceKindLabel(props.result.previewSourceContext.kind)}
+              </div>
+            ) : null}
+            {props.result.previewTargetContext?.profile ? (
+              <div className="mt-1 text-xs leading-5">Target: {formatMigrationPreviewTargetProfileLabel(props.result.previewTargetContext.profile)}</div>
+            ) : null}
+            {props.result.previewScope?.kind ? (
+              <div className="mt-1 text-xs leading-5">
+                Scope: {formatMigrationPreviewScopeLabel(props.result.previewScope.kind)} ({props.result.previewScope.itemRefs.length})
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {hasSessionResults ? (
           <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
             <div className="font-medium text-foreground">Per-session results</div>
@@ -265,12 +342,53 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
             </div>
           </div>
         ) : null}
-        <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
-          <span className="font-medium text-foreground">No vendor-runtime restore.</span>{" "}
-          Imported or backed-up sessions are product-readable only. They will not reopen inside a third-party agent runtime or private source store.
-        </div>
+        {props.result.workflowType === "migration-preview" && props.result.previewScope?.kind && !hasPreviewItems ? (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-400/8 px-3 py-3 text-sm text-muted">
+            No previewable {formatMigrationPreviewScopeLabel(props.result.previewScope.kind).toLowerCase()} were available. Return to scope configuration to refine the bounded preview set.
+          </div>
+        ) : null}
+        {hasPreviewItems ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <div className="font-medium text-foreground">Preview item detail</div>
+            <div className="mt-3 space-y-2">
+              {props.result.previewItems!.map((item) => (
+                <div key={item.id} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={item.classification === "portable" ? "ok" : item.classification === "degraded" ? "default" : "warn"}>
+                        {item.classification}
+                      </Badge>
+                      <span className="font-medium">{item.label}</span>
+                    </div>
+                    <span className="text-xs text-muted">{formatMigrationPreviewScopeLabel(item.scopeKind)}</span>
+                  </div>
+                  <div className="mt-1 text-xs leading-5">{item.detail}</div>
+                  {item.classification !== "portable" ? (
+                    <div className="mt-1 text-xs text-muted">{buildPreviewRepairLabel(item.repairTarget)}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {props.result.workflowType === "migration-preview" ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <span className="font-medium text-foreground">No runtime restore or apply.</span>{" "}
+            Preview results are advisory compatibility findings only. They do not write objects, reopen third-party runtimes, or create backup packages.
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <span className="font-medium text-foreground">No vendor-runtime restore.</span>{" "}
+            Imported or backed-up sessions are product-readable only. They will not reopen inside a third-party agent runtime or private source store.
+          </div>
+        )}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
+        {props.result.workflowType === "migration-preview" ? (
+          <Button size="sm" variant="outline" onClick={props.onReconfigurePreview}>
+            Return to scope configuration
+          </Button>
+        ) : null}
         <Button size="sm" variant="outline" onClick={props.onNewWorkflow}>
           Start another workflow
         </Button>
@@ -304,6 +422,11 @@ function RecentOperationsPanel(props: { operations: RecentOperation[]; onSelectO
             </div>
             <div className="mt-1 text-xs text-muted">{op.summary}</div>
             {op.sessionCount != null ? <div className="mt-1 text-[11px] text-muted">Sessions: {op.sessionCount}</div> : null}
+            {op.workflowType === "migration-preview" && op.previewScope?.kind ? (
+              <div className="mt-1 text-[11px] text-muted">
+                Scope: {formatMigrationPreviewScopeLabel(op.previewScope.kind)} ({op.previewScope.itemRefs.length})
+              </div>
+            ) : null}
           </button>
         ))}
       </div>
@@ -339,6 +462,12 @@ export function BackupMigrationFoundation({
   // Import / validate state
   const [backupIdInput, setBackupIdInput] = useState("");
 
+  // Migration preview state
+  const [previewSourceContext, setPreviewSourceContext] = useState<MigrationPreviewSourceContext>(() => deriveInitialPreviewSourceContext(handoff));
+  const [previewTargetContext, setPreviewTargetContext] = useState<MigrationPreviewTargetContext>(() => deriveInitialPreviewTargetContext(handoff));
+  const [previewScope, setPreviewScope] = useState<MigrationPreviewScope>(() => deriveInitialPreviewScope(handoff));
+  const [previewScopeDraft, setPreviewScopeDraft] = useState(deriveInitialPreviewScope(handoff).itemRefs.join("\n"));
+
   // Validation
   const [validationResult, setValidationResult] = useState<BackupValidationResult | null>(null);
 
@@ -358,6 +487,16 @@ export function BackupMigrationFoundation({
     () => buildBulkConfirmationDetails({ selections: dedupedBulkSelections, validationResult }),
     [dedupedBulkSelections, validationResult]
   );
+  const previewItems = useMemo(() => {
+    if (!previewSourceContext.product || !previewSourceContext.kind || !previewTargetContext.profile || !previewScope.kind) {
+      return [];
+    }
+    return buildMigrationPreviewItems({
+      sourceContext: previewSourceContext,
+      targetContext: previewTargetContext,
+      scope: previewScope,
+    });
+  }, [previewScope, previewSourceContext, previewTargetContext]);
 
   // ── Actions ──
   const resetWorkflow = useCallback(() => {
@@ -373,6 +512,10 @@ export function BackupMigrationFoundation({
     setBulkDraftSource("");
     setBulkDraftRootId("");
     setBackupIdInput("");
+    setPreviewSourceContext({});
+    setPreviewTargetContext({});
+    setPreviewScope({ itemRefs: [] });
+    setPreviewScopeDraft("");
     setValidationResult(null);
     setIsExecuting(false);
     setExecutionError(null);
@@ -388,6 +531,15 @@ export function BackupMigrationFoundation({
     setIsExecuting(false);
     if (type === "bulk-session-backup") {
       setBulkSelections(resolveInitialBulkSelections(activeHandoff));
+    }
+    if (type === "migration-preview") {
+      const initialSource = deriveInitialPreviewSourceContext(activeHandoff);
+      const initialTarget = deriveInitialPreviewTargetContext(activeHandoff);
+      const initialScope = deriveInitialPreviewScope(activeHandoff);
+      setPreviewSourceContext(initialSource);
+      setPreviewTargetContext(initialTarget);
+      setPreviewScope(initialScope);
+      setPreviewScopeDraft(initialScope.itemRefs.join("\n"));
     }
   }, [activeHandoff]);
 
@@ -423,6 +575,25 @@ export function BackupMigrationFoundation({
       return;
     }
 
+    if (activeWorkflow === "migration-preview") {
+      const nextScope: MigrationPreviewScope = {
+        ...previewScope,
+        itemRefs: previewScopeDraft
+          .split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      };
+      setPreviewScope(nextScope);
+      const result = deriveMigrationPreviewValidationResult({
+        sourceContext: previewSourceContext,
+        targetContext: previewTargetContext,
+        scope: nextScope,
+      });
+      setValidationResult(result);
+      setWorkflowState("validation");
+      return;
+    }
+
     let items: BackupValidationItem[];
     if (!normalizedBackupId) {
       items = activeWorkflow === "import-backup"
@@ -434,7 +605,7 @@ export function BackupMigrationFoundation({
     const result = deriveValidationResult(items);
     setValidationResult(result);
     setWorkflowState("validation");
-  }, [activeWorkflow, dedupedBulkSelections, normalizedBackupId, selectedSessionId]);
+  }, [activeWorkflow, dedupedBulkSelections, normalizedBackupId, previewScope, previewScopeDraft, previewSourceContext, previewTargetContext, selectedSessionId]);
 
   const addBulkSelection = useCallback(() => {
     if (!bulkDraftSessionId.trim() || !bulkDraftSource) return;
@@ -709,11 +880,55 @@ export function BackupMigrationFoundation({
     setWorkflowState("result");
   }, [validationResult]);
 
+  const finishMigrationPreview = useCallback(() => {
+    const nextScope: MigrationPreviewScope = {
+      ...previewScope,
+      itemRefs: previewScopeDraft
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    };
+    setPreviewScope(nextScope);
+
+    const items =
+      previewSourceContext.product && previewSourceContext.kind && previewTargetContext.profile && nextScope.kind
+        ? buildMigrationPreviewItems({
+            sourceContext: previewSourceContext,
+            targetContext: previewTargetContext,
+            scope: nextScope,
+          })
+        : [];
+
+    const result = createMigrationPreviewOperationResult({
+      sourceContext: previewSourceContext,
+      targetContext: previewTargetContext,
+      scope: nextScope,
+      items,
+      issueLabel: activeHandoff?.issueLabel,
+    });
+    setOperationResult(result);
+    setRecentOperations((prev) => addRecentOperation(prev, result));
+    setWorkflowState("result");
+  }, [activeHandoff?.issueLabel, previewScope, previewScopeDraft, previewSourceContext, previewTargetContext]);
+
   const handleSelectRecentOperation = useCallback((op: RecentOperation) => {
     setOperationResult(op);
     setActiveWorkflow(op.workflowType);
+    if (op.workflowType === "migration-preview") {
+      setPreviewSourceContext(op.previewSourceContext ?? {});
+      setPreviewTargetContext(op.previewTargetContext ?? {});
+      setPreviewScope(op.previewScope ?? { itemRefs: [] });
+      setPreviewScopeDraft((op.previewScope?.itemRefs ?? []).join("\n"));
+    }
     setWorkflowState("result");
   }, []);
+
+  const reopenMigrationPreviewConfiguration = useCallback(() => {
+    if (activeWorkflow !== "migration-preview") return;
+    setOperationResult(null);
+    setValidationResult(null);
+    setWorkflowState("configuration");
+  }, [activeWorkflow]);
 
   // ── Auto-prefill from handoff ──
   const prefillSessionId = useMemo(() => handoff?.sessionId ?? null, [handoff]);
@@ -739,7 +954,7 @@ export function BackupMigrationFoundation({
             <h2 className="text-xl font-semibold">Backup / Migration</h2>
             <p className="max-w-3xl text-sm leading-6 text-muted">
               Choose a bounded workflow below. Each workflow follows explicit selection, validation, and result steps.
-              This foundation does not support migration preview, project bundle packaging, vendor-runtime restore, or cloud sync.
+              This foundation does not support migration apply, project bundle packaging, vendor-runtime restore, or cloud sync.
             </p>
           </div>
         </Card>
@@ -779,7 +994,7 @@ export function BackupMigrationFoundation({
           </div>
         </Card>
 
-        <OperationResultPanel result={operationResult} onNewWorkflow={resetWorkflow} />
+        <OperationResultPanel result={operationResult} onNewWorkflow={resetWorkflow} onReconfigurePreview={reopenMigrationPreviewConfiguration} />
 
         <RecentOperationsPanel operations={recentOperations} onSelectOperation={handleSelectRecentOperation} />
       </div>
@@ -856,6 +1071,59 @@ export function BackupMigrationFoundation({
                   <div className="text-xs text-muted">Pre-filled from routed handoff.</div>
                 ) : null}
                 <Button size="sm" disabled={!selectedSessionId || !selectedSource} onClick={advanceState}>
+                  Continue to Configuration
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
+          {workflowState === "selection" && activeWorkflow === "migration-preview" ? (
+            <Card className="p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Select Source Context</div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Preview requires explicit source context. Routed handoff can prefill only fields that were explicitly provided.
+                </div>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Source product</span>
+                  <select
+                    value={previewSourceContext.product ?? ""}
+                    onChange={(e) => setPreviewSourceContext((prev) => ({ ...prev, product: (e.target.value as MigrationPreviewSourceProduct) || undefined }))}
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose source product</option>
+                    <option value="antigravity">Antigravity</option>
+                    <option value="windsurf">Windsurf</option>
+                    <option value="codex">Codex</option>
+                    <option value="imported">Imported</option>
+                    <option value="generated">Generated</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Source context type</span>
+                  <select
+                    value={previewSourceContext.kind ?? ""}
+                    onChange={(e) => setPreviewSourceContext((prev) => ({ ...prev, kind: (e.target.value as MigrationPreviewSourceKind) || undefined }))}
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose source context</option>
+                    <option value="session-evidence">Session evidence</option>
+                    <option value="context-asset">Reusable context asset</option>
+                    <option value="analysis-context">Analysis context</option>
+                    <option value="project-overview">Project overview</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Source label (optional)</span>
+                  <input
+                    type="text"
+                    value={previewSourceContext.label ?? ""}
+                    onChange={(e) => setPreviewSourceContext((prev) => ({ ...prev, label: e.target.value || undefined }))}
+                    placeholder="Keep explicit routed/source wording visible"
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  />
+                </label>
+                <Button size="sm" onClick={advanceState}>
                   Continue to Configuration
                 </Button>
               </div>
@@ -1065,6 +1333,64 @@ export function BackupMigrationFoundation({
             </Card>
           ) : null}
 
+          {workflowState === "configuration" && activeWorkflow === "migration-preview" ? (
+            <Card className="p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Configure Preview</div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Keep source, target, and scope explicit. This workflow is preview only and does not apply migration or generate bundles.
+                </div>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Target context</span>
+                  <select
+                    value={previewTargetContext.profile ?? ""}
+                    onChange={(e) => setPreviewTargetContext((prev) => ({ ...prev, profile: (e.target.value as MigrationPreviewTargetProfile) || undefined }))}
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose target context</option>
+                    <option value="session-backup-package">Session backup package</option>
+                    <option value="reusable-context-assets">Reusable context assets</option>
+                    <option value="project-context-subset">Project-context subset</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Preview scope</span>
+                  <select
+                    value={previewScope.kind ?? ""}
+                    onChange={(e) => setPreviewScope((prev) => ({ ...prev, kind: (e.target.value as MigrationPreviewScopeKind) || undefined }))}
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose bounded scope</option>
+                    <option value="sessions">Sessions</option>
+                    <option value="assets">Reusable context assets</option>
+                    <option value="project-context">Project-context subset</option>
+                  </select>
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Scope item refs</span>
+                  <textarea
+                    value={previewScopeDraft}
+                    onChange={(e) => setPreviewScopeDraft(e.target.value)}
+                    placeholder="One explicit session / asset / project-context ref per line"
+                    rows={6}
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  />
+                </label>
+                <div className="text-xs leading-5 text-muted">
+                  Empty scope remains visible and leads to an explicit no-result preview state so you can return here and refine the bounded scope.
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={retreatState}>
+                    Back
+                  </Button>
+                  <Button size="sm" onClick={runValidation}>
+                    Validate Preview
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
           {/* Validation */}
           {workflowState === "validation" && validationResult ? (
             <div className="space-y-4">
@@ -1100,6 +1426,18 @@ export function BackupMigrationFoundation({
                   <Button size="sm" onClick={finishValidateOnly}>
                     Complete Validation
                   </Button>
+                ) : activeWorkflow === "migration-preview" ? (
+                  isPreviewReadyForResult({
+                    sourceContext: previewSourceContext,
+                    targetContext: previewTargetContext,
+                    scope: previewScope,
+                  }) ? (
+                    <Button size="sm" onClick={finishMigrationPreview}>
+                      Open Preview Result
+                    </Button>
+                  ) : (
+                    <div className="text-sm text-muted">Source, target, and scope must remain explicit before preview result can open.</div>
+                  )
                 ) : canProceedFromValidation(validationResult) ? (
                   <Button size="sm" onClick={advanceState}>
                     Proceed to Confirmation
@@ -1226,6 +1564,24 @@ export function BackupMigrationFoundation({
                   <div className="text-xs text-muted">Selected sessions</div>
                   <div className="font-medium">{dedupedBulkSelections.length}</div>
                   <div className="mt-1 text-xs text-muted">{bulkConfirmationDetails.sourceCopySummary}</div>
+                </div>
+              ) : null}
+              {activeWorkflow === "migration-preview" ? (
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-2">
+                  <div className="text-xs text-muted">Preview context</div>
+                  <div className="font-medium">
+                    {previewSourceContext.product && previewSourceContext.kind
+                      ? `${formatMigrationPreviewSourceProductLabel(previewSourceContext.product)} / ${formatMigrationPreviewSourceKindLabel(previewSourceContext.kind)}`
+                      : "Source still required"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {previewTargetContext.profile ? formatMigrationPreviewTargetProfileLabel(previewTargetContext.profile) : "Target still required"}
+                  </div>
+                  <div className="mt-1 text-xs text-muted">
+                    {previewScope.kind
+                      ? `${formatMigrationPreviewScopeLabel(previewScope.kind)} (${previewScope.itemRefs.length || previewScopeDraft.split("\n").map((item) => item.trim()).filter(Boolean).length})`
+                      : "Scope still required"}
+                  </div>
                 </div>
               ) : null}
               {normalizedBackupId && activeWorkflow !== "session-backup" ? (

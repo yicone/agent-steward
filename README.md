@@ -63,7 +63,7 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - `Sessions` contains the existing viewer, source diagnostics, URL deep links, search selection, and direct session backup behavior
   - `Assets` provides a bounded reusable context assets foundation for rules, memory, skills, commands, and unknown asset fragments
   - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
-  - `Backup / Migration` remains a bounded foundation surface until full project-level workflows are implemented
+  - `Backup / Migration` provides bounded workflow-first backup and migration-preview surfaces without turning into a generic tools drawer or migration apply UI
 - Assets foundation:
   - local-first reusable context asset model with subtype, scope, source, status, provenance, optional body summary, and in-effect/usage metadata
   - subtype/scope/source/status filtering with asset summary, inventory, selected detail, provenance, and in-effect/usage regions
@@ -109,10 +109,11 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - verify/import flows are available through `/api/session-backups`, `/api/session-backups/import`, and `/api/session-backups/[backupId]`
   - v1 `Source Backup` is opt-in and currently supports copy-only source preservation for Codex sessions only
 - Backup / Migration workflows:
-  - `Backup / Migration` now provides bounded `session backup`, `bulk session backup`, `import backup`, and `validate package` workflows
+  - `Backup / Migration` now provides bounded `session backup`, `bulk session backup`, `import backup`, `validate package`, and `migration preview` workflows
   - bulk session backup requires explicit session selection, validates each selected session independently, and fans out through the existing single-session backup execution path
   - bulk results show aggregate status plus per-session detail, while recent operations record one compact batch entry instead of one entry per session
-  - the foundation still does not implement migration preview, project bundle packaging, vendor-runtime restore, or cloud sync
+  - migration preview requires explicit source context, target context, and bounded scope, and ends at preview-only validation/result states without migration apply or bundle generation
+  - the foundation still does not implement migration apply, project bundle packaging, vendor-runtime restore, or cloud sync
 
 For detailed view semantics and cross-source alignment notes, see `docs/viewer/trajectory-view.md`.
 
