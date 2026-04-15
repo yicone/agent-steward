@@ -36,7 +36,7 @@ The QA run verified the result state copy:
 
 ```text
 Operation Result: preview-clear
-Preview only: 1 sessions checked — 1 portable, 0 degraded, 0 unsupported, 0 blocked.
+Preview only: 1 session checked — 1 portable, 0 degraded, 0 unsupported, 0 blocked.
 
 Preview only. This result compares explicit source, target, and bounded scope
 without applying migration, generating bundles, or writing migrated objects.

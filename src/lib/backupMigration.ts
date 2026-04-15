@@ -544,8 +544,9 @@ export function createMigrationPreviewSummary(input: {
   counts: MigrationPreviewAggregateCounts;
 }): string {
   const normalizedScope = normalizeMigrationPreviewScope(input.scope);
-  const scopeLabel = normalizedScope.kind ? formatMigrationPreviewScopeLabel(normalizedScope.kind).toLowerCase() : "items";
   const total = Object.values(input.counts).reduce((sum, count) => sum + count, 0);
+  const pluralScopeLabel = normalizedScope.kind ? formatMigrationPreviewScopeLabel(normalizedScope.kind).toLowerCase() : "items";
+  const scopeLabel = total === 1 && pluralScopeLabel.endsWith("s") ? pluralScopeLabel.slice(0, -1) : pluralScopeLabel;
 
   return `Preview only: ${total} ${scopeLabel} checked — ${input.counts.portable} portable, ${input.counts.degraded} degraded, ${input.counts.unsupported} unsupported, ${input.counts.blocked} blocked.`;
 }

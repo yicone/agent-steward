@@ -120,6 +120,21 @@ describe("migration preview model tests", () => {
     expect(deriveMigrationPreviewAggregateStatus([])).toBe("preview-with-concerns");
   });
 
+  it("uses singular scope label for one-item migration preview summaries", () => {
+    const result = createMigrationPreviewOperationResult({
+      sourceContext: { product: "codex", kind: "session-evidence" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: { kind: "sessions", itemRefs: ["session-001"] },
+      items: buildMigrationPreviewItems({
+        sourceContext: { product: "codex", kind: "session-evidence" },
+        targetContext: { profile: "reusable-context-assets" },
+        scope: { kind: "sessions", itemRefs: ["session-001"] },
+      }),
+    });
+
+    expect(result.summary).toContain("1 session checked");
+  });
+
   it("creates migration preview operation results with preview-only summary metadata", () => {
     const items = buildMigrationPreviewItems({
       sourceContext: { product: "codex", kind: "context-asset" },

@@ -126,7 +126,7 @@ function renderMigrationPreviewBlockerResultPanel() {
         workflowType: "migration-preview",
         status: "preview-with-blockers",
         timestamp: "2026-04-15T13:00:00Z",
-        summary: "Preview only: 1 reusable context assets checked — 0 portable, 0 degraded, 0 unsupported, 1 blocked.",
+        summary: "Preview only: 1 reusable context asset checked — 0 portable, 0 degraded, 0 unsupported, 1 blocked.",
         previewSourceContext: { product: "codex", kind: "context-asset" },
         previewTargetContext: { profile: "reusable-context-assets" },
         previewScope: { kind: "assets", itemRefs: ["missing-asset-ref"] },
