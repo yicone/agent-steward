@@ -140,7 +140,7 @@ Regression checks:
 
 Boundary checks:
 1. No button or copy should imply:
-   - batch backup
+   - unscoped or implicit batch backup
    - migration apply
    - project bundle packaging
    - runtime continuation in third-party tools
