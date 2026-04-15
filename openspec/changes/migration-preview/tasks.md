@@ -1,9 +1,10 @@
 ## 1. Workflow Model
 
 - [ ] 1.1 Add `migration-preview` to backup workflow types, labels, descriptors, and step definitions.
-- [ ] 1.2 Define migration preview source context, target context, preview scope, preview item, classification, and aggregate result types.
-- [ ] 1.3 Add helper functions for preview validation, item classification, aggregate count derivation, and recent-operation creation.
-- [ ] 1.4 Ensure existing backup/import/validate/bulk workflow helpers remain backward compatible.
+- [ ] 1.2 Define migration preview source context, target context, and preview scope types.
+- [ ] 1.3 Define preview item, closed classification enum, and preview-specific aggregate result status types.
+- [ ] 1.4 Add helper functions for preview validation, item classification, aggregate count derivation, and recent-operation creation.
+- [ ] 1.5 Ensure existing backup/import/validate/bulk workflow helpers remain backward compatible.
 
 ## 2. Selection and Configuration
 
@@ -12,10 +13,11 @@
 - [ ] 2.3 Require explicit target context before preview can proceed.
 - [ ] 2.4 Support bounded preview scope choices for sessions, reusable context assets, and project-context subset.
 - [ ] 2.5 Keep missing source, target, and scope fields visible and user-editable.
+- [ ] 2.6 Update idle-state description copy in `BackupMigrationFoundation` to include migration preview and remove the migration-preview exclusion statement.
 
 ## 3. Preview Validation and Result
 
-- [ ] 3.1 Validate source context, target context, canonical basis, and metadata completeness before preview result.
+- [ ] 3.1 Validate source context, target context, canonical source data availability, and metadata completeness before preview result.
 - [ ] 3.2 Classify preview items as `portable`, `degraded`, `unsupported`, or `blocked`.
 - [ ] 3.3 Render aggregate counts for all preview classifications.
 - [ ] 3.4 Render item-level preview detail with explanations.
@@ -24,7 +26,7 @@
 
 ## 4. Routed Handoff
 
-- [ ] 4.1 Extend backup-migration handoff types to carry migration preview source, target, and scope context.
+- [ ] 4.1 Extend backup-migration handoff types to carry migration preview source, target, and scope context after task 1.1 adds `migration-preview` to `BackupWorkflowType`.
 - [ ] 4.2 Add `Project Overview -> Migration Preview` route that opens preview selection/configuration without invented context.
 - [ ] 4.3 Add `Assets -> Migration Preview` route that may prefill explicit asset source/scope context only.
 - [ ] 4.4 Add `Analysis -> Migration Preview` route that preserves issue context but does not infer missing source or target.
@@ -51,3 +53,4 @@
 - [ ] 7.2 Update `CHANGELOG.md` under `## Unreleased` when implementation ships.
 - [ ] 7.3 Run targeted tests for backup-migration model helpers, `BackupMigrationFoundation`, and shell routing.
 - [ ] 7.4 Run `pnpm test`, `pnpm build`, and `OPENSPEC_TELEMETRY=0 openspec validate migration-preview --strict`.
+- [ ] 7.5 Update `docs/viewer/backup-migration-foundation-qa-prompt.md` to include migration preview smoke checks and remove the migration-preview exclusion assertion.

@@ -15,7 +15,7 @@ The system SHALL provide a bounded `migration-preview` workflow inside `Backup /
 - **AND** it does not show confirmation or execution steps for migration apply
 - **AND** it does not write migrated objects, generate a project bundle, or restore any third-party runtime state
 
-### Requirement: Migration preview SHALL require explicit source target and scope
+### Requirement: Migration preview SHALL require explicit source, target, and scope
 The system SHALL require explicit source context, target context, and preview scope before generating a migration preview.
 
 #### Scenario: Missing source context blocks preview
@@ -27,6 +27,11 @@ The system SHALL require explicit source context, target context, and preview sc
 - **WHEN** the user starts migration preview without explicit target context
 - **THEN** the workflow remains in configuration state
 - **AND** it explains that target context is required before preview
+
+#### Scenario: Missing scope blocks preview
+- **WHEN** the user starts migration preview with explicit source and target context but no preview scope
+- **THEN** the workflow remains in configuration state
+- **AND** it explains that a bounded preview scope is required before preview
 
 #### Scenario: Scope remains bounded
 - **WHEN** the user configures migration preview scope
@@ -40,6 +45,8 @@ The system SHALL require explicit source context, target context, and preview sc
 
 ### Requirement: Migration preview SHALL classify portability outcomes
 The system SHALL classify previewed items as `portable`, `degraded`, `unsupported`, or `blocked`.
+
+The preview classification SHALL use exactly these values: `portable`, `degraded`, `unsupported`, `blocked`. No other classification values are valid for migration preview results. When multiple classifications could apply, precedence SHALL be `blocked` before `unsupported` before `degraded` before `portable`.
 
 #### Scenario: Portable item
 - **WHEN** a selected item has recognized source metadata, target mapping, and required canonical data
@@ -59,7 +66,7 @@ The system SHALL classify previewed items as `portable`, `degraded`, `unsupporte
 #### Scenario: Blocked item
 - **WHEN** a selected item is missing required canonical data, source context, target context, or provenance
 - **THEN** the preview classifies the item as `blocked`
-- **AND** it gives an actionable reason before any migration apply is implied
+- **AND** it gives an actionable reason such as which data is missing or which source needs repair
 
 ### Requirement: Migration preview result SHALL summarize aggregate risk and item detail
 The system SHALL show a migration preview result with aggregate counts and item-level compatibility detail.
@@ -69,10 +76,21 @@ The system SHALL show a migration preview result with aggregate counts and item-
 - **THEN** the result shows counts for portable, degraded, unsupported, and blocked items
 - **AND** it states that the result is a preview only
 
+#### Scenario: Empty preview scope produces no-result state
+- **WHEN** the configured preview scope resolves to zero previewable items
+- **THEN** the workflow shows an explicit empty-scope message instead of an empty result table
+- **AND** it routes the user back to scope configuration
+
 #### Scenario: Preview result preserves item detail
 - **WHEN** migration preview includes more than one item
 - **THEN** the result shows item-level classifications and explanations
 - **AND** it does not collapse degraded, unsupported, or blocked items into a generic success message
+
+#### Scenario: Preview result uses preview-specific aggregate status
+- **WHEN** migration preview completes
+- **THEN** the aggregate preview status is `preview-clear` when all previewed items are portable
+- **AND** the aggregate preview status is `preview-with-concerns` when any item is degraded and no item is unsupported or blocked
+- **AND** the aggregate preview status is `preview-with-blockers` when any item is unsupported or blocked
 
 #### Scenario: Preview result offers repair routes
 - **WHEN** preview result contains degraded, unsupported, or blocked items

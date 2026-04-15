@@ -29,9 +29,10 @@ Execution tracking still belongs in GitHub Issues.
 This is the current primary line because `bulk-session-backup` has shipped and
 been archived, leaving migration preview as the next P1 follow-up.
 
-## 2. Explicitly Deferred Follow-Ups
+## 2. Completed or Deferred Follow-Ups
 
-These items were deliberately excluded from `backup-migration-foundation`.
+These items were deliberately excluded from `backup-migration-foundation`. Items
+listed as shipped are preserved for history, not as active deferred work.
 
 ### P1: Bulk Session Backup
 
@@ -46,20 +47,6 @@ Why it is next-tier priority:
 
 - it extends an already real workflow instead of creating a new product area
 - it is valuable once the single-session workflow has stabilized
-
-### P1: Migration Preview
-
-- Issue: `#54 Track migration preview follow-up`
-- Status: active proposal
-- Why it was deferred:
-  - preview-only behavior risks fake-authority UX
-  - needs clearer portability semantics before implementation
-  - should not ship as a seed-only shell mixed into the first workflow page
-
-Why it is next-tier priority:
-
-- it naturally belongs under `Backup / Migration`
-- it can reuse the workflow spine once foundation is stable
 
 ### P2: Project Bundle Foundation
 

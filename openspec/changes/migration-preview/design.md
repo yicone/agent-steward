@@ -78,6 +78,20 @@ Each preview item should be classified as `portable`, `degraded`,
 `unsupported`, or `blocked`. The aggregate preview result can summarize counts,
 but it should preserve item-level detail.
 
+An item is `degraded` when the target can accept the object but with measurably
+reduced fidelity. An item is `unsupported` when the target has no recognized
+mapping for that object class, regardless of source quality. If multiple
+classifications could apply, the precedence is `blocked` -> `unsupported` ->
+`degraded` -> `portable`.
+
+Aggregate preview status uses preview-specific values rather than backup
+operation success values:
+
+- `preview-clear`: all previewed items are portable
+- `preview-with-concerns`: one or more items are degraded and none are
+  unsupported or blocked
+- `preview-with-blockers`: one or more items are unsupported or blocked
+
 Alternative considered: only show valid/invalid. Rejected because migration
 preview needs to distinguish reduced fidelity from complete incompatibility.
 
