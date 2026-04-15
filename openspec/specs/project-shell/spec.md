@@ -112,11 +112,15 @@ claiming unimplemented full behavior.
 - **AND** it does not present complete automated analysis, fake findings,
   automatic remediation, or workflow execution as implemented behavior
 
-#### Scenario: Backup Migration placeholder is bounded
-- **WHEN** the user navigates to `Backup / Migration` before full workflow
-  behavior is implemented
-- **THEN** the app communicates the intended workflow role without replacing the
-  existing working session backup action
+#### Scenario: Backup / Migration foundation is bounded
+- **WHEN** the user navigates to `Backup / Migration`
+- **THEN** the app presents a bounded workflow-first foundation surface for
+  session backup, import, and validation workflows
+- **AND** it does not present bulk backup, migration preview, project bundle
+  packaging, full migration execution, vendor-runtime restoration, or cloud
+  sync as implemented behavior
+- **AND** working session backup from `Sessions` remains available without
+  change
 
 ### Requirement: Additive styling boundary
 The system SHALL introduce shell-foundation styling additively without broadly
