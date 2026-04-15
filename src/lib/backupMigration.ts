@@ -456,13 +456,28 @@ export function classifyMigrationPreviewItem(input: {
   sourceRef: string;
 }): MigrationPreviewItem {
   const normalizedRef = input.sourceRef.trim();
+  const repairTarget = deriveMigrationPreviewRepairTarget(input.scopeKind, input.sourceContext.kind);
+  const targetProfile = input.targetContext.profile;
+
+  if (!targetProfile) {
+    return {
+      id: `${input.scopeKind}:${normalizedRef}`,
+      label: normalizedRef,
+      scopeKind: input.scopeKind,
+      sourceRef: normalizedRef,
+      classification: "blocked",
+      detail: `Preview only: ${normalizedRef} is blocked because the target profile is incomplete and the migration preview cannot classify its destination.`,
+      repairTarget,
+      repairLabel: `Inspect in ${repairTarget}`,
+    };
+  }
+
   const classification = deriveMigrationPreviewClassification({
     scopeKind: input.scopeKind,
     sourceRef: normalizedRef,
-    targetProfile: input.targetContext.profile!,
+    targetProfile,
   });
-  const repairTarget = deriveMigrationPreviewRepairTarget(input.scopeKind, input.sourceContext.kind);
-  const targetLabel = formatMigrationPreviewTargetProfileLabel(input.targetContext.profile!);
+  const targetLabel = formatMigrationPreviewTargetProfileLabel(targetProfile);
 
   return {
     id: `${input.scopeKind}:${normalizedRef}`,

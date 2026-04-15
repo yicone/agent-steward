@@ -114,6 +114,12 @@ function isPreviewReadyForResult(input: {
   return Boolean(input.sourceContext.product && input.sourceContext.kind && input.targetContext.profile && input.scope.kind);
 }
 
+function getOperationStatusBadgeVariant(status: BackupOperationResult["status"]): "default" | "ok" | "warn" {
+  if (status === "success" || status === "preview-clear") return "ok";
+  if (status === "failed" || status === "preview-with-blockers") return "warn";
+  return "default";
+}
+
 export function resolveInitialBulkSelections(handoff: BackupMigrationHandoff | null): BackupSessionSelection[] {
   if (!handoff) return [];
   if (handoff.sessions?.length) return dedupeSessionSelections(handoff.sessions);
@@ -245,7 +251,7 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="text-xs uppercase tracking-[0.18em] text-muted">Operation Result</div>
-        <Badge variant={props.result.status === "success" ? "ok" : props.result.status === "failed" ? "warn" : "default"}>
+        <Badge variant={getOperationStatusBadgeVariant(props.result.status)}>
           {props.result.status}
         </Badge>
       </div>
@@ -413,7 +419,7 @@ function RecentOperationsPanel(props: { operations: RecentOperation[]; onSelectO
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Badge variant={op.status === "success" ? "ok" : op.status === "failed" ? "warn" : "default"}>
+                <Badge variant={getOperationStatusBadgeVariant(op.status)}>
                   {op.status}
                 </Badge>
                 <span className="font-medium">{formatWorkflowTypeLabel(op.workflowType)}</span>

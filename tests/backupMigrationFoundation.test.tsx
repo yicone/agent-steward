@@ -118,6 +118,37 @@ function renderMigrationPreviewResultPanel() {
   );
 }
 
+function renderMigrationPreviewBlockerResultPanel() {
+  return renderToStaticMarkup(
+    <OperationResultPanel
+      result={{
+        id: "op-preview-blocked",
+        workflowType: "migration-preview",
+        status: "preview-with-blockers",
+        timestamp: "2026-04-15T13:00:00Z",
+        summary: "Preview only: 1 reusable context assets checked — 0 portable, 0 degraded, 0 unsupported, 1 blocked.",
+        previewSourceContext: { product: "codex", kind: "context-asset" },
+        previewTargetContext: { profile: "reusable-context-assets" },
+        previewScope: { kind: "assets", itemRefs: ["missing-asset-ref"] },
+        previewCounts: { portable: 0, degraded: 0, unsupported: 0, blocked: 1 },
+        previewItems: [
+          {
+            id: "assets:missing-asset-ref",
+            label: "missing-asset-ref",
+            scopeKind: "assets",
+            sourceRef: "missing-asset-ref",
+            classification: "blocked",
+            detail: "Preview only: missing-asset-ref is blocked because canonical data, provenance, or required source detail is incomplete.",
+            repairTarget: "assets",
+          },
+        ],
+      }}
+      onNewWorkflow={vi.fn()}
+      onReconfigurePreview={vi.fn()}
+    />
+  );
+}
+
 describe("BackupMigrationFoundation", () => {
   it("renders idle workflow selector including migration preview", () => {
     const html = renderBackupMigrationFoundation(null);
@@ -303,5 +334,13 @@ describe("BackupMigrationFoundation panels", () => {
     expect(html).toContain("Return to scope configuration");
     expect(html).toContain("No runtime restore or apply.");
     expect(html).not.toContain("Imported or backed-up sessions are product-readable only");
+  });
+
+  it("renders migration preview blocker status explicitly", () => {
+    const html = renderMigrationPreviewBlockerResultPanel();
+
+    expect(html).toContain("preview-with-blockers");
+    expect(html).toContain("blocked");
+    expect(html).toContain("missing-asset-ref");
   });
 });

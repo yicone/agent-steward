@@ -137,6 +137,18 @@ describe("migration preview model tests", () => {
     expect(result.issueLabel).toBe("asset migration review");
   });
 
+  it("blocks preview item classification when target profile is missing", () => {
+    const items = buildMigrationPreviewItems({
+      sourceContext: { product: "codex", kind: "context-asset" },
+      targetContext: {},
+      scope: { kind: "assets", itemRefs: ["asset-rule-project-codex"] },
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.classification).toBe("blocked");
+    expect(items[0]!.detail).toContain("target profile is incomplete");
+  });
+
   it("resolves migration-preview workflow from handoff", () => {
     const handoff: BackupMigrationHandoff = {
       origin: "analysis",
