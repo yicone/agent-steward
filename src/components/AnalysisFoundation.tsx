@@ -39,7 +39,7 @@ import type { Source } from "@/lib/types";
 export type AnalysisFoundationProps = {
   handoff: AnalysisHandoff | null;
   onOpenAssets(handoff: AssetsHandoff): void;
-  onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string }): void;
+  onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string; backupWorkflowType?: AnalysisRoute["backupWorkflowType"] }): void;
   onOpenOverview(): void;
   onOpenSession(selection: { sessionId: string; source: Source; rootId?: string }): void;
   loadingDelayMs?: number;
@@ -122,7 +122,7 @@ function RouteButton(props: {
   route: AnalysisRoute;
   navigationHandoff: AnalysisHandoff | null;
   onOpenAssets(handoff: AssetsHandoff): void;
-  onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string }): void;
+  onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string; backupWorkflowType?: AnalysisRoute["backupWorkflowType"] }): void;
   onOpenOverview(): void;
   onOpenSession(selection: { sessionId: string; source: Source; rootId?: string }): void;
 }) {
@@ -168,6 +168,7 @@ function RouteButton(props: {
             title: props.finding.title,
             preservationWarning: props.route.preservationWarning ?? props.finding.preservationWarning,
             routeLabel: props.route.label,
+            backupWorkflowType: props.route.backupWorkflowType,
           })
         }
       >

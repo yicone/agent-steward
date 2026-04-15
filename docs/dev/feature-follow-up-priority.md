@@ -1,9 +1,9 @@
 # Feature Follow-Up Priority
 
-Updated: 2026-04-13
+Updated: 2026-04-15
 
-This document is the control-thread view of what should happen after the current
-`backup-migration-foundation` implementation line.
+This document is the control-thread view of follow-up sequencing after the
+`Backup / Migration` foundation line.
 
 It is not a roadmap or implementation spec. It exists to:
 
@@ -15,30 +15,29 @@ Execution tracking still belongs in GitHub Issues.
 
 ## 1. Current In-Flight Line
 
-### P0: Backup / Migration Foundation
+### P1: Migration Preview
 
-- Issue: `#50 Track backup / migration foundation`
-- Status: active
+- Issue: `#54 Track migration preview follow-up`
+- Status: active proposal
 - Goal:
-  - replace the `Backup / Migration` placeholder with a bounded workflow-first
-    foundation
-  - support:
-    - `session-backup`
-    - `import-backup`
-    - `validate-package`
-    - routed handoff
-    - recent operations
+  - add a preview-only portability workflow under `Backup / Migration`
+  - require explicit source, target, and scope context
+  - classify selected items as portable, degraded, unsupported, or blocked
+  - stop at preview result with no migration apply, project bundle packaging, or
+    vendor-runtime restore
 
-This is the current primary line because it closes the last top-level
-placeholder in the project shell.
+This is the current primary line because `bulk-session-backup` has shipped and
+been archived, leaving migration preview as the next P1 follow-up.
 
-## 2. Explicitly Deferred Follow-Ups
+## 2. Completed or Deferred Follow-Ups
 
-These items were deliberately excluded from `backup-migration-foundation`.
+These items were deliberately excluded from `backup-migration-foundation`. Items
+listed as shipped are preserved for history, not as active deferred work.
 
 ### P1: Bulk Session Backup
 
 - Issue: `#53 Track bulk session backup follow-up`
+- Status: shipped and archived
 - Why it was deferred:
   - not required to replace the placeholder
   - increases workflow-state complexity sharply
@@ -48,19 +47,6 @@ Why it is next-tier priority:
 
 - it extends an already real workflow instead of creating a new product area
 - it is valuable once the single-session workflow has stabilized
-
-### P1: Migration Preview
-
-- Issue: `#54 Track migration preview follow-up`
-- Why it was deferred:
-  - preview-only behavior risks fake-authority UX
-  - needs clearer portability semantics before implementation
-  - should not ship as a seed-only shell mixed into the first workflow page
-
-Why it is next-tier priority:
-
-- it naturally belongs under `Backup / Migration`
-- it can reuse the workflow spine once foundation is stable
 
 ### P2: Project Bundle Foundation
 
@@ -78,22 +64,18 @@ Why it is lower priority than the other two:
 
 ## 3. Candidate Feature-Line Priority
 
-Assuming `backup-migration-foundation` merges cleanly, the recommended priority
-order is:
+Assuming `migration-preview` merges cleanly, the recommended next priority order
+is:
 
-1. `bulk-session-backup`
-2. `migration-preview`
-3. `project-bundle-foundation`
+1. `project-bundle-foundation`
+2. `privacy-redaction`
 
 Reasoning:
 
-- `bulk-session-backup` is the most direct extension of already-real workflow
-  behavior and has the least product ambiguity.
-- `migration-preview` fits the same page and model family, but still needs more
-  semantic precision than bulk backup.
-- `project-bundle-foundation` is strategically important, but it deserves a
-  narrower dedicated line rather than being rushed in immediately after the
-  current workflow page lands.
+- `project-bundle-foundation` becomes the next natural `Backup / Migration`
+  expansion after migration preview clarifies portability boundaries.
+- `privacy-redaction` cuts across diagnostics, exports, backups, and review
+  tooling; it remains important but should not be mixed into migration preview.
 
 ## 4. Other Open Work
 
@@ -110,11 +92,9 @@ Reason:
 
 ## 5. Recommended Decision Rule
 
-Once the current `backup-migration-foundation` PR is merged:
+Once the current `migration-preview` PR is merged:
 
-- choose `bulk-session-backup` next if the current workflow page is functionally
-  stable and the team wants the fastest incremental expansion
-- choose `migration-preview` next if portability / compatibility semantics have
-  become the dominant product question
-- choose `project-bundle-foundation` next only if the product conversation is
-  ready to commit to bundle boundaries and packaging promises
+- choose `project-bundle-foundation` next if the product conversation is ready
+  to commit to bundle boundaries and packaging promises
+- choose `privacy-redaction` next if sensitive diagnostics, exports, or package
+  contents become the dominant risk before more portability features

@@ -3,16 +3,21 @@ import { describe, expect, it } from "vitest";
 import {
   addRecentOperation,
   buildBulkSessionValidationResult,
+  buildMigrationPreviewItems,
   buildPackageValidationItems,
   buildBackupHandoffInstanceKey,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
+  createMigrationPreviewOperationResult,
   createBulkOperationSummary,
   createOperationResult,
   dedupeSessionSelections,
   deriveAggregateOperationStatus,
+  deriveMigrationPreviewAggregateStatus,
+  deriveMigrationPreviewValidationResult,
   deriveValidationResult,
   formatWorkflowStateLabel,
+  formatMigrationPreviewClassificationLabel,
   formatWorkflowTypeLabel,
   getNextState,
   getPreviousState,
@@ -37,6 +42,144 @@ describe("getWorkflowDescriptor", () => {
       expect(descriptor.stepsLabel.length).toBeGreaterThan(0);
     }
   });
+
+  it("retains migration preview metadata when provided", () => {
+    const result = createOperationResult({
+      workflowType: "migration-preview",
+      status: "preview-with-concerns",
+      summary: "Preview only: 2 assets checked.",
+      previewSourceContext: { product: "codex", kind: "context-asset" },
+      previewTargetContext: { profile: "reusable-context-assets" },
+      previewScope: { kind: "assets", itemRefs: ["asset-1", "asset-2"] },
+      previewCounts: { portable: 1, degraded: 1, unsupported: 0, blocked: 0 },
+    });
+
+    expect(result.workflowType).toBe("migration-preview");
+    expect(result.status).toBe("preview-with-concerns");
+    expect(result.previewScope?.itemRefs).toEqual(["asset-1", "asset-2"]);
+    expect(result.previewCounts?.degraded).toBe(1);
+  });
+});
+
+describe("migration preview model tests", () => {
+  it("returns the correct workflow label for migration-preview", () => {
+    expect(formatWorkflowTypeLabel("migration-preview")).toBe("Migration Preview");
+  });
+
+  it("returns the correct steps for migration-preview", () => {
+    expect(getStepsForWorkflow("migration-preview")).toEqual(["selection", "configuration", "validation", "result"]);
+  });
+
+  it("builds invalid preview validation when explicit fields are missing", () => {
+    const result = deriveMigrationPreviewValidationResult({
+      sourceContext: {},
+      targetContext: {},
+      scope: { itemRefs: [] },
+    });
+
+    expect(result.status).toBe("invalid");
+    expect(result.items.map((item) => item.label)).toEqual(["Source context", "Target context", "Preview scope"]);
+  });
+
+  it("builds warning preview validation when scope kind exists but no items are listed", () => {
+    const result = deriveMigrationPreviewValidationResult({
+      sourceContext: { product: "codex", kind: "context-asset" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: { kind: "assets", itemRefs: [] },
+    });
+
+    expect(result.status).toBe("valid-with-warnings");
+    expect(result.items.some((item) => item.id === "v-preview-scope-empty")).toBe(true);
+  });
+
+  it("classifies preview items with blocked precedence over degraded and unsupported", () => {
+    const items = buildMigrationPreviewItems({
+      sourceContext: { product: "windsurf", kind: "context-asset" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: {
+        kind: "assets",
+        itemRefs: ["asset-memory-user-windsurf", "asset-skill-global-generated", "asset-command-project-antigravity", "missing-asset-ref"],
+      },
+    });
+
+    expect(items.map((item) => item.classification)).toEqual(["degraded", "unsupported", "portable", "blocked"]);
+    expect(formatMigrationPreviewClassificationLabel(items[0]!.classification)).toBe("Degraded");
+  });
+
+  it("derives blocker aggregate status when any preview item is unsupported or blocked", () => {
+    const items = buildMigrationPreviewItems({
+      sourceContext: { product: "codex", kind: "context-asset" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: { kind: "assets", itemRefs: ["asset-skill-global-generated"] },
+    });
+
+    expect(deriveMigrationPreviewAggregateStatus(items)).toBe("preview-with-blockers");
+  });
+
+  it("treats empty migration preview results as concerns instead of clear", () => {
+    expect(deriveMigrationPreviewAggregateStatus([])).toBe("preview-with-concerns");
+  });
+
+  it("uses singular scope label for one-item migration preview summaries", () => {
+    const result = createMigrationPreviewOperationResult({
+      sourceContext: { product: "codex", kind: "session-evidence" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: { kind: "sessions", itemRefs: ["session-001"] },
+      items: buildMigrationPreviewItems({
+        sourceContext: { product: "codex", kind: "session-evidence" },
+        targetContext: { profile: "reusable-context-assets" },
+        scope: { kind: "sessions", itemRefs: ["session-001"] },
+      }),
+    });
+
+    expect(result.summary).toContain("1 session checked");
+  });
+
+  it("creates migration preview operation results with preview-only summary metadata", () => {
+    const items = buildMigrationPreviewItems({
+      sourceContext: { product: "codex", kind: "context-asset" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: { kind: "assets", itemRefs: ["asset-rule-project-codex", "asset-memory-user-windsurf"] },
+    });
+
+    const result = createMigrationPreviewOperationResult({
+      sourceContext: { product: "codex", kind: "context-asset" },
+      targetContext: { profile: "reusable-context-assets" },
+      scope: { kind: "assets", itemRefs: ["asset-rule-project-codex", "asset-memory-user-windsurf"] },
+      items,
+      issueLabel: "asset migration review",
+    });
+
+    expect(result.status).toBe("preview-with-concerns");
+    expect(result.summary).toContain("Preview only");
+    expect(result.previewItems).toHaveLength(2);
+    expect(result.issueLabel).toBe("asset migration review");
+  });
+
+  it("blocks preview item classification when target profile is missing", () => {
+    const items = buildMigrationPreviewItems({
+      sourceContext: { product: "codex", kind: "context-asset" },
+      targetContext: {},
+      scope: { kind: "assets", itemRefs: ["asset-rule-project-codex"] },
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]!.classification).toBe("blocked");
+    expect(items[0]!.detail).toContain("target profile is incomplete");
+  });
+
+  it("resolves migration-preview workflow from handoff", () => {
+    const handoff: BackupMigrationHandoff = {
+      origin: "analysis",
+      subtitle: "Migration preview for stale memory.",
+      workflowType: "migration-preview",
+      migrationPreviewSourceContext: { product: "windsurf", kind: "analysis-context" },
+      migrationPreviewTargetContext: { profile: "reusable-context-assets" },
+      migrationPreviewScope: { kind: "assets", itemRefs: ["asset-memory-user-windsurf"] },
+    };
+
+    expect(resolveWorkflowFromHandoff(handoff)).toBe("migration-preview");
+  });
 });
 
 describe("formatWorkflowTypeLabel", () => {
@@ -45,6 +188,7 @@ describe("formatWorkflowTypeLabel", () => {
     expect(formatWorkflowTypeLabel("bulk-session-backup")).toBe("Bulk Session Backup");
     expect(formatWorkflowTypeLabel("import-backup")).toBe("Import Backup");
     expect(formatWorkflowTypeLabel("validate-package")).toBe("Validate Package");
+    expect(formatWorkflowTypeLabel("migration-preview")).toBe("Migration Preview");
   });
 });
 
@@ -76,6 +220,11 @@ describe("getStepsForWorkflow", () => {
   it("returns steps for validate-package", () => {
     const steps = getStepsForWorkflow("validate-package");
     expect(steps).toEqual(["selection", "validation", "result"]);
+  });
+
+  it("returns steps for migration-preview", () => {
+    const steps = getStepsForWorkflow("migration-preview");
+    expect(steps).toEqual(["selection", "configuration", "validation", "result"]);
   });
 });
 

@@ -227,11 +227,21 @@ export function buildBackupHandoffFromAssets(context: {
 }): BackupMigrationHandoff {
   return {
     origin: "assets",
-    subtitle: `Prepare bounded backup or migration work${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}.`,
-    continueLabel: "Workflow execution belongs to Backup / Migration.",
+    subtitle: `Preview bounded migration scope${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}.`,
+    continueLabel: "Only explicit asset source and scope context are prefilled here. Source and target remain editable if they were not supplied by the route.",
     returnLabel: "Return to Assets for object-level review.",
     assetId: context.assetId,
     assetSubtype: context.subtype,
+    workflowType: "migration-preview",
+    migrationPreviewSourceContext: {
+      kind: "context-asset",
+      label: context.assetId,
+    },
+    migrationPreviewScope: {
+      kind: "assets",
+      itemRefs: context.assetId ? [context.assetId] : [],
+      label: context.subtype ? `${context.subtype} asset scope` : undefined,
+    },
   };
 }
 
@@ -240,15 +250,34 @@ export function buildBackupHandoffFromAnalysis(context: {
   title: string;
   preservationWarning?: string;
   routeLabel?: string;
+  backupWorkflowType?: "session-backup" | "migration-preview";
 }): BackupMigrationHandoff {
+  if (context.backupWorkflowType !== "migration-preview") {
+    return {
+      origin: "analysis",
+      subtitle: `${context.routeLabel ?? "Recommended route"} for ${context.title}.`,
+      continueLabel: context.preservationWarning ?? "Backup / Migration owns workflow validation and execution.",
+      returnLabel: "Return to Analysis for grouped interpretation.",
+      findingId: context.findingId,
+      preservationWarning: context.preservationWarning,
+      issueLabel: context.title,
+      workflowType: "session-backup",
+    };
+  }
+
   return {
     origin: "analysis",
-    subtitle: `${context.routeLabel ?? "Recommended route"} for ${context.title}.`,
-    continueLabel: context.preservationWarning ?? "Backup / Migration owns workflow validation and execution.",
+    subtitle: `${context.routeLabel ?? "Migration preview"} for ${context.title}.`,
+    continueLabel: context.preservationWarning ?? "Analysis issue context is preserved, but missing source or target must still be entered explicitly before preview can complete.",
     returnLabel: "Return to Analysis for grouped interpretation.",
     findingId: context.findingId,
     preservationWarning: context.preservationWarning,
-    workflowType: "session-backup",
+    issueLabel: context.title,
+    workflowType: "migration-preview",
+    migrationPreviewSourceContext: {
+      kind: "analysis-context",
+      label: context.title,
+    },
   };
 }
 
@@ -287,6 +316,7 @@ export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType)
     "bulk-session-backup": "Start a bounded bulk session backup workflow from Project Overview.",
     "import-backup": "Start a bounded import workflow from Project Overview.",
     "validate-package": "Start a bounded package validation workflow from Project Overview.",
+    "migration-preview": "Start a bounded migration preview workflow from Project Overview.",
   } satisfies Record<BackupWorkflowType, string>;
 
   return {
@@ -295,6 +325,7 @@ export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType)
     continueLabel: "Workflow execution belongs to Backup / Migration.",
     returnLabel: "Return to Project Overview.",
     workflowType,
+    migrationPreviewSourceContext: workflowType === "migration-preview" ? { kind: "project-overview" } : undefined,
   };
 }
 
@@ -493,6 +524,14 @@ function ProjectOverviewSurface(props: {
           >
             Validate backup package
           </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("migration-preview"))}
+          >
+            Open migration preview
+          </Button>
           <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("backup")}>
             Browse backup workflows
           </Button>
@@ -659,6 +698,7 @@ export default function ProjectShellClient() {
     title: string;
     preservationWarning?: string;
     routeLabel?: string;
+    backupWorkflowType?: "session-backup" | "migration-preview";
   }) => {
     leaveSessionsSurface();
     setAssetsHandoff(null);

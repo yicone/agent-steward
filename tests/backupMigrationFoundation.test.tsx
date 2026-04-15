@@ -7,6 +7,7 @@ import {
   buildBulkConfirmationDetails,
   resolveInitialBulkSelections,
   OperationResultPanel,
+  resolveMigrationPreviewInvalidWorkflowState,
   ValidationPanel,
 } from "@/components/BackupMigrationFoundation";
 import type { BackupMigrationHandoff } from "@/lib/backupMigration";
@@ -79,8 +80,84 @@ function renderOperationResultPanel() {
   );
 }
 
+function renderMigrationPreviewResultPanel() {
+  return renderToStaticMarkup(
+    <OperationResultPanel
+      result={{
+        id: "op-preview-1",
+        workflowType: "migration-preview",
+        status: "preview-with-concerns",
+        timestamp: "2026-04-15T13:00:00Z",
+        summary: "Preview only: 2 reusable context assets checked — 1 portable, 1 degraded, 0 unsupported, 0 blocked.",
+        previewSourceContext: { product: "codex", kind: "context-asset" },
+        previewTargetContext: { profile: "reusable-context-assets" },
+        previewScope: { kind: "assets", itemRefs: ["asset-rule-project-codex", "asset-memory-user-windsurf"] },
+        previewCounts: { portable: 1, degraded: 1, unsupported: 0, blocked: 0 },
+        previewItems: [
+          {
+            id: "assets:asset-rule-project-codex",
+            label: "asset-rule-project-codex",
+            scopeKind: "assets",
+            sourceRef: "asset-rule-project-codex",
+            classification: "portable",
+            detail: "Preview only: asset-rule-project-codex maps cleanly into Reusable context assets with recognized metadata.",
+          },
+          {
+            id: "assets:asset-memory-user-windsurf",
+            label: "asset-memory-user-windsurf",
+            scopeKind: "assets",
+            sourceRef: "asset-memory-user-windsurf",
+            classification: "degraded",
+            detail: "Preview only: asset-memory-user-windsurf can be represented in Reusable context assets, but fidelity or contextual detail will be reduced.",
+            repairTarget: "assets",
+          },
+        ],
+      }}
+      onNewWorkflow={vi.fn()}
+      onReconfigurePreview={vi.fn()}
+    />
+  );
+}
+
+function renderMigrationPreviewBlockerResultPanel() {
+  return renderToStaticMarkup(
+    <OperationResultPanel
+      result={{
+        id: "op-preview-blocked",
+        workflowType: "migration-preview",
+        status: "preview-with-blockers",
+        timestamp: "2026-04-15T13:00:00Z",
+        summary: "Preview only: 1 reusable context asset checked — 0 portable, 0 degraded, 0 unsupported, 1 blocked.",
+        previewSourceContext: { product: "codex", kind: "context-asset" },
+        previewTargetContext: { profile: "reusable-context-assets" },
+        previewScope: { kind: "assets", itemRefs: ["missing-asset-ref"] },
+        previewCounts: { portable: 0, degraded: 0, unsupported: 0, blocked: 1 },
+        previewItems: [
+          {
+            id: "assets:missing-asset-ref",
+            label: "missing-asset-ref",
+            scopeKind: "assets",
+            sourceRef: "missing-asset-ref",
+            classification: "blocked",
+            detail: "Preview only: missing-asset-ref is blocked because canonical data, provenance, or required source detail is incomplete.",
+            repairTarget: "assets",
+          },
+        ],
+      }}
+      onNewWorkflow={vi.fn()}
+      onReconfigurePreview={vi.fn()}
+    />
+  );
+}
+
 describe("BackupMigrationFoundation", () => {
-  it("renders idle workflow selector without unimplemented workflows", () => {
+  it("keeps invalid migration preview validation on the owning input step", () => {
+    expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: {} })).toBe("selection");
+    expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: { product: "codex" } })).toBe("selection");
+    expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: { product: "codex", kind: "session-evidence" } })).toBe("configuration");
+  });
+
+  it("renders idle workflow selector including migration preview", () => {
     const html = renderBackupMigrationFoundation(null);
 
     expect(html).toContain("Backup / Migration");
@@ -89,7 +166,8 @@ describe("BackupMigrationFoundation", () => {
     expect(html).toContain("Start Bulk Session Backup");
     expect(html).toContain("Start Import Backup");
     expect(html).toContain("Start Validate Package");
-    expect(html).toContain("does not support migration preview, project bundle packaging, vendor-runtime restore, or cloud sync");
+    expect(html).toContain("Start Migration Preview");
+    expect(html).toContain("does not support migration apply, project bundle packaging, vendor-runtime restore, or cloud sync");
   });
 
   it("renders routed session-backup workflow with prefilling context", () => {
@@ -112,20 +190,49 @@ describe("BackupMigrationFoundation", () => {
     expect(html).toContain("Pre-filled from routed handoff.");
   });
 
-  it("degrades vague asset handoff to idle selector instead of opening a broken workflow", () => {
+  it("opens migration preview from asset-routed handoff with explicit scope but editable missing fields", () => {
     const html = renderBackupMigrationFoundation({
       origin: "assets",
-      subtitle: "Prepare bounded backup or migration work for skill assets.",
+      subtitle: "Preview bounded migration scope for skill assets starting from asset-skill-global-generated.",
+      workflowType: "migration-preview",
       assetId: "asset-skill-global-generated",
       assetSubtype: "skill",
-      continueLabel: "Workflow execution belongs to Backup / Migration.",
+      continueLabel: "Only explicit asset source and scope context are prefilled here. Source and target remain editable if they were not supplied by the route.",
       returnLabel: "Return to Assets for object-level review.",
+      migrationPreviewSourceContext: {
+        kind: "context-asset",
+        label: "asset-skill-global-generated",
+      },
+      migrationPreviewScope: {
+        kind: "assets",
+        itemRefs: ["asset-skill-global-generated"],
+      },
     });
 
     expect(html).toContain("routed workflow");
     expect(html).toContain("from assets");
-    expect(html).toContain("Choose a bounded workflow below.");
-    expect(html).not.toContain("Select Session");
+    expect(html).toContain("Migration Preview");
+    expect(html).toContain("Select Source Context");
+    expect(html).toContain("asset-skill-global-generated");
+    expect(html).toContain("Source still required");
+  });
+
+  it("renders overview-routed migration-preview workflow as a direct routed entry", () => {
+    const html = renderBackupMigrationFoundation({
+      origin: "overview",
+      subtitle: "Start a bounded migration preview workflow from Project Overview.",
+      workflowType: "migration-preview",
+      continueLabel: "Workflow execution belongs to Backup / Migration.",
+      returnLabel: "Return to Project Overview.",
+      migrationPreviewSourceContext: {
+        kind: "project-overview",
+      },
+    });
+
+    expect(html).toContain("from overview");
+    expect(html).toContain("Migration Preview");
+    expect(html).toContain("Select Source Context");
+    expect(html).not.toContain("Choose a bounded workflow below.");
   });
 
   it("renders overview-routed validate-package workflow as a direct routed entry", () => {
@@ -221,5 +328,26 @@ describe("BackupMigrationFoundation panels", () => {
     expect(html).toContain("Per-session results");
     expect(html).toContain("backup-1");
     expect(html).toContain("Canonical record could not be read.");
+  });
+
+  it("renders migration preview result details and preview-only messaging", () => {
+    const html = renderMigrationPreviewResultPanel();
+
+    expect(html).toContain("Preview only.");
+    expect(html).toContain("Preview context");
+    expect(html).toContain("Reusable context assets");
+    expect(html).toContain("Preview item detail");
+    expect(html).toContain("asset-memory-user-windsurf");
+    expect(html).toContain("Return to scope configuration");
+    expect(html).toContain("No runtime restore or apply.");
+    expect(html).not.toContain("Imported or backed-up sessions are product-readable only");
+  });
+
+  it("renders migration preview blocker status explicitly", () => {
+    const html = renderMigrationPreviewBlockerResultPanel();
+
+    expect(html).toContain("preview-with-blockers");
+    expect(html).toContain("blocked");
+    expect(html).toContain("missing-asset-ref");
   });
 });

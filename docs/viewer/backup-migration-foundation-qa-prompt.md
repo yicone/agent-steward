@@ -3,10 +3,10 @@
 Use this prompt with an external QA agent that can operate the local app through a browser.
 
 ```text
-You are QA-ing the `bulk-session-backup` implementation for the local-first Agent Storage Manager project.
+You are QA-ing the `migration-preview` and `bulk-session-backup` implementation for the local-first Agent Storage Manager project.
 
 Repository: <repo-path>
-Branch under test: feat/bulk-session-backup
+Branch under test: feat/migration-preview
 
 Goal:
 Verify that the new `Backup / Migration` page behaves as a bounded workflow-first foundation surface. It should support:
@@ -14,12 +14,13 @@ Verify that the new `Backup / Migration` page behaves as a bounded workflow-firs
 - bulk session backup
 - import backup
 - validate package
+- migration preview
 - routed handoff from `Project Overview`, `Sessions`, `Assets`, and `Analysis`
 - compact recent operations
 
 It must not behave like:
 - a generic tools drawer
-- a migration preview surface
+- a migration apply surface
 - a project bundle implementation
 - a vendor runtime restore UI
 
@@ -41,8 +42,7 @@ Primary smoke checks:
    - validation-oriented state
    - result / recent operations region
 6. Confirm copy clearly states bounded foundation behavior and does not imply:
-   - bulk backup
-   - migration preview
+   - migration apply
    - project bundle execution
    - vendor-runtime restore
 
@@ -53,7 +53,8 @@ Workflow selector / idle checks:
    - bulk session backup
    - import backup
    - validate package
-3. Confirm `migration preview` and `project bundle` are not presented as active workflows.
+   - migration preview
+3. Confirm `project bundle` is not presented as an active workflow.
 
 Session backup workflow checks:
 1. Enter the `session backup` workflow from `Backup / Migration`.
@@ -109,17 +110,45 @@ Validate package workflow checks:
    - invalid
 4. Confirm validation result is still clearly a workflow result, not an editor or generic inspector.
 
+Migration preview workflow checks:
+1. Enter the `migration preview` workflow from `Backup / Migration`.
+2. Confirm the workflow follows this bounded path only:
+   - selection
+   - configuration
+   - validation
+   - result
+3. Confirm no confirmation or execution step appears for migration preview.
+4. Confirm preview requires explicit:
+   - source context
+   - target context
+   - bounded scope
+5. Confirm missing fields remain visible and editable instead of being silently inferred.
+6. Confirm bounded scope choices include:
+   - sessions
+   - reusable context assets
+   - project-context subset
+7. Confirm validation and result copy clearly state `preview only` and never imply migration apply, object writing, or bundle generation.
+8. Confirm result output distinguishes item classifications:
+   - portable
+   - degraded
+   - unsupported
+   - blocked
+9. Confirm aggregate counts are shown for all four preview classifications.
+10. Confirm degraded / unsupported / blocked rows offer inspection or repair-oriented follow-up wording without executing work inline.
+
 Routed handoff checks:
 1. From `Sessions`, if available, route into `Backup / Migration` for a selected session.
 2. Confirm `Backup / Migration` opens the `session backup` workflow with the session prefilled and a compact origin cue.
 3. If `Sessions` exposes explicit multi-selection under this branch, route that selection into `Backup / Migration`.
 4. Confirm the destination opens `bulk session backup` with the selected sessions prefilled and no silently dropped entries.
 5. From `Assets`, trigger a route into `Backup / Migration` if available.
-6. Confirm the destination page preserves bounded asset context but does not embed the full Assets page.
+6. Confirm the destination page may open migration preview with explicit asset scope context only, while missing source product or target context remains editable.
 7. From `Analysis`, trigger a preservation-oriented route into `Backup / Migration` if available.
-8. Confirm issue context is preserved and workflow identity remains primary.
-9. From `Project Overview`, trigger a route into single backup, bulk backup, import, and validation if available.
-10. Confirm routed context opens the correct workflow and degrades safely if context is incomplete.
+8. Confirm preservation-oriented analysis routes still open `session backup` and preserve the issue/preservation warning context.
+9. From `Analysis`, trigger a migration-preview route into `Backup / Migration` if available.
+10. Confirm migration-preview analysis routes open `migration preview`, preserve issue context, and do not invent missing source or target.
+11. From `Project Overview`, trigger a route into single backup, bulk backup, import, validation, and migration preview if available.
+12. Confirm routed context opens the correct workflow and degrades safely to selection/configuration if preview context is incomplete.
 
 Recent operations checks:
 1. After completing or simulating at least one workflow, confirm a compact recent-operations region appears.
@@ -129,14 +158,16 @@ Recent operations checks:
    - timestamp or recency indicator
    - status
    - session count for bulk runs
+   - selected preview scope for migration preview runs
 3. Confirm it reads as a secondary result/history strip, not a persistent audit console.
 4. Confirm a bulk run produces one recent-operation entry for the batch, not one entry per selected session.
+5. Confirm a migration preview entry routes back to preview detail and does not claim migration was applied.
 
 Regression checks:
 1. `Sessions` still works as before, including existing viewer behavior and direct session backup.
 2. `Assets` and `Analysis` routing into `Backup / Migration` does not break their own page roles.
 3. Top-level navigation away from `Backup / Migration` clears stale routed workflow context when appropriate.
-4. `Backup / Migration` does not expose migration preview or project bundle execution accidentally through copy or buttons.
+4. `Backup / Migration` does not expose migration apply or project bundle execution accidentally through copy or buttons.
 
 Boundary checks:
 1. No button or copy should imply:

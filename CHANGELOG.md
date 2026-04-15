@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-15` — Migration preview workflow
+  - Added a bounded `migration preview` workflow to `Backup / Migration` with explicit source context, target context, and bounded scope state flow (`selection -> configuration -> validation -> result`)
+  - Added preview-only classification and aggregate reporting for `portable`, `degraded`, `unsupported`, and `blocked` items, plus recent-operation entries that route back to preview detail without implying migration apply
+  - Added routed handoff into migration preview from `Project Overview`, `Assets`, and `Analysis` without inventing missing source, target, or scope fields
+
 - `2026-04-15` — Bulk session backup
   - Added a bounded `bulk session backup` workflow to `Backup / Migration` with explicit multi-session selection, per-session validation, batch confirmation, and aggregate plus per-session result reporting
   - Reused the existing single-session backup execution path for batch fan-out and kept recent operations compact with one entry per bulk run

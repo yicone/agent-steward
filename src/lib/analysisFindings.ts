@@ -28,6 +28,7 @@ export type AnalysisRoute = {
   target: AnalysisRouteTarget;
   label: string;
   reason: string;
+  backupWorkflowType?: "session-backup" | "migration-preview";
   sessionId?: string;
   source?: Source;
   rootId?: string;
@@ -167,7 +168,15 @@ export function createAnalysisFindingSeeds(): AnalysisFinding[] {
           target: "backup",
           label: "Preserve in Backup / Migration",
           reason: "Preserve source evidence before changing backup or migration state.",
+          backupWorkflowType: "session-backup",
           preservationWarning: "Preserve before destructive cleanup or migration changes.",
+        },
+        {
+          target: "backup",
+          label: "Preview migration compatibility",
+          reason: "Preview portability before changing backup or migration state.",
+          backupWorkflowType: "migration-preview",
+          preservationWarning: "Preview before destructive cleanup or migration changes.",
         },
         {
           target: "sessions",
