@@ -365,7 +365,7 @@ export function deriveMigrationPreviewValidationResult(input: {
   const normalizedScope = normalizeMigrationPreviewScope(input.scope);
   const items: BackupValidationItem[] = [];
 
-  if (!input.sourceContext?.product || !input.sourceContext.kind) {
+  if (!input.sourceContext?.product || !input.sourceContext?.kind) {
     items.push({
       id: "v-preview-source-required",
       label: "Source context",
