@@ -235,7 +235,7 @@ export function buildBackupHandoffFromAssets(context: {
     workflowType: "migration-preview",
     migrationPreviewSourceContext: {
       kind: "context-asset",
-      label: context.assetId ?? context.subtype,
+      label: context.assetId,
     },
     migrationPreviewScope: {
       kind: "assets",

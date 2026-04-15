@@ -983,7 +983,7 @@ export function buildBackupHandoffInstanceKey(handoff: BackupMigrationHandoff | 
     handoff.migrationPreviewSourceContext?.kind ?? "no-preview-source-kind",
     handoff.migrationPreviewTargetContext?.profile ?? "no-preview-target-profile",
     handoff.migrationPreviewScope?.kind ?? "no-preview-scope-kind",
-    handoff.migrationPreviewScope?.itemRefs.join("|") ?? "no-preview-scope-items",
+    handoff.migrationPreviewScope?.itemRefs?.join("|") ?? "no-preview-scope-items",
     handoff.subtitle,
   ].join(":");
 }

@@ -114,6 +114,13 @@ function isPreviewReadyForResult(input: {
   return Boolean(input.sourceContext.product && input.sourceContext.kind && input.targetContext.profile && input.scope.kind);
 }
 
+function parsePreviewScopeDraft(draft: string): string[] {
+  return draft
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function getOperationStatusBadgeVariant(status: BackupOperationResult["status"]): "default" | "ok" | "warn" {
   if (status === "success" || status === "preview-clear") return "ok";
   if (status === "failed" || status === "preview-with-blockers") return "warn";
@@ -390,7 +397,7 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
         )}
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {props.result.workflowType === "migration-preview" ? (
+        {props.result.workflowType === "migration-preview" && props.onReconfigurePreview ? (
           <Button size="sm" variant="outline" onClick={props.onReconfigurePreview}>
             Return to scope configuration
           </Button>
@@ -574,10 +581,7 @@ export function BackupMigrationFoundation({
     if (activeWorkflow === "migration-preview") {
       const nextScope: MigrationPreviewScope = {
         ...previewScope,
-        itemRefs: previewScopeDraft
-          .split("\n")
-          .map((item) => item.trim())
-          .filter(Boolean),
+        itemRefs: parsePreviewScopeDraft(previewScopeDraft),
       };
       setPreviewScope(nextScope);
       const result = deriveMigrationPreviewValidationResult({
@@ -879,10 +883,7 @@ export function BackupMigrationFoundation({
   const finishMigrationPreview = useCallback(() => {
     const nextScope: MigrationPreviewScope = {
       ...previewScope,
-      itemRefs: previewScopeDraft
-        .split("\n")
-        .map((item) => item.trim())
-        .filter(Boolean),
+      itemRefs: parsePreviewScopeDraft(previewScopeDraft),
     };
     setPreviewScope(nextScope);
 
