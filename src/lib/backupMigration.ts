@@ -514,6 +514,7 @@ export function deriveMigrationPreviewCounts(items: MigrationPreviewItem[]): Mig
 }
 
 export function deriveMigrationPreviewAggregateStatus(items: MigrationPreviewItem[]): MigrationPreviewAggregateStatus {
+  if (items.length === 0) return "preview-with-concerns";
   const counts = deriveMigrationPreviewCounts(items);
   if (counts.unsupported > 0 || counts.blocked > 0) return "preview-with-blockers";
   if (counts.degraded > 0) return "preview-with-concerns";

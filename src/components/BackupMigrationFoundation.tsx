@@ -493,16 +493,6 @@ export function BackupMigrationFoundation({
     () => buildBulkConfirmationDetails({ selections: dedupedBulkSelections, validationResult }),
     [dedupedBulkSelections, validationResult]
   );
-  const previewItems = useMemo(() => {
-    if (!previewSourceContext.product || !previewSourceContext.kind || !previewTargetContext.profile || !previewScope.kind) {
-      return [];
-    }
-    return buildMigrationPreviewItems({
-      sourceContext: previewSourceContext,
-      targetContext: previewTargetContext,
-      scope: previewScope,
-    });
-  }, [previewScope, previewSourceContext, previewTargetContext]);
 
   // ── Actions ──
   const resetWorkflow = useCallback(() => {

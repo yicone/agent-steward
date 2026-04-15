@@ -116,6 +116,10 @@ describe("migration preview model tests", () => {
     expect(deriveMigrationPreviewAggregateStatus(items)).toBe("preview-with-blockers");
   });
 
+  it("treats empty migration preview results as concerns instead of clear", () => {
+    expect(deriveMigrationPreviewAggregateStatus([])).toBe("preview-with-concerns");
+  });
+
   it("creates migration preview operation results with preview-only summary metadata", () => {
     const items = buildMigrationPreviewItems({
       sourceContext: { product: "codex", kind: "context-asset" },
