@@ -7,6 +7,7 @@ import {
   buildBulkConfirmationDetails,
   resolveInitialBulkSelections,
   OperationResultPanel,
+  resolveMigrationPreviewInvalidWorkflowState,
   ValidationPanel,
 } from "@/components/BackupMigrationFoundation";
 import type { BackupMigrationHandoff } from "@/lib/backupMigration";
@@ -150,6 +151,12 @@ function renderMigrationPreviewBlockerResultPanel() {
 }
 
 describe("BackupMigrationFoundation", () => {
+  it("keeps invalid migration preview validation on the owning input step", () => {
+    expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: {} })).toBe("selection");
+    expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: { product: "codex" } })).toBe("selection");
+    expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: { product: "codex", kind: "session-evidence" } })).toBe("configuration");
+  });
+
   it("renders idle workflow selector including migration preview", () => {
     const html = renderBackupMigrationFoundation(null);
 

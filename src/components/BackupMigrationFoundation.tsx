@@ -114,6 +114,12 @@ function isPreviewReadyForResult(input: {
   return Boolean(input.sourceContext.product && input.sourceContext.kind && input.targetContext.profile && input.scope.kind);
 }
 
+export function resolveMigrationPreviewInvalidWorkflowState(input: {
+  sourceContext: MigrationPreviewSourceContext;
+}): BackupWorkflowState {
+  return input.sourceContext.product && input.sourceContext.kind ? "configuration" : "selection";
+}
+
 function parsePreviewScopeDraft(draft: string): string[] {
   return draft
     .split("\n")
@@ -590,6 +596,10 @@ export function BackupMigrationFoundation({
         scope: nextScope,
       });
       setValidationResult(result);
+      if (result.status === "invalid") {
+        setWorkflowState(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: previewSourceContext }));
+        return;
+      }
       setWorkflowState("validation");
       return;
     }
@@ -1386,6 +1396,10 @@ export function BackupMigrationFoundation({
                 </div>
               </div>
             </Card>
+          ) : null}
+
+          {activeWorkflow === "migration-preview" && workflowState !== "validation" && validationResult?.status === "invalid" ? (
+            <ValidationPanel result={validationResult} />
           ) : null}
 
           {/* Validation */}
