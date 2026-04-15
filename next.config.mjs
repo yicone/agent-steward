@@ -3,18 +3,23 @@ const nextConfig = {
   output: "standalone",
   webpack: (config, { dev }) => {
     if (dev) {
+      const existingIgnored = config.watchOptions?.ignored;
+      const ignored = [
+        ...(Array.isArray(existingIgnored) ? existingIgnored : existingIgnored ? [existingIgnored] : []),
+        "**/.next/**",
+        "**/node_modules/**",
+        "**/.agent/**",
+        "**/.agents/**",
+        "**/.codex/**",
+        "**/.github/**",
+        "**/.windsurf/**",
+        "**/.git/**",
+        "**/output/**",
+      ];
+
       config.watchOptions = {
         ...config.watchOptions,
-        ignored: [
-          '**/node_modules/**',
-          '**/.agent/**',
-          '**/.agents/**',
-          '**/.codex/**',
-          '**/.github/**',
-          '**/.windsurf/**',
-          '**/.git/**',
-          '**/output/**',
-        ],
+        ignored,
       };
     }
     return config;
@@ -22,4 +27,3 @@ const nextConfig = {
 };
 
 export default nextConfig;
-
