@@ -16,16 +16,11 @@ vi.mock("@/lib/contextAssets", () => ({
   ],
 }));
 
-const readSessionBackupPackageMock = vi.hoisted(() => vi.fn());
-
-vi.mock("@/lib/server/sessionBackupService", () => ({
-  readSessionBackupPackage: (...args: unknown[]) => readSessionBackupPackageMock(...args),
-}));
-
 import {
   createDefaultProjectBundleSelection,
   type ProjectBundleConfiguration,
 } from "@/lib/backupMigration";
+import { buildSessionBackupManifest, serializeSessionBackupManifest, serializeSessionRecord } from "@/lib/sessionBackup";
 import { generateProjectBundle, validateProjectBundle } from "@/lib/server/projectBundleService";
 
 let tmpDir: string;
@@ -37,7 +32,6 @@ beforeEach(async () => {
   process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(tmpDir, "project-bundles");
   process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT = path.join(tmpDir, "backups");
   await fs.mkdir(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT, { recursive: true });
-  readSessionBackupPackageMock.mockReset();
 });
 
 afterEach(async () => {
@@ -80,10 +74,65 @@ function makeConfig(overrides?: Partial<ProjectBundleConfiguration>): ProjectBun
   };
 }
 
+async function writeBackupPackage(input: {
+  backupId: string;
+  createdAt: string;
+  sessionId: string;
+  source: "codex" | "windsurf" | "antigravity";
+  rootId?: string;
+}) {
+  const backupDir = path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, input.backupId);
+  await fs.mkdir(path.join(backupDir, "sessions"), { recursive: true });
+  const manifest = buildSessionBackupManifest([
+    {
+      sessionId: input.sessionId,
+      path: `sessions/${input.sessionId}.record.json`,
+      includesSourceCopy: false,
+    },
+  ]);
+  manifest.backupId = input.backupId;
+  manifest.createdAt = input.createdAt;
+  await fs.writeFile(path.join(backupDir, "manifest.json"), serializeSessionBackupManifest(manifest), "utf8");
+  await fs.writeFile(
+    path.join(backupDir, "sessions", `${input.sessionId}.record.json`),
+    serializeSessionRecord({
+      schemaVersion: "session-record/v1",
+      session: {
+        id: input.sessionId,
+        source: input.source,
+        rootId: input.rootId,
+        title: "Fixture session",
+      },
+      sourceRef: {
+        kind: "file",
+        locator: path.join(tmpDir, `${input.sessionId}.jsonl`),
+      },
+      provenance: {
+        capturedBy: "agent-storage-manager",
+        capturedAt: input.createdAt,
+      },
+      timestamps: {
+        capturedAt: input.createdAt,
+      },
+      summary: {
+        totalSteps: 0,
+        renderedEvents: 0,
+        userCount: 0,
+        assistantCount: 0,
+        thoughtCount: 0,
+        toolCount: 0,
+        commandCount: 0,
+        subagentCount: 0,
+        errorCount: 0,
+      },
+      events: [],
+    }),
+    "utf8"
+  );
+}
+
 describe("project bundle service", () => {
   it("returns a warning and unresolved reference when a selected session has no existing backup", async () => {
-    readSessionBackupPackageMock.mockRejectedValue(new Error("missing"));
-
     const result = await validateProjectBundle(makeSelection(), makeConfig());
 
     expect(result.validation.status).toBe("valid-with-warnings");
@@ -94,21 +143,12 @@ describe("project bundle service", () => {
   });
 
   it("generates a real local bundle file with the expected minimum structure", async () => {
-    await fs.mkdir(path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, "backup-001"), { recursive: true });
-    readSessionBackupPackageMock.mockResolvedValue({
-      manifest: {
-        backupId: "backup-001",
-        createdAt: "2026-04-16T10:00:00.000Z",
-      },
-      records: [
-        {
-          session: {
-            id: "session-1",
-            source: "codex",
-            rootId: "root-1",
-          },
-        },
-      ],
+    await writeBackupPackage({
+      backupId: "backup-001",
+      createdAt: "2026-04-16T10:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
     });
 
     const generated = await generateProjectBundle(makeSelection(), makeConfig());
@@ -126,23 +166,20 @@ describe("project bundle service", () => {
   });
 
   it("prefers the newest matching session backup package when multiple matches exist", async () => {
-    await fs.mkdir(path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, "backup-old"), { recursive: true });
-    await fs.mkdir(path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, "backup-new"), { recursive: true });
-    readSessionBackupPackageMock
-      .mockResolvedValueOnce({
-        manifest: {
-          backupId: "backup-old",
-          createdAt: "2026-04-16T09:00:00.000Z",
-        },
-        records: [{ session: { id: "session-1", source: "codex", rootId: "root-1" } }],
-      })
-      .mockResolvedValueOnce({
-        manifest: {
-          backupId: "backup-new",
-          createdAt: "2026-04-16T10:00:00.000Z",
-        },
-        records: [{ session: { id: "session-1", source: "codex", rootId: "root-1" } }],
-      });
+    await writeBackupPackage({
+      backupId: "backup-old",
+      createdAt: "2026-04-16T09:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+    await writeBackupPackage({
+      backupId: "backup-new",
+      createdAt: "2026-04-16T10:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
 
     const result = await validateProjectBundle(makeSelection(), makeConfig());
     const sessionReference = result.memberReferences.find((item) => item.category === "sessions");
@@ -152,8 +189,6 @@ describe("project bundle service", () => {
   });
 
   it("blocks generation when bundle identity is structurally invalid", async () => {
-    readSessionBackupPackageMock.mockRejectedValue(new Error("missing"));
-
     await expect(
       generateProjectBundle(makeSelection(), makeConfig({ bundleName: "" }))
     ).rejects.toThrow(/structurally valid composition/i);

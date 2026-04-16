@@ -1,6 +1,7 @@
 import "server-only";
 
 import crypto from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -25,8 +26,9 @@ import {
   type ProjectBundleValidationResponse,
 } from "@/lib/backupMigration";
 import { createContextAssetSeeds } from "@/lib/contextAssets";
-import { readSessionBackupPackage } from "@/lib/server/sessionBackupService";
+import { parseSessionBackupManifest, parseSessionRecord } from "@/lib/sessionBackup";
 import { getProjectBundlesRoot, getSessionBackupsRoot } from "@/lib/server/paths";
+import { readBackupFile, readBackupManifestFile } from "@/lib/server/sessionBackupStore";
 
 type SessionBackupReferenceMatch = {
   backupId: string;
@@ -67,9 +69,17 @@ function createSnapshot(input: {
   };
 }
 
-async function listSessionBackupMatches(): Promise<Map<string, SessionBackupReferenceMatch>> {
+async function listSessionBackupMatches(
+  sessionSelections: ProjectBundleSelectionState["sessionSelections"]
+): Promise<Map<string, SessionBackupReferenceMatch>> {
   const index = new Map<string, SessionBackupReferenceMatch>();
   const root = getSessionBackupsRoot();
+  const requestedKeys = new Set(sessionSelections.map((selection) => formatSessionSelectionLabel(selection)));
+  const requestedSessionIds = new Set(sessionSelections.map((selection) => selection.sessionId));
+
+  if (requestedKeys.size === 0) {
+    return index;
+  }
 
   try {
     const entries = await fs.readdir(root, { withFileTypes: true });
@@ -77,18 +87,21 @@ async function listSessionBackupMatches(): Promise<Map<string, SessionBackupRefe
       if (!entry.isDirectory()) continue;
 
       try {
-        const pkg = await readSessionBackupPackage(entry.name);
-        for (const record of pkg.records) {
+        const manifest = parseSessionBackupManifest(await readBackupManifestFile(entry.name));
+        for (const recordEntry of manifest.records) {
+          if (!requestedSessionIds.has(recordEntry.sessionId)) continue;
+          const record = parseSessionRecord((await readBackupFile(entry.name, recordEntry.path)).toString("utf8"));
           const key = formatSessionSelectionLabel({
             sessionId: record.session.id,
             source: record.session.source,
             rootId: record.session.rootId,
           });
+          if (!requestedKeys.has(key)) continue;
           const existing = index.get(key);
-          if (existing && existing.createdAt >= pkg.manifest.createdAt) continue;
+          if (existing && existing.createdAt >= manifest.createdAt) continue;
           index.set(key, {
-            backupId: pkg.manifest.backupId,
-            createdAt: pkg.manifest.createdAt,
+            backupId: manifest.backupId,
+            createdAt: manifest.createdAt,
             source: record.session.source,
             sessionId: record.session.id,
             rootId: record.session.rootId,
@@ -111,7 +124,7 @@ async function canPrepareBundleOutputRoot(): Promise<boolean> {
     let current = path.dirname(root);
     while (true) {
       try {
-        await fs.access(current);
+        await fs.access(current, fsConstants.W_OK);
         return true;
       } catch {
         const parent = path.dirname(current);
@@ -284,7 +297,7 @@ async function composeProjectBundle(
   const sessionSelections = dedupeSessionSelections(selection.sessionSelections);
   const sessionBackupIndex =
     selection.includedCategories.sessions && sessionSelections.length > 0
-      ? await listSessionBackupMatches()
+      ? await listSessionBackupMatches(sessionSelections)
       : new Map<string, SessionBackupReferenceMatch>();
   if (selection.includedCategories.sessions && sessionSelections.length === 0) {
     validationItems.push({
