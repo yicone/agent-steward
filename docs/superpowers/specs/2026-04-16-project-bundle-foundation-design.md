@@ -20,14 +20,14 @@ This design should serve as the upstream input for:
 
 ## References
 
-- [research-project-bundle.md](/Users/tr/Workspace/agent-storage-manager/docs/research-project-bundle.md)
-- [session-backup-migration-ux.md](/Users/tr/Workspace/agent-storage-manager/docs/session-backup-migration-ux.md)
-- [page-state-ia.md](/Users/tr/Workspace/agent-storage-manager/docs/page-state-ia.md)
-- [task-flow-ia.md](/Users/tr/Workspace/agent-storage-manager/docs/task-flow-ia.md)
-- [routed-context-handoff.md](/Users/tr/Workspace/agent-storage-manager/docs/routed-context-handoff.md)
-- [feature-follow-up-priority.md](/Users/tr/Workspace/agent-storage-manager/docs/dev/feature-follow-up-priority.md)
-- [session-backup/spec.md](/Users/tr/Workspace/agent-storage-manager/openspec/specs/session-backup/spec.md)
-- [backup-migration/spec.md](/Users/tr/Workspace/agent-storage-manager/openspec/specs/backup-migration/spec.md)
+- [research-project-bundle.md](/docs/research-project-bundle.md)
+- [session-backup-migration-ux.md](/docs/session-backup-migration-ux.md)
+- [page-state-ia.md](/docs/page-state-ia.md)
+- [task-flow-ia.md](/docs/task-flow-ia.md)
+- [routed-context-handoff.md](/docs/routed-context-handoff.md)
+- [feature-follow-up-priority.md](/docs/dev/feature-follow-up-priority.md)
+- [session-backup/spec.md](/openspec/specs/session-backup/spec.md)
+- [backup-migration/spec.md](/openspec/specs/backup-migration/spec.md)
 
 ## Product Intent
 

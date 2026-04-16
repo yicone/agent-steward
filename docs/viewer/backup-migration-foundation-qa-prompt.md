@@ -6,7 +6,7 @@ Use this prompt with an external QA agent that can operate the local app through
 You are QA-ing the `project-bundle`, `migration-preview`, and `bulk-session-backup` implementation for the local-first Agent Storage Manager project.
 
 Repository: <repo-path>
-Branch under test: feat/migration-preview
+Branch under test: <branch-under-test>
 
 Goal:
 Verify that the new `Backup / Migration` page behaves as a bounded workflow-first foundation surface. It should support:

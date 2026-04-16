@@ -126,7 +126,6 @@ export type ProjectBundleMemberReference = {
   status: ProjectBundleReferenceStatus;
   detail: string;
   backupId?: string;
-  manifestPath?: string;
   snapshot: ProjectBundleMetadataSnapshot;
 };
 

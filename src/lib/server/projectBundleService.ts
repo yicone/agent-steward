@@ -17,6 +17,7 @@ import {
   type ProjectBundleMemberCategory,
   type ProjectBundleMemberInventoryItem,
   type ProjectBundleMemberReference,
+  type ProjectBundleMemberStatus,
   type ProjectBundleMetadataSnapshot,
   type ProjectBundlePackageMetadata,
   type ProjectBundleProjectMetadata,
@@ -29,7 +30,6 @@ import { getProjectBundlesRoot, getSessionBackupsRoot } from "@/lib/server/paths
 
 type SessionBackupReferenceMatch = {
   backupId: string;
-  manifestPath: string;
   createdAt: string;
   source: string;
   sessionId: string;
@@ -87,7 +87,6 @@ async function listSessionBackupMatches(): Promise<Map<string, SessionBackupRefe
           if (index.has(key)) continue;
           index.set(key, {
             backupId: pkg.manifest.backupId,
-            manifestPath: path.join(root, entry.name, "manifest.json"),
             createdAt: pkg.manifest.createdAt,
             source: record.session.source,
             sessionId: record.session.id,
@@ -295,9 +294,8 @@ async function composeProjectBundle(
         status: match ? "resolved" : "missing-package",
         detail: match
           ? `Reuse existing session backup package ${match.backupId}.`
-          : "No existing session backup package is available for this selected session.",
+          : "No existing session backup package is available for this selected session yet. This is expected until the session has been backed up.",
         backupId: match?.backupId,
-        manifestPath: match?.manifestPath,
         snapshot: createSnapshot({
           id: key,
           label: sessionSelection.sessionId || "unresolved-session",
@@ -358,20 +356,54 @@ async function composeProjectBundle(
     });
   }
 
+  const memberInventoryStatusByCategory = new Map<ProjectBundleMemberCategory, ProjectBundleMemberStatus>();
+  const promoteCategoryStatus = (category: ProjectBundleMemberCategory, next: ProjectBundleMemberStatus) => {
+    const current = memberInventoryStatusByCategory.get(category);
+    if (current === "blocked") return;
+    if (current === "warning" && next === "ready") return;
+    if (current === "ready" && next === "ready") return;
+    if (current === "warning" && next === "blocked") {
+      memberInventoryStatusByCategory.set(category, "blocked");
+      return;
+    }
+    if (!current) {
+      memberInventoryStatusByCategory.set(category, next);
+      return;
+    }
+    if (current === "ready" && (next === "warning" || next === "blocked")) {
+      memberInventoryStatusByCategory.set(category, next);
+    }
+  };
+
+  for (const reference of memberReferences) {
+    promoteCategoryStatus(reference.category, reference.status === "resolved" ? "ready" : "warning");
+  }
+
+  for (const item of validationItems) {
+    if (item.id.startsWith("bundle-session-")) {
+      promoteCategoryStatus("sessions", item.severity === "block" ? "blocked" : "warning");
+    } else if (item.id.startsWith("bundle-package-metadata-")) {
+      promoteCategoryStatus("package-metadata", item.severity === "block" ? "blocked" : "warning");
+    } else if (item.id.startsWith("bundle-output-root-")) {
+      promoteCategoryStatus("project-metadata", item.severity === "block" ? "blocked" : "warning");
+    }
+  }
+
   const memberInventory: ProjectBundleMemberInventoryItem[] = PROJECT_BUNDLE_MEMBER_CATEGORIES.map((category) => {
     const selected = selection.includedCategories[category];
     const includedCount =
-      category === "sessions"
+      !selected
+        ? 0
+        : category === "sessions"
         ? sessionSelections.length
         : memberReferences.filter((item) => item.category === category).length;
-    const hasBlocker = validationItems.some((item) => item.severity === "block" && item.id.includes(category));
-    const hasWarning = validationItems.some((item) => item.severity === "warning" && item.id.includes(category));
+    const status = selected ? memberInventoryStatusByCategory.get(category) ?? "ready" : "ready";
 
     return {
       category,
       selected,
       includedCount,
-      status: hasBlocker ? "blocked" : hasWarning ? "warning" : "ready",
+      status,
       detail: !selected
         ? "Excluded from bundle composition."
         : includedCount === 0

@@ -1,0 +1,136 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const validateProjectBundleMock = vi.hoisted(() => vi.fn());
+const generateProjectBundleMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/server/projectBundleService", () => ({
+  validateProjectBundle: (...args: unknown[]) => validateProjectBundleMock(...args),
+  generateProjectBundle: (...args: unknown[]) => generateProjectBundleMock(...args),
+}));
+
+// @ts-ignore
+import { POST } from "@/app/api/project-bundles/route";
+
+afterEach(() => {
+  validateProjectBundleMock.mockReset();
+  generateProjectBundleMock.mockReset();
+});
+
+describe("project bundle route", () => {
+  it("routes validate requests to validateProjectBundle", async () => {
+    validateProjectBundleMock.mockResolvedValue({
+      validation: { status: "valid", items: [] },
+      summary: {
+        warningCount: 0,
+        blockerCount: 0,
+        selectedCategoryCount: 2,
+        selectedSessionCount: 0,
+        resolvedReferenceCount: 2,
+        unresolvedReferenceCount: 0,
+      },
+      memberInventory: [],
+      memberReferences: [],
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "validate",
+          selection: {
+            includedCategories: {
+              sessions: false,
+              rules: true,
+            },
+          },
+          configuration: {
+            bundleName: "My bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(validateProjectBundleMock).toHaveBeenCalledTimes(1);
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    const [selection, configuration] = validateProjectBundleMock.mock.calls[0]!;
+    expect(selection.includedCategories.rules).toBe(true);
+    expect(selection.includedCategories.sessions).toBe(false);
+    expect(configuration.bundleName).toBe("My bundle");
+  });
+
+  it("routes generate requests to generateProjectBundle", async () => {
+    generateProjectBundleMock.mockResolvedValue({
+      validation: { status: "valid", items: [] },
+      summary: {
+        warningCount: 0,
+        blockerCount: 0,
+        selectedCategoryCount: 1,
+        selectedSessionCount: 1,
+        resolvedReferenceCount: 1,
+        unresolvedReferenceCount: 0,
+      },
+      memberInventory: [],
+      memberReferences: [],
+      packageId: "project-bundle-1",
+      filePath: "/tmp/project-bundle-1.bundle.json",
+      bundle: {},
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          handoff: {
+            origin: "overview",
+            workflowType: "project-bundle",
+            projectBundleScopeHint: "overview-routed project context",
+          },
+          selection: {
+            sessionSelections: [
+              {
+                sessionId: "session-1",
+                source: "codex",
+              },
+            ],
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+            notes: "  note  ",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(generateProjectBundleMock).toHaveBeenCalledTimes(1);
+    const [selection, configuration] = generateProjectBundleMock.mock.calls[0]!;
+    expect(selection.scopeHint).toBe("overview-routed project context");
+    expect(selection.sessionSelections).toHaveLength(1);
+    expect(configuration.notes).toBe("note");
+  });
+
+  it("returns a structured 400 when the service throws", async () => {
+    validateProjectBundleMock.mockRejectedValue(new Error("bundle failed"));
+
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "validate",
+          configuration: {
+            bundleName: "Broken bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "bundle failed",
+      code: "PROJECT_BUNDLE_FAILED",
+      title: "Bundle validation failed",
+    });
+  });
+});

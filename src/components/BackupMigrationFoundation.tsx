@@ -173,6 +173,20 @@ export function resolveInitialProjectBundleSessionSelections(handoff: BackupMigr
   return [];
 }
 
+function formatBundleCategoryLabel(category: ProjectBundleMemberCategory): string {
+  const labels: Record<ProjectBundleMemberCategory, string> = {
+    sessions: "Sessions",
+    rules: "Rules",
+    memory: "Memory",
+    skills: "Skills",
+    commands: "Commands",
+    "package-metadata": "Package Metadata",
+    "project-metadata": "Project Metadata",
+  };
+
+  return labels[category];
+}
+
 export function buildBulkConfirmationDetails(input: {
   selections: BackupSessionSelection[];
   validationResult: BackupValidationResult | null;
@@ -355,7 +369,7 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
               {props.result.projectBundleMemberInventory!.map((item) => (
                 <div key={item.category} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{item.category}</span>
+                    <span className="font-medium">{formatBundleCategoryLabel(item.category)}</span>
                     <Badge variant={item.status === "ready" ? "ok" : item.status === "warning" ? "warn" : "default"}>
                       {item.status}
                     </Badge>
@@ -1518,7 +1532,7 @@ export function BackupMigrationFoundation({
                         checked={projectBundleSelection.includedCategories[category]}
                         onChange={(e) => toggleProjectBundleCategory(category, e.target.checked)}
                       />
-                      <span>{category}</span>
+                      <span>{formatBundleCategoryLabel(category)}</span>
                     </label>
                   ))}
                 </div>
@@ -1851,7 +1865,7 @@ export function BackupMigrationFoundation({
                     {projectBundleMemberInventory.map((item) => (
                       <div key={item.category} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3">
                         <div className="flex items-center justify-between gap-2">
-                          <div className="font-medium">{item.category}</div>
+                          <div className="font-medium">{formatBundleCategoryLabel(item.category)}</div>
                           <Badge variant={item.status === "ready" ? "ok" : item.status === "warning" ? "warn" : "default"}>
                             {item.status}
                           </Badge>
