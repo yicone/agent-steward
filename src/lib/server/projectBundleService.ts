@@ -77,6 +77,7 @@ async function listSessionBackupMatches(
   const index = new Map<string, SessionBackupReferenceMatch>();
   const root = getSessionBackupsRoot();
   const requestedKeys = new Set(sessionSelections.map((selection) => formatSessionSelectionLabel(selection)));
+  const remainingKeys = new Set(requestedKeys);
   const requestedSessionIds = new Set(sessionSelections.map((selection) => selection.sessionId));
 
   if (requestedKeys.size === 0) {
@@ -86,11 +87,13 @@ async function listSessionBackupMatches(
   try {
     const entries = await fs.readdir(root, { withFileTypes: true });
     for (const entry of entries) {
+      if (remainingKeys.size === 0) break;
       if (!entry.isDirectory()) continue;
 
       try {
         const manifest = parseSessionBackupManifest(await readBackupManifestFile(entry.name));
         for (const recordEntry of manifest.records) {
+          if (remainingKeys.size === 0) break;
           if (!requestedSessionIds.has(recordEntry.sessionId)) continue;
           const record = parseSessionRecord((await readBackupFile(entry.name, recordEntry.path)).toString("utf8"));
           const key = formatSessionSelectionLabel({
@@ -108,6 +111,7 @@ async function listSessionBackupMatches(
             sessionId: record.session.id,
             rootId: record.session.rootId,
           });
+          remainingKeys.delete(key);
         }
       } catch {
         continue;
@@ -123,6 +127,16 @@ async function listSessionBackupMatches(
 async function canPrepareBundleOutputRoot(): Promise<boolean> {
   try {
     const root = getProjectBundlesRoot();
+    try {
+      const stat = await fs.stat(root);
+      if (stat.isDirectory()) {
+        await fs.access(root, fsConstants.W_OK);
+        return true;
+      }
+      return false;
+    } catch {
+      // Root does not exist yet; fall back to nearest existing writable ancestor.
+    }
     let current = path.dirname(root);
     while (true) {
       try {
@@ -274,8 +288,7 @@ async function composeProjectBundle(
   let packageInfo: Awaited<ReturnType<typeof readPackageMetadata>> | null = null;
   try {
     packageInfo = await readPackageMetadata();
-  } catch (error) {
-    console.error("Failed to read package metadata for project bundle validation.", error);
+  } catch {
     validationItems.push({
       id: "bundle-package-metadata-missing",
       label: "Package metadata",

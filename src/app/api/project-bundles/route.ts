@@ -103,8 +103,7 @@ export async function POST(req: Request) {
 
     const validation = await validateProjectBundle(selection, configuration);
     return NextResponse.json(validation);
-  } catch (error) {
-    console.error("Project bundle route failed.", error);
+  } catch {
     return NextResponse.json(
       {
         error: body.mode === "generate"

@@ -215,4 +215,17 @@ describe("project bundle service", () => {
       process.chdir(originalCwd);
     }
   });
+
+  it("blocks validation when the bundle root path is not a writable directory", async () => {
+    const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
+    await fs.writeFile(bundleRoot, "not-a-directory", "utf8");
+
+    try {
+      const result = await validateProjectBundle(makeSelection(), makeConfig());
+      expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+      expect(result.validation.status).toBe("invalid");
+    } finally {
+      await fs.rm(bundleRoot, { force: true });
+    }
+  });
 });

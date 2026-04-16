@@ -1,3 +1,4 @@
+import os from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const validateProjectBundleMock = vi.hoisted(() => vi.fn());
@@ -73,7 +74,7 @@ describe("project bundle route", () => {
       memberInventory: [],
       memberReferences: [],
       packageId: "project-bundle-1",
-      filePath: `${process.env.HOME}/.agent-storage-manager/project-bundle-1.bundle.json`,
+      filePath: `${os.homedir()}/.agent-storage-manager/project-bundle-1.bundle.json`,
     });
 
     const response = await POST(
