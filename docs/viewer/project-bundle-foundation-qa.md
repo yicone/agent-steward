@@ -37,10 +37,11 @@ Primary QA conclusion:
 
 ## Non-blocking Concerns
 
-1. Bundle category labels currently render raw keys such as `sessions` instead
-   of more polished display labels.
-2. Missing-package reference detail could say more explicitly that this is
-   expected until the session has been backed up.
+1. The 2026-04-16 external QA run noted that bundle category labels rendered
+   raw keys such as `sessions` instead of more polished display labels.
+2. The 2026-04-16 external QA run also noted that the missing-package
+   reference detail could more explicitly say that this is expected until the
+   session has been backed up.
 
 ## Suggested Follow-up Tests
 

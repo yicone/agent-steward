@@ -133,4 +133,28 @@ describe("project bundle route", () => {
       title: "Bundle validation failed",
     });
   });
+
+  it("rejects unknown mode values instead of silently treating them as validation", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "oops",
+          configuration: {
+            bundleName: "Broken mode",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(validateProjectBundleMock).not.toHaveBeenCalled();
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      error: "Unsupported mode: oops",
+      code: "INVALID_MODE",
+      title: "Invalid request",
+      hint: "Use mode validate or generate.",
+    });
+  });
 });

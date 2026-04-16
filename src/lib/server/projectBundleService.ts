@@ -84,7 +84,8 @@ async function listSessionBackupMatches(): Promise<Map<string, SessionBackupRefe
             source: record.session.source,
             rootId: record.session.rootId,
           });
-          if (index.has(key)) continue;
+          const existing = index.get(key);
+          if (existing && existing.createdAt >= pkg.manifest.createdAt) continue;
           index.set(key, {
             backupId: pkg.manifest.backupId,
             createdAt: pkg.manifest.createdAt,
@@ -102,6 +103,17 @@ async function listSessionBackupMatches(): Promise<Map<string, SessionBackupRefe
   }
 
   return index;
+}
+
+async function canPrepareBundleOutputRoot(): Promise<boolean> {
+  try {
+    const root = getProjectBundlesRoot();
+    const parent = path.dirname(root);
+    await fs.access(parent);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readPackageMetadata(): Promise<{
@@ -250,19 +262,21 @@ async function composeProjectBundle(
     });
   }
 
-  try {
-    await fs.mkdir(getProjectBundlesRoot(), { recursive: true });
-  } catch (error) {
+  const outputRootWritable = await canPrepareBundleOutputRoot();
+  if (!outputRootWritable) {
     validationItems.push({
       id: "bundle-output-root-unwritable",
       label: "Bundle output",
       severity: "block",
-      detail: `Bundle output root is not writable. ${error instanceof Error ? error.message : String(error)}`,
+      detail: "Bundle output root cannot be prepared from the current environment.",
     });
   }
 
   const sessionSelections = dedupeSessionSelections(selection.sessionSelections);
-  const sessionBackupIndex = await listSessionBackupMatches();
+  const sessionBackupIndex =
+    selection.includedCategories.sessions && sessionSelections.length > 0
+      ? await listSessionBackupMatches()
+      : new Map<string, SessionBackupReferenceMatch>();
   if (selection.includedCategories.sessions && sessionSelections.length === 0) {
     validationItems.push({
       id: "bundle-sessions-empty",
@@ -384,8 +398,6 @@ async function composeProjectBundle(
       promoteCategoryStatus("sessions", item.severity === "block" ? "blocked" : "warning");
     } else if (item.id.startsWith("bundle-package-metadata-")) {
       promoteCategoryStatus("package-metadata", item.severity === "block" ? "blocked" : "warning");
-    } else if (item.id.startsWith("bundle-output-root-")) {
-      promoteCategoryStatus("project-metadata", item.severity === "block" ? "blocked" : "warning");
     }
   }
 
@@ -494,6 +506,7 @@ export async function generateProjectBundle(
   }
 
   const bundle = createBundleDocument(composed);
+  await fs.mkdir(getProjectBundlesRoot(), { recursive: true });
   const filePath = path.join(getProjectBundlesRoot(), `${composed.packageMetadata.packageId}.bundle.json`);
   await fs.writeFile(filePath, JSON.stringify(bundle, null, 2), "utf8");
 

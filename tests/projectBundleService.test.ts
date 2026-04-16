@@ -125,6 +125,32 @@ describe("project bundle service", () => {
     expect(generated.filePath).toContain("project-bundles");
   });
 
+  it("prefers the newest matching session backup package when multiple matches exist", async () => {
+    await fs.mkdir(path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, "backup-old"), { recursive: true });
+    await fs.mkdir(path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, "backup-new"), { recursive: true });
+    readSessionBackupPackageMock
+      .mockResolvedValueOnce({
+        manifest: {
+          backupId: "backup-old",
+          createdAt: "2026-04-16T09:00:00.000Z",
+        },
+        records: [{ session: { id: "session-1", source: "codex", rootId: "root-1" } }],
+      })
+      .mockResolvedValueOnce({
+        manifest: {
+          backupId: "backup-new",
+          createdAt: "2026-04-16T10:00:00.000Z",
+        },
+        records: [{ session: { id: "session-1", source: "codex", rootId: "root-1" } }],
+      });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+    const sessionReference = result.memberReferences.find((item) => item.category === "sessions");
+
+    expect(sessionReference?.backupId).toBe("backup-new");
+    expect(sessionReference?.detail).toContain("backup-new");
+  });
+
   it("blocks generation when bundle identity is structurally invalid", async () => {
     readSessionBackupPackageMock.mockRejectedValue(new Error("missing"));
 

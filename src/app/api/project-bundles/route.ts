@@ -48,6 +48,18 @@ export async function POST(req: Request) {
     );
   }
 
+  if (body.mode !== undefined && body.mode !== "validate" && body.mode !== "generate") {
+    return NextResponse.json(
+      {
+        error: `Unsupported mode: ${String(body.mode)}`,
+        code: "INVALID_MODE",
+        title: "Invalid request",
+        hint: "Use mode validate or generate.",
+      },
+      { status: 400 }
+    );
+  }
+
   const configuration = normalizeConfiguration(body.configuration);
   const selection = createDefaultProjectBundleSelection(body.handoff ?? null, body.selection?.sessionSelections ?? []);
 
