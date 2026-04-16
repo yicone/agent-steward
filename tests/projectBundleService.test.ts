@@ -193,4 +193,23 @@ describe("project bundle service", () => {
       generateProjectBundle(makeSelection(), makeConfig({ bundleName: "" }))
     ).rejects.toThrow(/structurally valid composition/i);
   });
+
+  it("marks both package and project metadata categories blocked when package metadata cannot be read", async () => {
+    const originalCwd = process.cwd();
+    const missingWorkspace = path.join(tmpDir, "missing-workspace");
+    await fs.mkdir(missingWorkspace, { recursive: true });
+    process.chdir(missingWorkspace);
+
+    try {
+      const result = await validateProjectBundle(makeSelection(), makeConfig());
+      const packageMetadata = result.memberInventory.find((item) => item.category === "package-metadata");
+      const projectMetadata = result.memberInventory.find((item) => item.category === "project-metadata");
+
+      expect(result.validation.items.some((item) => item.id === "bundle-package-metadata-missing")).toBe(true);
+      expect(packageMetadata?.status).toBe("blocked");
+      expect(projectMetadata?.status).toBe("blocked");
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
 });

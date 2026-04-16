@@ -420,6 +420,7 @@ async function composeProjectBundle(
       promoteCategoryStatus("sessions", item.severity === "block" ? "blocked" : "warning");
     } else if (item.id.startsWith("bundle-package-metadata-")) {
       promoteCategoryStatus("package-metadata", item.severity === "block" ? "blocked" : "warning");
+      promoteCategoryStatus("project-metadata", item.severity === "block" ? "blocked" : "warning");
     } else {
       const categoryPrefix = PROJECT_BUNDLE_MEMBER_CATEGORIES.find((category) => item.id.startsWith(`bundle-${category}-`));
       if (categoryPrefix) {
