@@ -60,6 +60,18 @@ export async function POST(req: Request) {
     );
   }
 
+  if (body.mode === "generate" && (!body.selection || !body.configuration)) {
+    return NextResponse.json(
+      {
+        error: "Generate mode requires explicit selection and configuration.",
+        code: "MISSING_GENERATE_INPUT",
+        title: "Invalid request",
+        hint: "Run explicit composition first, then submit selection and configuration for generation.",
+      },
+      { status: 400 }
+    );
+  }
+
   const configuration = normalizeConfiguration(body.configuration);
   const selection = createDefaultProjectBundleSelection(body.handoff ?? null, body.selection?.sessionSelections ?? []);
 

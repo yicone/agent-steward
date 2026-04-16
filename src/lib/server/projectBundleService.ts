@@ -108,11 +108,20 @@ async function listSessionBackupMatches(): Promise<Map<string, SessionBackupRefe
 async function canPrepareBundleOutputRoot(): Promise<boolean> {
   try {
     const root = getProjectBundlesRoot();
-    const parent = path.dirname(root);
-    await fs.access(parent);
-    return true;
-  } catch {
+    let current = path.dirname(root);
+    while (true) {
+      try {
+        await fs.access(current);
+        return true;
+      } catch {
+        const parent = path.dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+    }
     return false;
+  } catch {
+    return true;
   }
 }
 
@@ -186,7 +195,7 @@ function buildContextAssetReferences(
 
       if (!asset.provenance || asset.provenance === "Provenance unavailable.") {
         validationItems.push({
-          id: `bundle-${asset.id}-provenance-missing`,
+          id: `bundle-${category}-${asset.id}-provenance-missing`,
           label: `${asset.title} provenance`,
           severity: "warning",
           detail: "Provenance is incomplete. The bundle remains structurally valid and will preserve a lightweight metadata snapshot.",
@@ -194,7 +203,7 @@ function buildContextAssetReferences(
       }
       if (asset.subtype === "unknown") {
         validationItems.push({
-          id: `bundle-${asset.id}-subtype-unknown`,
+          id: `bundle-${category}-${asset.id}-subtype-unknown`,
           label: `${asset.title} subtype classification`,
           severity: "warning",
           detail: "Subtype classification is uncertain. The bundle remains structurally valid and keeps the member snapshot.",
@@ -202,7 +211,7 @@ function buildContextAssetReferences(
       }
       if (asset.status === "stale" || asset.status === "conflicted" || asset.status === "orphaned" || asset.status === "unknown") {
         validationItems.push({
-          id: `bundle-${asset.id}-state-warning`,
+          id: `bundle-${category}-${asset.id}-state-warning`,
           label: `${asset.title} member state`,
           severity: "warning",
           detail: `Member state is ${asset.status}. The bundle can proceed, but the warning remains visible through confirmation.`,
@@ -398,6 +407,11 @@ async function composeProjectBundle(
       promoteCategoryStatus("sessions", item.severity === "block" ? "blocked" : "warning");
     } else if (item.id.startsWith("bundle-package-metadata-")) {
       promoteCategoryStatus("package-metadata", item.severity === "block" ? "blocked" : "warning");
+    } else {
+      const categoryPrefix = PROJECT_BUNDLE_MEMBER_CATEGORIES.find((category) => item.id.startsWith(`bundle-${category}-`));
+      if (categoryPrefix) {
+        promoteCategoryStatus(categoryPrefix, item.severity === "block" ? "blocked" : "warning");
+      }
     }
   }
 

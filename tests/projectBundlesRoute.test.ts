@@ -157,4 +157,25 @@ describe("project bundle route", () => {
       hint: "Use mode validate or generate.",
     });
   });
+
+  it("rejects generate mode when explicit selection or configuration is missing", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(validateProjectBundleMock).not.toHaveBeenCalled();
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      error: "Generate mode requires explicit selection and configuration.",
+      code: "MISSING_GENERATE_INPUT",
+      title: "Invalid request",
+      hint: "Run explicit composition first, then submit selection and configuration for generation.",
+    });
+  });
 });

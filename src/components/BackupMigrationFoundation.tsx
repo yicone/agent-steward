@@ -187,6 +187,13 @@ function formatBundleCategoryLabel(category: ProjectBundleMemberCategory): strin
   return labels[category];
 }
 
+function redactDisplayPath(filePath: string): string {
+  return filePath
+    .replace(/^\/Users\/[^/]+/, "~")
+    .replace(/^\/home\/[^/]+/, "~")
+    .replace(/^[A-Za-z]:\\Users\\[^\\]+/, "~");
+}
+
 export function buildBulkConfirmationDetails(input: {
   selections: BackupSessionSelection[];
   validationResult: BackupValidationResult | null;
@@ -318,7 +325,7 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
             <div className="mt-2 text-xs text-muted">Package ID: {props.result.packageId}</div>
           ) : null}
           {props.result.filePath ? (
-            <div className="mt-1 text-xs text-muted">File: {props.result.filePath}</div>
+            <div className="mt-1 text-xs text-muted">File: {redactDisplayPath(props.result.filePath)}</div>
           ) : null}
           {props.result.sessionCount != null ? (
             <div className="text-xs text-muted">Sessions: {props.result.sessionCount}</div>
