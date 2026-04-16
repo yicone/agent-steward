@@ -28,7 +28,7 @@ export type AnalysisRoute = {
   target: AnalysisRouteTarget;
   label: string;
   reason: string;
-  backupWorkflowType?: "session-backup" | "migration-preview";
+  backupWorkflowType?: "session-backup" | "migration-preview" | "project-bundle";
   sessionId?: string;
   source?: Source;
   rootId?: string;
@@ -212,6 +212,12 @@ export function createAnalysisFindingSeeds(): AnalysisFinding[] {
           assetId: "asset-skill-global-generated",
           assetSubtype: "skill",
           assetStatus: "conflicted",
+        },
+        {
+          target: "backup",
+          label: "Bundle project context",
+          reason: "Open Project Bundle with this finding as an explicit context cue without auto-deciding final composition.",
+          backupWorkflowType: "project-bundle",
         },
       ],
     }),

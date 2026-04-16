@@ -1,0 +1,477 @@
+import "server-only";
+
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import {
+  PROJECT_BUNDLE_MEMBER_CATEGORIES,
+  buildProjectBundleValidationSummary,
+  dedupeSessionSelections,
+  deriveValidationResult,
+  formatSessionSelectionLabel,
+  type BackupValidationItem,
+  type ProjectBundleConfiguration,
+  type ProjectBundleDocument,
+  type ProjectBundleGenerateResponse,
+  type ProjectBundleMemberCategory,
+  type ProjectBundleMemberInventoryItem,
+  type ProjectBundleMemberReference,
+  type ProjectBundleMetadataSnapshot,
+  type ProjectBundlePackageMetadata,
+  type ProjectBundleProjectMetadata,
+  type ProjectBundleSelectionState,
+  type ProjectBundleValidationResponse,
+} from "@/lib/backupMigration";
+import { createContextAssetSeeds } from "@/lib/contextAssets";
+import { readSessionBackupPackage } from "@/lib/server/sessionBackupService";
+import { getProjectBundlesRoot, getSessionBackupsRoot } from "@/lib/server/paths";
+
+type SessionBackupReferenceMatch = {
+  backupId: string;
+  manifestPath: string;
+  createdAt: string;
+  source: string;
+  sessionId: string;
+  rootId?: string;
+};
+
+type ComposeProjectBundleResult = ProjectBundleValidationResponse & {
+  packageMetadata: ProjectBundlePackageMetadata;
+  projectMetadata: ProjectBundleProjectMetadata;
+};
+
+function createPackageId(): string {
+  return `project-bundle-${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+function createSnapshot(input: {
+  id: string;
+  label: string;
+  category: ProjectBundleMemberCategory;
+  scope?: string;
+  subtype?: string;
+  provenanceSummary?: string;
+  status?: string;
+  capturedAt?: string;
+}): ProjectBundleMetadataSnapshot {
+  return {
+    id: input.id,
+    label: input.label,
+    category: input.category,
+    scope: input.scope,
+    subtype: input.subtype,
+    provenanceSummary: input.provenanceSummary,
+    status: input.status,
+    timestamps: input.capturedAt ? { capturedAt: input.capturedAt } : undefined,
+  };
+}
+
+async function listSessionBackupMatches(): Promise<Map<string, SessionBackupReferenceMatch>> {
+  const index = new Map<string, SessionBackupReferenceMatch>();
+  const root = getSessionBackupsRoot();
+
+  try {
+    const entries = await fs.readdir(root, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      try {
+        const pkg = await readSessionBackupPackage(entry.name);
+        for (const record of pkg.records) {
+          const key = formatSessionSelectionLabel({
+            sessionId: record.session.id,
+            source: record.session.source,
+            rootId: record.session.rootId,
+          });
+          if (index.has(key)) continue;
+          index.set(key, {
+            backupId: pkg.manifest.backupId,
+            manifestPath: path.join(root, entry.name, "manifest.json"),
+            createdAt: pkg.manifest.createdAt,
+            source: record.session.source,
+            sessionId: record.session.id,
+            rootId: record.session.rootId,
+          });
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    return index;
+  }
+
+  return index;
+}
+
+async function readPackageMetadata(): Promise<{
+  projectName: string;
+  packageName: string;
+  packageVersion: string;
+  repository?: string;
+  workspacePath: string;
+}> {
+  const workspacePath = process.cwd();
+  const raw = await fs.readFile(path.join(workspacePath, "package.json"), "utf8");
+  const pkg = JSON.parse(raw) as {
+    name?: string;
+    version?: string;
+    repository?: { url?: string } | string;
+  };
+
+  const repository = typeof pkg.repository === "string"
+    ? pkg.repository
+    : pkg.repository?.url;
+
+  return {
+    projectName: path.basename(workspacePath),
+    packageName: pkg.name ?? "",
+    packageVersion: pkg.version ?? "",
+    repository: repository || undefined,
+    workspacePath,
+  };
+}
+
+function buildContextAssetReferences(
+  selection: ProjectBundleSelectionState
+): {
+  memberReferences: ProjectBundleMemberReference[];
+  validationItems: BackupValidationItem[];
+} {
+  const assets = createContextAssetSeeds();
+  const selectedSubtypes = new Map<ProjectBundleMemberCategory, string>([
+    ["rules", "rule"],
+    ["memory", "memory"],
+    ["skills", "skill"],
+    ["commands", "command"],
+  ]);
+
+  const memberReferences: ProjectBundleMemberReference[] = [];
+  const validationItems: BackupValidationItem[] = [];
+
+  for (const [category, subtype] of selectedSubtypes.entries()) {
+    if (!selection.includedCategories[category]) continue;
+
+    for (const asset of assets.filter((item) => item.subtype === subtype)) {
+      memberReferences.push({
+        id: `${category}:${asset.id}`,
+        category,
+        label: asset.title,
+        referenceType: "context-asset",
+        referenceId: asset.id,
+        status: "resolved",
+        detail: `Include ${asset.title} as a ${category} member reference.`,
+        snapshot: createSnapshot({
+          id: asset.id,
+          label: asset.title,
+          category,
+          scope: asset.scope,
+          subtype: asset.subtype,
+          provenanceSummary: asset.provenance,
+          status: asset.status,
+        }),
+      });
+
+      if (!asset.provenance || asset.provenance === "Provenance unavailable.") {
+        validationItems.push({
+          id: `bundle-${asset.id}-provenance-missing`,
+          label: `${asset.title} provenance`,
+          severity: "warning",
+          detail: "Provenance is incomplete. The bundle remains structurally valid and will preserve a lightweight metadata snapshot.",
+        });
+      }
+      if (asset.subtype === "unknown") {
+        validationItems.push({
+          id: `bundle-${asset.id}-subtype-unknown`,
+          label: `${asset.title} subtype classification`,
+          severity: "warning",
+          detail: "Subtype classification is uncertain. The bundle remains structurally valid and keeps the member snapshot.",
+        });
+      }
+      if (asset.status === "stale" || asset.status === "conflicted" || asset.status === "orphaned" || asset.status === "unknown") {
+        validationItems.push({
+          id: `bundle-${asset.id}-state-warning`,
+          label: `${asset.title} member state`,
+          severity: "warning",
+          detail: `Member state is ${asset.status}. The bundle can proceed, but the warning remains visible through confirmation.`,
+        });
+      }
+    }
+  }
+
+  return { memberReferences, validationItems };
+}
+
+async function composeProjectBundle(
+  selection: ProjectBundleSelectionState,
+  configuration: ProjectBundleConfiguration
+): Promise<ComposeProjectBundleResult> {
+  const selectedCategories = PROJECT_BUNDLE_MEMBER_CATEGORIES.filter((category) => selection.includedCategories[category]);
+  const validationItems: BackupValidationItem[] = [];
+  const memberReferences: ProjectBundleMemberReference[] = [];
+  const now = new Date().toISOString();
+
+  if (selectedCategories.length === 0) {
+    validationItems.push({
+      id: "bundle-no-categories",
+      label: "Bundle composition",
+      severity: "block",
+      detail: "Select at least one bundle member category before validation.",
+    });
+  }
+
+  if (!configuration.bundleName.trim()) {
+    validationItems.push({
+      id: "bundle-name-required",
+      label: "Bundle name",
+      severity: "block",
+      detail: "Bundle name is required before a legal bundle manifest can be formed.",
+    });
+  }
+
+  let packageInfo: Awaited<ReturnType<typeof readPackageMetadata>> | null = null;
+  try {
+    packageInfo = await readPackageMetadata();
+  } catch (error) {
+    validationItems.push({
+      id: "bundle-package-metadata-missing",
+      label: "Package metadata",
+      severity: "block",
+      detail: `Required package metadata could not be read. ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+
+  if (packageInfo && (!packageInfo.packageName || !packageInfo.packageVersion || !packageInfo.projectName)) {
+    validationItems.push({
+      id: "bundle-package-metadata-incomplete",
+      label: "Package identity",
+      severity: "block",
+      detail: "Required package identity is incomplete, so a legal bundle package cannot be generated.",
+    });
+  }
+
+  try {
+    await fs.mkdir(getProjectBundlesRoot(), { recursive: true });
+  } catch (error) {
+    validationItems.push({
+      id: "bundle-output-root-unwritable",
+      label: "Bundle output",
+      severity: "block",
+      detail: `Bundle output root is not writable. ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+
+  const sessionSelections = dedupeSessionSelections(selection.sessionSelections);
+  const sessionBackupIndex = await listSessionBackupMatches();
+  if (selection.includedCategories.sessions && sessionSelections.length === 0) {
+    validationItems.push({
+      id: "bundle-sessions-empty",
+      label: "Session members",
+      severity: "warning",
+      detail: "Sessions are selected as a default bundle category, but no explicit session references are currently listed.",
+    });
+  }
+
+  if (selection.includedCategories.sessions) {
+    for (const sessionSelection of sessionSelections) {
+      const key = formatSessionSelectionLabel(sessionSelection);
+      const match = sessionBackupIndex.get(key);
+      if (!match) {
+        validationItems.push({
+          id: `bundle-session-missing-package-${key}`,
+          label: `${sessionSelection.sessionId} existing backup package`,
+          severity: "warning",
+          detail: "No existing session backup package is available. Bundle generation will preserve an unresolved member reference plus metadata snapshot instead of silently omitting the session.",
+        });
+      }
+
+      memberReferences.push({
+        id: `sessions:${key}`,
+        category: "sessions",
+        label: sessionSelection.sessionId || "unresolved-session",
+        referenceType: "session-backup-package",
+        referenceId: key,
+        status: match ? "resolved" : "missing-package",
+        detail: match
+          ? `Reuse existing session backup package ${match.backupId}.`
+          : "No existing session backup package is available for this selected session.",
+        backupId: match?.backupId,
+        manifestPath: match?.manifestPath,
+        snapshot: createSnapshot({
+          id: key,
+          label: sessionSelection.sessionId || "unresolved-session",
+          category: "sessions",
+          scope: "project",
+          subtype: "session-backup-package",
+          provenanceSummary: sessionSelection.source
+            ? `Selected from ${sessionSelection.source}${sessionSelection.rootId ? ` / ${sessionSelection.rootId}` : ""}.`
+            : "Selected session provenance is incomplete.",
+          status: match ? "resolved" : "missing-package",
+          capturedAt: match?.createdAt,
+        }),
+      });
+    }
+  }
+
+  const contextAssets = buildContextAssetReferences(selection);
+  memberReferences.push(...contextAssets.memberReferences);
+  validationItems.push(...contextAssets.validationItems);
+
+  if (selection.includedCategories["package-metadata"] && packageInfo) {
+    memberReferences.push({
+      id: "package-metadata:self",
+      category: "package-metadata",
+      label: packageInfo.packageName,
+      referenceType: "package-metadata",
+      referenceId: packageInfo.packageName,
+      status: "resolved",
+      detail: "Include package-level metadata snapshot for the current app package.",
+      snapshot: createSnapshot({
+        id: packageInfo.packageName,
+        label: packageInfo.packageName,
+        category: "package-metadata",
+        scope: "package",
+        provenanceSummary: packageInfo.repository,
+        status: "active",
+      }),
+    });
+  }
+
+  if (selection.includedCategories["project-metadata"] && packageInfo) {
+    memberReferences.push({
+      id: "project-metadata:self",
+      category: "project-metadata",
+      label: packageInfo.projectName,
+      referenceType: "project-metadata",
+      referenceId: packageInfo.workspacePath,
+      status: "resolved",
+      detail: "Include project-level metadata snapshot for the current workspace.",
+      snapshot: createSnapshot({
+        id: packageInfo.workspacePath,
+        label: packageInfo.projectName,
+        category: "project-metadata",
+        scope: "project",
+        provenanceSummary: packageInfo.workspacePath,
+        status: "active",
+      }),
+    });
+  }
+
+  const memberInventory: ProjectBundleMemberInventoryItem[] = PROJECT_BUNDLE_MEMBER_CATEGORIES.map((category) => {
+    const selected = selection.includedCategories[category];
+    const includedCount =
+      category === "sessions"
+        ? sessionSelections.length
+        : memberReferences.filter((item) => item.category === category).length;
+    const hasBlocker = validationItems.some((item) => item.severity === "block" && item.id.includes(category));
+    const hasWarning = validationItems.some((item) => item.severity === "warning" && item.id.includes(category));
+
+    return {
+      category,
+      selected,
+      includedCount,
+      status: hasBlocker ? "blocked" : hasWarning ? "warning" : "ready",
+      detail: !selected
+        ? "Excluded from bundle composition."
+        : includedCount === 0
+          ? "Selected with no resolved members yet."
+          : `${includedCount} member reference${includedCount === 1 ? "" : "s"} included.`,
+    };
+  });
+
+  const validation = deriveValidationResult(validationItems);
+  const summary = buildProjectBundleValidationSummary({
+    validationItems,
+    memberReferences,
+    memberInventory,
+    selectedCategoryCount: selectedCategories.length,
+    selectedSessionCount: sessionSelections.length,
+  });
+
+  const packageId = createPackageId();
+  const packageMetadata: ProjectBundlePackageMetadata = {
+    packageId,
+    schemaVersion: "project-bundle/v1",
+    createdAt: now,
+    createdBy: "agent-storage-manager",
+    bundleName: configuration.bundleName.trim(),
+    notes: configuration.notes?.trim() || undefined,
+  };
+
+  const projectMetadata: ProjectBundleProjectMetadata = {
+    projectName: packageInfo?.projectName ?? "unknown-project",
+    workspacePath: packageInfo?.workspacePath ?? process.cwd(),
+    repository: packageInfo?.repository,
+    packageName: packageInfo?.packageName ?? "unknown-package",
+    packageVersion: packageInfo?.packageVersion ?? "0.0.0",
+    originCue: selection.originCue,
+    scopeHint: selection.scopeHint,
+    filterHint: selection.filterHint,
+    objectRefs: selection.objectRefs,
+  };
+
+  return {
+    validation,
+    summary,
+    memberInventory,
+    memberReferences,
+    packageMetadata,
+    projectMetadata,
+  };
+}
+
+function createBundleDocument(input: ComposeProjectBundleResult): ProjectBundleDocument {
+  return {
+    manifest: {
+      schemaVersion: "project-bundle/v1",
+      packageId: input.packageMetadata.packageId,
+      createdAt: input.packageMetadata.createdAt,
+      memberInventory: input.memberInventory,
+      memberReferences: input.memberReferences,
+      validationSummary: input.summary,
+    },
+    packageMetadata: input.packageMetadata,
+    projectMetadata: input.projectMetadata,
+    memberInventory: input.memberInventory,
+    memberReferences: input.memberReferences,
+    validationSummary: input.summary,
+  };
+}
+
+export async function validateProjectBundle(
+  selection: ProjectBundleSelectionState,
+  configuration: ProjectBundleConfiguration
+): Promise<ProjectBundleValidationResponse> {
+  const composed = await composeProjectBundle(selection, configuration);
+  return {
+    validation: composed.validation,
+    summary: composed.summary,
+    memberInventory: composed.memberInventory,
+    memberReferences: composed.memberReferences,
+  };
+}
+
+export async function generateProjectBundle(
+  selection: ProjectBundleSelectionState,
+  configuration: ProjectBundleConfiguration
+): Promise<ProjectBundleGenerateResponse> {
+  const composed = await composeProjectBundle(selection, configuration);
+  if (composed.validation.status === "invalid") {
+    throw new Error("Project bundle generation requires a structurally valid composition.");
+  }
+
+  const bundle = createBundleDocument(composed);
+  const filePath = path.join(getProjectBundlesRoot(), `${composed.packageMetadata.packageId}.bundle.json`);
+  await fs.writeFile(filePath, JSON.stringify(bundle, null, 2), "utf8");
+
+  return {
+    validation: composed.validation,
+    summary: composed.summary,
+    memberInventory: composed.memberInventory,
+    memberReferences: composed.memberReferences,
+    packageId: composed.packageMetadata.packageId,
+    filePath,
+    bundle,
+  };
+}

@@ -9,9 +9,11 @@ import {
   addRecentOperation,
   buildBulkSessionValidationResult,
   buildMigrationPreviewItems,
+  createDefaultProjectBundleSelection,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
   createMigrationPreviewOperationResult,
+  createProjectBundleOperationResult,
   createBulkOperationSummary,
   createOperationResult,
   dedupeSessionSelections,
@@ -33,8 +35,10 @@ import {
   isTerminalState,
   normalizeBackupId,
   resolveWorkflowFromHandoff,
+  summarizeProjectBundleSelection,
   summarizeSourceCopyConfiguration,
   validateBackupPackageRemote,
+  PROJECT_BUNDLE_MEMBER_CATEGORIES,
   WORKFLOW_DESCRIPTORS,
   type BackupSessionSelection,
   type BackupMigrationHandoff,
@@ -51,6 +55,12 @@ import {
   type MigrationPreviewSourceProduct,
   type MigrationPreviewTargetContext,
   type MigrationPreviewTargetProfile,
+  type ProjectBundleConfiguration,
+  type ProjectBundleMemberCategory,
+  type ProjectBundleMemberInventoryItem,
+  type ProjectBundleMemberReference,
+  type ProjectBundleSelectionState,
+  type ProjectBundleValidationSummary,
   type RecentOperation,
 } from "@/lib/backupMigration";
 import type { Source } from "@/lib/types";
@@ -137,6 +147,21 @@ export function resolveInitialBulkSelections(handoff: BackupMigrationHandoff | n
   if (!handoff) return [];
   if (handoff.sessions?.length) return dedupeSessionSelections(handoff.sessions);
   if (handoff.workflowType === "bulk-session-backup" && handoff.sessionId) {
+    return dedupeSessionSelections([
+      {
+        sessionId: handoff.sessionId,
+        source: handoff.source,
+        rootId: handoff.rootId,
+      },
+    ]);
+  }
+  return [];
+}
+
+export function resolveInitialProjectBundleSessionSelections(handoff: BackupMigrationHandoff | null): BackupSessionSelection[] {
+  if (!handoff) return [];
+  if (handoff.sessions?.length) return dedupeSessionSelections(handoff.sessions);
+  if (handoff.workflowType === "project-bundle" && handoff.sessionId) {
     return dedupeSessionSelections([
       {
         sessionId: handoff.sessionId,
@@ -275,8 +300,17 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
           {props.result.backupId ? (
             <div className="mt-2 text-xs text-muted">Backup ID: {props.result.backupId}</div>
           ) : null}
+          {props.result.packageId ? (
+            <div className="mt-2 text-xs text-muted">Package ID: {props.result.packageId}</div>
+          ) : null}
+          {props.result.filePath ? (
+            <div className="mt-1 text-xs text-muted">File: {props.result.filePath}</div>
+          ) : null}
           {props.result.sessionCount != null ? (
             <div className="text-xs text-muted">Sessions: {props.result.sessionCount}</div>
+          ) : null}
+          {props.result.memberCount != null ? (
+            <div className="text-xs text-muted">Members: {props.result.memberCount}</div>
           ) : null}
           <div className="text-xs text-muted">Completed: {props.result.timestamp}</div>
         </div>
@@ -292,6 +326,60 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
           <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
             <div className="font-medium text-foreground">Source-copy configuration</div>
             <div className="mt-1 text-xs leading-5">{props.result.sourceCopySummary}</div>
+          </div>
+        ) : null}
+        {props.result.workflowType === "project-bundle" && props.result.projectBundleValidationSummary ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+              <div className="text-xs text-muted">Warnings</div>
+              <div className="mt-1 font-medium">{props.result.projectBundleValidationSummary.warningCount}</div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+              <div className="text-xs text-muted">Blockers at validation</div>
+              <div className="mt-1 font-medium">{props.result.projectBundleValidationSummary.blockerCount}</div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+              <div className="text-xs text-muted">Selected categories</div>
+              <div className="mt-1 font-medium">{props.result.projectBundleValidationSummary.selectedCategoryCount}</div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+              <div className="text-xs text-muted">Unresolved refs</div>
+              <div className="mt-1 font-medium">{props.result.projectBundleValidationSummary.unresolvedReferenceCount}</div>
+            </div>
+          </div>
+        ) : null}
+        {props.result.workflowType === "project-bundle" && (props.result.projectBundleMemberInventory?.length ?? 0) > 0 ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <div className="font-medium text-foreground">Bundle member inventory</div>
+            <div className="mt-3 space-y-2">
+              {props.result.projectBundleMemberInventory!.map((item) => (
+                <div key={item.category} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{item.category}</span>
+                    <Badge variant={item.status === "ready" ? "ok" : item.status === "warning" ? "warn" : "default"}>
+                      {item.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs leading-5">{item.detail}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {props.result.workflowType === "project-bundle" && (props.result.projectBundleMemberReferences?.length ?? 0) > 0 ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <div className="font-medium text-foreground">Member references</div>
+            <div className="mt-3 space-y-2">
+              {props.result.projectBundleMemberReferences!.map((item) => (
+                <div key={item.id} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{item.label}</span>
+                    <Badge variant={item.status === "resolved" ? "ok" : "warn"}>{item.status}</Badge>
+                  </div>
+                  <div className="mt-1 text-xs leading-5">{item.detail}</div>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
         {props.result.workflowType === "migration-preview" ? (
@@ -395,6 +483,11 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
             <span className="font-medium text-foreground">No runtime restore or apply.</span>{" "}
             Preview results are advisory compatibility findings only. They do not write objects, reopen third-party runtimes, or create backup packages.
           </div>
+        ) : props.result.workflowType === "project-bundle" ? (
+          <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+            <span className="font-medium text-foreground">No restore or apply in foundation v1.</span>{" "}
+            The generated project bundle is a portable local package only. It does not promise vendor-runtime reopen, cloud sync, app snapshot, or team collaboration semantics.
+          </div>
         ) : (
           <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
             <span className="font-medium text-foreground">No vendor-runtime restore.</span>{" "}
@@ -441,6 +534,8 @@ function RecentOperationsPanel(props: { operations: RecentOperation[]; onSelectO
             </div>
             <div className="mt-1 text-xs text-muted">{op.summary}</div>
             {op.sessionCount != null ? <div className="mt-1 text-[11px] text-muted">Sessions: {op.sessionCount}</div> : null}
+            {op.packageId ? <div className="mt-1 text-[11px] text-muted">Package: {op.packageId}</div> : null}
+            {op.memberCount != null ? <div className="mt-1 text-[11px] text-muted">Members: {op.memberCount}</div> : null}
             {op.workflowType === "migration-preview" && op.previewScope?.kind ? (
               <div className="mt-1 text-[11px] text-muted">
                 Scope: {formatMigrationPreviewScopeLabel(op.previewScope.kind)} ({op.previewScope.itemRefs.length})
@@ -487,6 +582,21 @@ export function BackupMigrationFoundation({
   const [previewScope, setPreviewScope] = useState<MigrationPreviewScope>(() => deriveInitialPreviewScope(handoff));
   const [previewScopeDraft, setPreviewScopeDraft] = useState(deriveInitialPreviewScope(handoff).itemRefs.join("\n"));
 
+  // Project bundle state
+  const [projectBundleSelection, setProjectBundleSelection] = useState<ProjectBundleSelectionState>(() =>
+    createDefaultProjectBundleSelection(handoff, resolveInitialProjectBundleSessionSelections(handoff))
+  );
+  const [bundleDraftSessionId, setBundleDraftSessionId] = useState("");
+  const [bundleDraftSource, setBundleDraftSource] = useState<Source | "">("");
+  const [bundleDraftRootId, setBundleDraftRootId] = useState("");
+  const [bundleConfig, setBundleConfig] = useState<ProjectBundleConfiguration>({
+    bundleName: "Current project context bundle",
+    notes: "",
+  });
+  const [projectBundleValidationSummary, setProjectBundleValidationSummary] = useState<ProjectBundleValidationSummary | null>(null);
+  const [projectBundleMemberInventory, setProjectBundleMemberInventory] = useState<ProjectBundleMemberInventoryItem[]>([]);
+  const [projectBundleMemberReferences, setProjectBundleMemberReferences] = useState<ProjectBundleMemberReference[]>([]);
+
   // Validation
   const [validationResult, setValidationResult] = useState<BackupValidationResult | null>(null);
 
@@ -525,6 +635,17 @@ export function BackupMigrationFoundation({
     setPreviewTargetContext({});
     setPreviewScope({ itemRefs: [] });
     setPreviewScopeDraft("");
+    setProjectBundleSelection(createDefaultProjectBundleSelection(null, []));
+    setBundleDraftSessionId("");
+    setBundleDraftSource("");
+    setBundleDraftRootId("");
+    setBundleConfig({
+      bundleName: "Current project context bundle",
+      notes: "",
+    });
+    setProjectBundleValidationSummary(null);
+    setProjectBundleMemberInventory([]);
+    setProjectBundleMemberReferences([]);
     setValidationResult(null);
     setIsExecuting(false);
     setExecutionError(null);
@@ -549,6 +670,16 @@ export function BackupMigrationFoundation({
       setPreviewTargetContext(initialTarget);
       setPreviewScope(initialScope);
       setPreviewScopeDraft(initialScope.itemRefs.join("\n"));
+    }
+    if (type === "project-bundle") {
+      setProjectBundleSelection(createDefaultProjectBundleSelection(activeHandoff, resolveInitialProjectBundleSessionSelections(activeHandoff)));
+      setBundleConfig({
+        bundleName: "Current project context bundle",
+        notes: activeHandoff?.subtitle ?? "",
+      });
+      setProjectBundleValidationSummary(null);
+      setProjectBundleMemberInventory([]);
+      setProjectBundleMemberReferences([]);
     }
   }, [activeHandoff]);
 
@@ -604,6 +735,42 @@ export function BackupMigrationFoundation({
       return;
     }
 
+    if (activeWorkflow === "project-bundle") {
+      const response = await fetch("/api/project-bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "validate",
+          handoff: activeHandoff,
+          selection: projectBundleSelection,
+          configuration: bundleConfig,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload) {
+        const result = deriveValidationResult([
+          {
+            id: "bundle-validation-request-failed",
+            label: "Bundle validation",
+            severity: "block",
+            detail: payload?.error ?? `Bundle validation failed with HTTP ${response.status}.`,
+          },
+        ]);
+        setValidationResult(result);
+        setProjectBundleValidationSummary(null);
+        setProjectBundleMemberInventory([]);
+        setProjectBundleMemberReferences([]);
+        setWorkflowState("validation");
+        return;
+      }
+      setValidationResult(payload.validation);
+      setProjectBundleValidationSummary(payload.summary);
+      setProjectBundleMemberInventory(payload.memberInventory ?? []);
+      setProjectBundleMemberReferences(payload.memberReferences ?? []);
+      setWorkflowState("validation");
+      return;
+    }
+
     let items: BackupValidationItem[];
     if (!normalizedBackupId) {
       items = activeWorkflow === "import-backup"
@@ -615,7 +782,19 @@ export function BackupMigrationFoundation({
     const result = deriveValidationResult(items);
     setValidationResult(result);
     setWorkflowState("validation");
-  }, [activeWorkflow, dedupedBulkSelections, normalizedBackupId, previewScope, previewScopeDraft, previewSourceContext, previewTargetContext, selectedSessionId]);
+  }, [
+    activeHandoff,
+    activeWorkflow,
+    bundleConfig,
+    dedupedBulkSelections,
+    normalizedBackupId,
+    previewScope,
+    previewScopeDraft,
+    previewSourceContext,
+    previewTargetContext,
+    projectBundleSelection,
+    selectedSessionId,
+  ]);
 
   const addBulkSelection = useCallback(() => {
     if (!bulkDraftSessionId.trim() || !bulkDraftSource) return;
@@ -633,6 +812,44 @@ export function BackupMigrationFoundation({
     setBulkDraftSource("");
     setBulkDraftRootId("");
   }, [bulkDraftRootId, bulkDraftSessionId, bulkDraftSource]);
+
+  const toggleProjectBundleCategory = useCallback((category: ProjectBundleMemberCategory, selected: boolean) => {
+    setProjectBundleSelection((prev) => ({
+      ...prev,
+      includedCategories: {
+        ...prev.includedCategories,
+        [category]: selected,
+      },
+    }));
+  }, []);
+
+  const addProjectBundleSession = useCallback(() => {
+    if (!bundleDraftSessionId.trim() || !bundleDraftSource) return;
+    setProjectBundleSelection((prev) => ({
+      ...prev,
+      sessionSelections: dedupeSessionSelections([
+        ...prev.sessionSelections,
+        {
+          sessionId: bundleDraftSessionId,
+          source: bundleDraftSource,
+          rootId: bundleDraftRootId || undefined,
+        },
+      ]),
+    }));
+    setBundleDraftSessionId("");
+    setBundleDraftSource("");
+    setBundleDraftRootId("");
+  }, [bundleDraftRootId, bundleDraftSessionId, bundleDraftSource]);
+
+  const removeProjectBundleSession = useCallback((selection: BackupSessionSelection) => {
+    const target = `${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`;
+    setProjectBundleSelection((prev) => ({
+      ...prev,
+      sessionSelections: prev.sessionSelections.filter(
+        (item) => `${item.sessionId}:${item.source ?? ""}:${item.rootId ?? ""}` !== target
+      ),
+    }));
+  }, []);
 
   const removeBulkSelection = useCallback((selection: BackupSessionSelection) => {
     const target = `${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`;
@@ -877,6 +1094,66 @@ export function BackupMigrationFoundation({
     }
   }, [normalizedBackupId]);
 
+  const executeProjectBundle = useCallback(async () => {
+    setIsExecuting(true);
+    setExecutionError(null);
+    setWorkflowState("execution");
+
+    try {
+      const response = await fetch("/api/project-bundles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "generate",
+          handoff: activeHandoff,
+          selection: projectBundleSelection,
+          configuration: bundleConfig,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload) {
+        throw new Error(payload?.error ?? `HTTP ${response.status}`);
+      }
+
+      setProjectBundleValidationSummary(payload.summary);
+      setProjectBundleMemberInventory(payload.memberInventory ?? []);
+      setProjectBundleMemberReferences(payload.memberReferences ?? []);
+      const warnings = (payload.validation?.items ?? [])
+        .filter((item: BackupValidationItem) => item.severity === "warning")
+        .map((item: BackupValidationItem) => item.detail);
+
+      const result = createProjectBundleOperationResult({
+        status: warnings.length ? "success-with-warnings" : "success",
+        packageId: payload.packageId,
+        filePath: payload.filePath,
+        summary: `Project bundle ${payload.packageId} generated with ${payload.memberReferences?.length ?? 0} member references.`,
+        validationSummary: payload.summary,
+        memberInventory: payload.memberInventory ?? [],
+        memberReferences: payload.memberReferences ?? [],
+        bundle: payload.bundle,
+        warnings,
+      });
+
+      setOperationResult(result);
+      setRecentOperations((prev) => addRecentOperation(prev, result));
+      setWorkflowState("result");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setExecutionError(message);
+      const result = createOperationResult({
+        workflowType: "project-bundle",
+        status: "failed",
+        summary: `Project bundle generation failed: ${message}`,
+      });
+      setOperationResult(result);
+      setRecentOperations((prev) => addRecentOperation(prev, result));
+      setWorkflowState("failed");
+    } finally {
+      setIsExecuting(false);
+    }
+  }, [activeHandoff, bundleConfig, projectBundleSelection]);
+
   const finishValidateOnly = useCallback(() => {
     if (!validationResult) return;
     const result = createOperationResult({
@@ -927,6 +1204,11 @@ export function BackupMigrationFoundation({
       setPreviewScope(op.previewScope ?? { itemRefs: [] });
       setPreviewScopeDraft((op.previewScope?.itemRefs ?? []).join("\n"));
     }
+    if (op.workflowType === "project-bundle") {
+      setProjectBundleValidationSummary(op.projectBundleValidationSummary ?? null);
+      setProjectBundleMemberInventory(op.projectBundleMemberInventory ?? []);
+      setProjectBundleMemberReferences(op.projectBundleMemberReferences ?? []);
+    }
     setWorkflowState("result");
   }, []);
 
@@ -961,7 +1243,7 @@ export function BackupMigrationFoundation({
             <h2 className="text-xl font-semibold">Backup / Migration</h2>
             <p className="max-w-3xl text-sm leading-6 text-muted">
               Choose a bounded workflow below. Each workflow follows explicit selection, validation, and result steps.
-              This foundation does not support migration apply, project bundle packaging, vendor-runtime restore, or cloud sync.
+              This foundation does not support migration apply, vendor-runtime restore, or cloud sync.
             </p>
           </div>
         </Card>
@@ -1221,6 +1503,100 @@ export function BackupMigrationFoundation({
             </Card>
           ) : null}
 
+          {workflowState === "selection" && activeWorkflow === "project-bundle" ? (
+            <Card className="p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Select Bundle Scope</div>
+              <div className="space-y-4">
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Project Bundle is a real Backup / Migration workflow. Routed context can prefill cues and explicit refs, but final composition still happens here before validation and generation.
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {PROJECT_BUNDLE_MEMBER_CATEGORIES.map((category) => (
+                    <label key={category} className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={projectBundleSelection.includedCategories[category]}
+                        onChange={(e) => toggleProjectBundleCategory(category, e.target.checked)}
+                      />
+                      <span>{category}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="space-y-3 rounded-xl border border-border/60 bg-background/10 px-3 py-3">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Explicit session refs</div>
+                  <div className="grid gap-3 md:grid-cols-[minmax(0,1.3fr)_180px_minmax(0,1fr)_auto]">
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-xs uppercase tracking-[0.18em] text-muted">Session ID</span>
+                      <input
+                        type="text"
+                        value={bundleDraftSessionId}
+                        onChange={(e) => setBundleDraftSessionId(e.target.value)}
+                        placeholder="Enter session ID"
+                        className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-xs uppercase tracking-[0.18em] text-muted">Source</span>
+                      <select
+                        value={bundleDraftSource}
+                        onChange={(e) => setBundleDraftSource((e.target.value as Source | "") ?? "")}
+                        className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                      >
+                        <option value="">Choose source</option>
+                        <option value="antigravity">Antigravity</option>
+                        <option value="windsurf">Windsurf</option>
+                        <option value="codex">Codex</option>
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm">
+                      <span className="text-xs uppercase tracking-[0.18em] text-muted">Root ID (optional)</span>
+                      <input
+                        type="text"
+                        value={bundleDraftRootId}
+                        onChange={(e) => setBundleDraftRootId(e.target.value)}
+                        placeholder="Optional root ID"
+                        className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                      />
+                    </label>
+                    <div className="flex items-end">
+                      <Button size="sm" onClick={addProjectBundleSession} disabled={!bundleDraftSessionId.trim() || !bundleDraftSource}>
+                        Add session ref
+                      </Button>
+                    </div>
+                  </div>
+                  {(projectBundleSelection.sessionSelections.length ?? 0) > 0 ? (
+                    <div className="space-y-2">
+                      {projectBundleSelection.sessionSelections.map((selection) => (
+                        <div key={`${selection.sessionId}:${selection.source ?? ""}:${selection.rootId ?? ""}`} className="rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="font-medium">{selection.sessionId}</div>
+                              <div className="text-xs text-muted">
+                                {selection.source ?? "unknown-source"}
+                                {selection.rootId ? ` / ${selection.rootId}` : ""}
+                              </div>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => removeProjectBundleSession(selection)}>
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted">No explicit sessions listed yet. If you keep sessions selected, validation may warn but will not invent session members for you.</div>
+                  )}
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  {summarizeProjectBundleSelection(projectBundleSelection)}
+                </div>
+                <Button size="sm" onClick={advanceState}>
+                  Continue to Configuration
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+
           {workflowState === "selection" && (activeWorkflow === "import-backup" || activeWorkflow === "validate-package") ? (
             <Card className="p-4">
               <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Select Package</div>
@@ -1398,6 +1774,45 @@ export function BackupMigrationFoundation({
             </Card>
           ) : null}
 
+          {workflowState === "configuration" && activeWorkflow === "project-bundle" ? (
+            <Card className="p-4">
+              <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Configure Bundle</div>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Bundle generation is gated by composition and validation. This configuration step only sets bundle identity and notes; it does not decide final composition for you.
+                </div>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Bundle name</span>
+                  <input
+                    type="text"
+                    value={bundleConfig.bundleName}
+                    onChange={(e) => setBundleConfig((prev) => ({ ...prev, bundleName: e.target.value }))}
+                    placeholder="Enter bundle name"
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="grid gap-1 text-sm">
+                  <span className="text-xs uppercase tracking-[0.18em] text-muted">Notes (optional)</span>
+                  <textarea
+                    value={bundleConfig.notes ?? ""}
+                    onChange={(e) => setBundleConfig((prev) => ({ ...prev, notes: e.target.value }))}
+                    rows={4}
+                    placeholder="Optional notes captured in package metadata"
+                    className="rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm"
+                  />
+                </label>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={retreatState}>
+                    Back
+                  </Button>
+                  <Button size="sm" onClick={runValidation}>
+                    Validate Bundle
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
           {activeWorkflow === "migration-preview" && workflowState !== "validation" && validationResult?.status === "invalid" ? (
             <ValidationPanel result={validationResult} />
           ) : null}
@@ -1424,6 +1839,40 @@ export function BackupMigrationFoundation({
                             {entry.result.status}
                           </Badge>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
+              {activeWorkflow === "project-bundle" && projectBundleMemberInventory.length > 0 ? (
+                <Card className="p-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Bundle inventory</div>
+                  <div className="space-y-2">
+                    {projectBundleMemberInventory.map((item) => (
+                      <div key={item.category} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium">{item.category}</div>
+                          <Badge variant={item.status === "ready" ? "ok" : item.status === "warning" ? "warn" : "default"}>
+                            {item.status}
+                          </Badge>
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-muted">{item.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ) : null}
+              {activeWorkflow === "project-bundle" && projectBundleMemberReferences.length > 0 ? (
+                <Card className="p-4">
+                  <div className="mb-3 text-xs uppercase tracking-[0.18em] text-muted">Member references</div>
+                  <div className="space-y-2">
+                    {projectBundleMemberReferences.map((item) => (
+                      <div key={item.id} className="rounded-xl border border-border/60 bg-background/10 px-3 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-medium">{item.label}</div>
+                          <Badge variant={item.status === "resolved" ? "ok" : "warn"}>{item.status}</Badge>
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-muted">{item.detail}</div>
                       </div>
                     ))}
                   </div>
@@ -1509,9 +1958,39 @@ export function BackupMigrationFoundation({
                     </div>
                   </div>
                 ) : null}
+                {activeWorkflow === "project-bundle" ? (
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                      <div className="font-medium">{bundleConfig.bundleName}</div>
+                      <div className="mt-1 text-xs text-muted">{summarizeProjectBundleSelection(projectBundleSelection)}</div>
+                      {bundleConfig.notes ? <div className="mt-2 text-xs text-muted">{bundleConfig.notes}</div> : null}
+                    </div>
+                    {projectBundleValidationSummary ? (
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                          <div className="text-xs text-muted">Warnings</div>
+                          <div className="mt-1 font-medium">{projectBundleValidationSummary.warningCount}</div>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                          <div className="text-xs text-muted">Resolved refs</div>
+                          <div className="mt-1 font-medium">{projectBundleValidationSummary.resolvedReferenceCount}</div>
+                        </div>
+                        <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                          <div className="text-xs text-muted">Unresolved refs</div>
+                          <div className="mt-1 font-medium">{projectBundleValidationSummary.unresolvedReferenceCount}</div>
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                      Generation writes a real local bundle file containing manifest, package metadata, project metadata, member inventory, member references, validation summary, and lightweight member snapshots.
+                    </div>
+                  </div>
+                ) : null}
                 <div className="rounded-xl border border-amber-400/35 bg-amber-400/10 px-3 py-3 text-sm text-muted">
                   <span className="font-medium text-foreground">Preservation notice:</span>{" "}
-                  {activeWorkflow === "import-backup"
+                  {activeWorkflow === "project-bundle"
+                    ? "Project Bundle preserves portable project context composition only. It does not promise restore, apply, vendor-runtime reopen, cloud sync, or full app snapshot semantics."
+                    : activeWorkflow === "import-backup"
                     ? "Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime or private source store."
                     : "This backup preserves a canonical session record. It does not modify, move, or delete the upstream session source."}
                 </div>
@@ -1527,7 +2006,15 @@ export function BackupMigrationFoundation({
                   <Button
                     size="sm"
                     disabled={isExecuting}
-                    onClick={activeWorkflow === "session-backup" ? executeSessionBackup : activeWorkflow === "bulk-session-backup" ? executeBulkSessionBackup : executeImport}
+                    onClick={
+                      activeWorkflow === "session-backup"
+                        ? executeSessionBackup
+                        : activeWorkflow === "bulk-session-backup"
+                          ? executeBulkSessionBackup
+                          : activeWorkflow === "project-bundle"
+                            ? executeProjectBundle
+                            : executeImport
+                    }
                   >
                     {isExecuting ? "Executing…" : "Execute"}
                   </Button>
@@ -1593,6 +2080,15 @@ export function BackupMigrationFoundation({
                       ? `${formatMigrationPreviewScopeLabel(previewScope.kind)} (${previewScope.itemRefs.length || previewScopeDraft.split("\n").map((item) => item.trim()).filter(Boolean).length})`
                       : "Scope still required"}
                   </div>
+                </div>
+              ) : null}
+              {activeWorkflow === "project-bundle" ? (
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-2">
+                  <div className="text-xs text-muted">Bundle context</div>
+                  <div className="font-medium">{bundleConfig.bundleName || "Bundle name still required"}</div>
+                  <div className="mt-1 text-xs text-muted">{summarizeProjectBundleSelection(projectBundleSelection)}</div>
+                  {projectBundleSelection.scopeHint ? <div className="mt-1 text-xs text-muted">Scope hint: {projectBundleSelection.scopeHint}</div> : null}
+                  {projectBundleSelection.filterHint ? <div className="mt-1 text-xs text-muted">Filter hint: {projectBundleSelection.filterHint}</div> : null}
                 </div>
               ) : null}
               {normalizedBackupId && activeWorkflow !== "session-backup" ? (

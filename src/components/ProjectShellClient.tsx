@@ -224,7 +224,23 @@ export function buildAssetsFoundationInstanceKey(handoff: AssetsHandoff | null):
 export function buildBackupHandoffFromAssets(context: {
   assetId?: string;
   subtype?: ContextAssetSubtype;
+  workflowType?: "migration-preview" | "project-bundle";
 }): BackupMigrationHandoff {
+  if (context.workflowType === "project-bundle") {
+    return {
+      origin: "assets",
+      subtitle: `Open Project Bundle${context.subtype ? ` with ${context.subtype} asset context` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}.`,
+      continueLabel: "Assets may prefill explicit object references and compact hints only. Final bundle composition still happens in Backup / Migration.",
+      returnLabel: "Return to Assets for object-level review.",
+      assetId: context.assetId,
+      assetSubtype: context.subtype,
+      workflowType: "project-bundle",
+      projectBundleScopeHint: context.subtype ? `${context.subtype} asset scope` : undefined,
+      projectBundleObjectRefs: context.assetId ? [context.assetId] : [],
+      projectBundleFilterHint: context.subtype ? `asset subtype = ${context.subtype}` : undefined,
+    };
+  }
+
   return {
     origin: "assets",
     subtitle: `Preview bounded migration scope${context.subtype ? ` for ${context.subtype} assets` : ""}${context.assetId ? ` starting from ${context.assetId}` : ""}.`,
@@ -250,8 +266,23 @@ export function buildBackupHandoffFromAnalysis(context: {
   title: string;
   preservationWarning?: string;
   routeLabel?: string;
-  backupWorkflowType?: "session-backup" | "migration-preview";
+  backupWorkflowType?: "session-backup" | "migration-preview" | "project-bundle";
 }): BackupMigrationHandoff {
+  if (context.backupWorkflowType === "project-bundle") {
+    return {
+      origin: "analysis",
+      subtitle: `${context.routeLabel ?? "Project bundle"} for ${context.title}.`,
+      continueLabel: context.preservationWarning ?? "Analysis may preserve issue framing, but Backup / Migration still owns explicit bundle composition and validation.",
+      returnLabel: "Return to Analysis for grouped interpretation.",
+      findingId: context.findingId,
+      preservationWarning: context.preservationWarning,
+      issueLabel: context.title,
+      workflowType: "project-bundle",
+      projectBundleScopeHint: "analysis-routed bundle context",
+      projectBundleObjectRefs: [context.findingId],
+    };
+  }
+
   if (context.backupWorkflowType !== "migration-preview") {
     return {
       origin: "analysis",
@@ -317,6 +348,7 @@ export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType)
     "import-backup": "Start a bounded import workflow from Project Overview.",
     "validate-package": "Start a bounded package validation workflow from Project Overview.",
     "migration-preview": "Start a bounded migration preview workflow from Project Overview.",
+    "project-bundle": "Start a bounded project bundle workflow from Project Overview.",
   } satisfies Record<BackupWorkflowType, string>;
 
   return {
@@ -325,6 +357,7 @@ export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType)
     continueLabel: "Workflow execution belongs to Backup / Migration.",
     returnLabel: "Return to Project Overview.",
     workflowType,
+    projectBundleScopeHint: workflowType === "project-bundle" ? "overview-routed project context" : undefined,
     migrationPreviewSourceContext: workflowType === "migration-preview" ? { kind: "project-overview" } : undefined,
   };
 }
@@ -532,6 +565,14 @@ function ProjectOverviewSurface(props: {
           >
             Open migration preview
           </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("project-bundle"))}
+          >
+            Open project bundle
+          </Button>
           <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("backup")}>
             Browse backup workflows
           </Button>
@@ -677,7 +718,7 @@ export default function ProjectShellClient() {
     setActivePage("analysis");
   }, [leaveSessionsSurface]);
 
-  const handleOpenBackupFromAssets = useCallback((context: { assetId?: string; subtype?: ContextAssetSubtype }) => {
+  const handleOpenBackupFromAssets = useCallback((context: { assetId?: string; subtype?: ContextAssetSubtype; workflowType?: "migration-preview" | "project-bundle" }) => {
     leaveSessionsSurface();
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
@@ -698,7 +739,7 @@ export default function ProjectShellClient() {
     title: string;
     preservationWarning?: string;
     routeLabel?: string;
-    backupWorkflowType?: "session-backup" | "migration-preview";
+    backupWorkflowType?: "session-backup" | "migration-preview" | "project-bundle";
   }) => {
     leaveSessionsSurface();
     setAssetsHandoff(null);

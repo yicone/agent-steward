@@ -2,7 +2,14 @@ import type { Source } from "@/lib/types";
 
 // ── Workflow types ──────────────────────────────────────────────────────────
 
-export const BACKUP_WORKFLOW_TYPES = ["session-backup", "bulk-session-backup", "import-backup", "validate-package", "migration-preview"] as const;
+export const BACKUP_WORKFLOW_TYPES = [
+  "session-backup",
+  "bulk-session-backup",
+  "import-backup",
+  "validate-package",
+  "migration-preview",
+  "project-bundle",
+] as const;
 export type BackupWorkflowType = (typeof BACKUP_WORKFLOW_TYPES)[number];
 
 export const BACKUP_WORKFLOW_STATES = [
@@ -66,6 +73,134 @@ export type MigrationPreviewItem = {
 };
 
 export type MigrationPreviewAggregateCounts = Record<MigrationPreviewClassification, number>;
+
+// ── Project bundle ──────────────────────────────────────────────────────────
+
+export const PROJECT_BUNDLE_MEMBER_CATEGORIES = [
+  "sessions",
+  "rules",
+  "memory",
+  "skills",
+  "commands",
+  "package-metadata",
+  "project-metadata",
+] as const;
+export type ProjectBundleMemberCategory = (typeof PROJECT_BUNDLE_MEMBER_CATEGORIES)[number];
+
+export const PROJECT_BUNDLE_REFERENCE_STATUSES = ["resolved", "unresolved", "missing-package"] as const;
+export type ProjectBundleReferenceStatus = (typeof PROJECT_BUNDLE_REFERENCE_STATUSES)[number];
+
+export const PROJECT_BUNDLE_MEMBER_STATUSES = ["ready", "warning", "blocked"] as const;
+export type ProjectBundleMemberStatus = (typeof PROJECT_BUNDLE_MEMBER_STATUSES)[number];
+
+export type ProjectBundleValidationSummary = {
+  warningCount: number;
+  blockerCount: number;
+  selectedCategoryCount: number;
+  selectedSessionCount: number;
+  resolvedReferenceCount: number;
+  unresolvedReferenceCount: number;
+};
+
+export type ProjectBundleMetadataSnapshot = {
+  id: string;
+  label: string;
+  category: ProjectBundleMemberCategory;
+  scope?: string;
+  subtype?: string;
+  provenanceSummary?: string;
+  status?: string;
+  timestamps?: {
+    createdAt?: string;
+    updatedAt?: string;
+    capturedAt?: string;
+  };
+};
+
+export type ProjectBundleMemberReference = {
+  id: string;
+  category: ProjectBundleMemberCategory;
+  label: string;
+  referenceType: "session-backup-package" | "context-asset" | "package-metadata" | "project-metadata";
+  referenceId: string;
+  status: ProjectBundleReferenceStatus;
+  detail: string;
+  backupId?: string;
+  manifestPath?: string;
+  snapshot: ProjectBundleMetadataSnapshot;
+};
+
+export type ProjectBundleMemberInventoryItem = {
+  category: ProjectBundleMemberCategory;
+  selected: boolean;
+  includedCount: number;
+  status: ProjectBundleMemberStatus;
+  detail: string;
+};
+
+export type ProjectBundleSelectionState = {
+  includedCategories: Record<ProjectBundleMemberCategory, boolean>;
+  sessionSelections: BackupSessionSelection[];
+  objectRefs: string[];
+  originCue?: string;
+  scopeHint?: string;
+  filterHint?: string;
+};
+
+export type ProjectBundleConfiguration = {
+  bundleName: string;
+  notes?: string;
+};
+
+export type ProjectBundlePackageMetadata = {
+  packageId: string;
+  schemaVersion: "project-bundle/v1";
+  createdAt: string;
+  createdBy: "agent-storage-manager";
+  bundleName: string;
+  notes?: string;
+};
+
+export type ProjectBundleProjectMetadata = {
+  projectName: string;
+  workspacePath: string;
+  repository?: string;
+  packageName: string;
+  packageVersion: string;
+  originCue?: string;
+  scopeHint?: string;
+  filterHint?: string;
+  objectRefs: string[];
+};
+
+export type ProjectBundleDocument = {
+  manifest: {
+    schemaVersion: "project-bundle/v1";
+    packageId: string;
+    createdAt: string;
+    memberInventory: ProjectBundleMemberInventoryItem[];
+    memberReferences: ProjectBundleMemberReference[];
+    validationSummary: ProjectBundleValidationSummary;
+  };
+  packageMetadata: ProjectBundlePackageMetadata;
+  projectMetadata: ProjectBundleProjectMetadata;
+  memberInventory: ProjectBundleMemberInventoryItem[];
+  memberReferences: ProjectBundleMemberReference[];
+  validationSummary: ProjectBundleValidationSummary;
+};
+
+export type ProjectBundleValidationResponse = {
+  validation: BackupValidationResult;
+  summary: ProjectBundleValidationSummary;
+  memberInventory: ProjectBundleMemberInventoryItem[];
+  memberReferences: ProjectBundleMemberReference[];
+};
+
+export type ProjectBundleGenerateResponse = ProjectBundleValidationResponse & {
+  packageId: string;
+  filePath: string;
+  bundle: ProjectBundleDocument;
+};
 
 // ── Validation ──────────────────────────────────────────────────────────────
 
@@ -131,7 +266,10 @@ export type BackupOperationResult = {
   timestamp: string;
   summary: string;
   backupId?: string;
+  packageId?: string;
+  filePath?: string;
   sessionCount?: number;
+  memberCount?: number;
   warnings?: string[];
   sourceCopySummary?: string;
   sessionResults?: BulkSessionExecutionResult[];
@@ -140,6 +278,10 @@ export type BackupOperationResult = {
   previewScope?: MigrationPreviewScope;
   previewCounts?: MigrationPreviewAggregateCounts;
   previewItems?: MigrationPreviewItem[];
+  projectBundleValidationSummary?: ProjectBundleValidationSummary;
+  projectBundleMemberInventory?: ProjectBundleMemberInventoryItem[];
+  projectBundleMemberReferences?: ProjectBundleMemberReference[];
+  projectBundleDocument?: ProjectBundleDocument;
   issueLabel?: string;
 };
 
@@ -184,6 +326,9 @@ export type BackupMigrationHandoff = {
   findingId?: string;
   preservationWarning?: string;
   issueLabel?: string;
+  projectBundleScopeHint?: string;
+  projectBundleFilterHint?: string;
+  projectBundleObjectRefs?: string[];
   migrationPreviewSourceContext?: MigrationPreviewSourceContext;
   migrationPreviewTargetContext?: MigrationPreviewTargetContext;
   migrationPreviewScope?: MigrationPreviewScope;
@@ -229,6 +374,12 @@ export const WORKFLOW_DESCRIPTORS: BackupWorkflowDescriptor[] = [
     description: "Preview only: compare explicit source, target, and bounded scope before any migration action.",
     stepsLabel: ["Select source", "Configure preview", "Validate", "Result"],
   },
+  {
+    type: "project-bundle",
+    label: "Project Bundle",
+    description: "Package the current project's context set into a validated portable local bundle. Compose and validate before generation.",
+    stepsLabel: ["Select bundle scope", "Configure bundle", "Validate", "Confirm", "Execute", "Result"],
+  },
 ];
 
 // ── Helper functions ────────────────────────────────────────────────────────
@@ -244,6 +395,7 @@ export function formatWorkflowTypeLabel(type: BackupWorkflowType): string {
     "import-backup": "Import Backup",
     "validate-package": "Validate Package",
     "migration-preview": "Migration Preview",
+    "project-bundle": "Project Bundle",
   };
   return labels[type];
 }
@@ -273,7 +425,54 @@ export function getStepsForWorkflow(type: BackupWorkflowType): BackupWorkflowSta
       return ["selection", "validation", "result"];
     case "migration-preview":
       return ["selection", "configuration", "validation", "result"];
+    case "project-bundle":
+      return ["selection", "configuration", "validation", "confirmation", "execution", "result"];
   }
+}
+
+export function createDefaultProjectBundleSelection(
+  handoff: BackupMigrationHandoff | null,
+  sessionSelections: BackupSessionSelection[] = []
+): ProjectBundleSelectionState {
+  return {
+    includedCategories: {
+      sessions: true,
+      rules: true,
+      memory: true,
+      skills: true,
+      commands: true,
+      "package-metadata": true,
+      "project-metadata": true,
+    },
+    sessionSelections: dedupeSessionSelections(sessionSelections),
+    objectRefs: Array.from(new Set((handoff?.projectBundleObjectRefs ?? []).map((item) => item.trim()).filter(Boolean))),
+    originCue: handoff ? `from ${handoff.origin}` : undefined,
+    scopeHint: handoff?.projectBundleScopeHint?.trim() || undefined,
+    filterHint: handoff?.projectBundleFilterHint?.trim() || undefined,
+  };
+}
+
+export function summarizeProjectBundleSelection(selection: ProjectBundleSelectionState): string {
+  const selectedCategories = PROJECT_BUNDLE_MEMBER_CATEGORIES.filter((category) => selection.includedCategories[category]);
+  const sessionCount = dedupeSessionSelections(selection.sessionSelections).length;
+  return `${selectedCategories.length} categories selected, ${sessionCount} explicit session reference${sessionCount === 1 ? "" : "s"}.`;
+}
+
+export function buildProjectBundleValidationSummary(input: {
+  validationItems: BackupValidationItem[];
+  memberReferences: ProjectBundleMemberReference[];
+  memberInventory: ProjectBundleMemberInventoryItem[];
+  selectedCategoryCount: number;
+  selectedSessionCount: number;
+}): ProjectBundleValidationSummary {
+  return {
+    warningCount: input.validationItems.filter((item) => item.severity === "warning").length,
+    blockerCount: input.validationItems.filter((item) => item.severity === "block").length,
+    selectedCategoryCount: input.selectedCategoryCount,
+    selectedSessionCount: input.selectedSessionCount,
+    resolvedReferenceCount: input.memberReferences.filter((item) => item.status === "resolved").length,
+    unresolvedReferenceCount: input.memberReferences.filter((item) => item.status !== "resolved").length,
+  };
 }
 
 export function getNextState(
@@ -817,7 +1016,10 @@ export function createOperationResult(input: {
   status: OperationResultStatus;
   summary: string;
   backupId?: string;
+  packageId?: string;
+  filePath?: string;
   sessionCount?: number;
+  memberCount?: number;
   warnings?: string[];
   sourceCopySummary?: string;
   sessionResults?: BulkSessionExecutionResult[];
@@ -826,6 +1028,10 @@ export function createOperationResult(input: {
   previewScope?: MigrationPreviewScope;
   previewCounts?: MigrationPreviewAggregateCounts;
   previewItems?: MigrationPreviewItem[];
+  projectBundleValidationSummary?: ProjectBundleValidationSummary;
+  projectBundleMemberInventory?: ProjectBundleMemberInventoryItem[];
+  projectBundleMemberReferences?: ProjectBundleMemberReference[];
+  projectBundleDocument?: ProjectBundleDocument;
   issueLabel?: string;
 }): BackupOperationResult {
   operationCounter += 1;
@@ -836,7 +1042,10 @@ export function createOperationResult(input: {
     timestamp: new Date().toISOString(),
     summary: input.summary,
     backupId: input.backupId,
+    packageId: input.packageId,
+    filePath: input.filePath,
     sessionCount: input.sessionCount,
+    memberCount: input.memberCount,
     warnings: input.warnings,
     sourceCopySummary: input.sourceCopySummary,
     sessionResults: input.sessionResults,
@@ -845,6 +1054,10 @@ export function createOperationResult(input: {
     previewScope: input.previewScope,
     previewCounts: input.previewCounts,
     previewItems: input.previewItems,
+    projectBundleValidationSummary: input.projectBundleValidationSummary,
+    projectBundleMemberInventory: input.projectBundleMemberInventory,
+    projectBundleMemberReferences: input.projectBundleMemberReferences,
+    projectBundleDocument: input.projectBundleDocument,
     issueLabel: input.issueLabel,
   };
 }
@@ -867,6 +1080,32 @@ export function createMigrationPreviewOperationResult(input: {
     previewCounts: counts,
     previewItems: input.items,
     issueLabel: input.issueLabel,
+  });
+}
+
+export function createProjectBundleOperationResult(input: {
+  status: BackupOperationStatus;
+  packageId: string;
+  filePath: string;
+  summary: string;
+  validationSummary: ProjectBundleValidationSummary;
+  memberInventory: ProjectBundleMemberInventoryItem[];
+  memberReferences: ProjectBundleMemberReference[];
+  bundle: ProjectBundleDocument;
+  warnings?: string[];
+}): BackupOperationResult {
+  return createOperationResult({
+    workflowType: "project-bundle",
+    status: input.status,
+    summary: input.summary,
+    packageId: input.packageId,
+    filePath: input.filePath,
+    memberCount: input.memberReferences.length,
+    warnings: input.warnings,
+    projectBundleValidationSummary: input.validationSummary,
+    projectBundleMemberInventory: input.memberInventory,
+    projectBundleMemberReferences: input.memberReferences,
+    projectBundleDocument: input.bundle,
   });
 }
 
@@ -956,6 +1195,9 @@ export function resolveWorkflowFromHandoff(
   if (handoff.migrationPreviewSourceContext || handoff.migrationPreviewTargetContext || handoff.migrationPreviewScope) {
     return "migration-preview";
   }
+  if (handoff.projectBundleObjectRefs || handoff.projectBundleScopeHint || handoff.projectBundleFilterHint) {
+    return "project-bundle";
+  }
   if ((handoff.sessions?.length ?? 0) > 1) return "bulk-session-backup";
   if (handoff.sessionId) return "session-backup";
   if (handoff.origin === "overview") return null;
@@ -980,6 +1222,9 @@ export function buildBackupHandoffInstanceKey(handoff: BackupMigrationHandoff | 
     handoff.findingId ?? "no-finding",
     handoff.issueLabel ?? "no-issue",
     handoff.preservationWarning ?? "no-preservation-warning",
+    handoff.projectBundleScopeHint ?? "no-bundle-scope-hint",
+    handoff.projectBundleFilterHint ?? "no-bundle-filter-hint",
+    handoff.projectBundleObjectRefs?.join("|") ?? "no-bundle-object-refs",
     handoff.migrationPreviewSourceContext?.product ?? "no-preview-source-product",
     handoff.migrationPreviewSourceContext?.kind ?? "no-preview-source-kind",
     handoff.migrationPreviewTargetContext?.profile ?? "no-preview-target-profile",

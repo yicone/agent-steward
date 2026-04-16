@@ -37,7 +37,7 @@ export type AssetsFoundationProps = {
   handoff: AssetsHandoff | null;
   onOpenSession(selection: { sessionId: string; source: Source; rootId?: string }): void;
   onOpenAnalysis(context: { issueLabel: string; assetId?: string; subtype?: ContextAssetSubtype; status?: ContextAssetStatus }): void;
-  onOpenBackup(context: { assetId?: string; subtype?: ContextAssetSubtype }): void;
+  onOpenBackup(context: { assetId?: string; subtype?: ContextAssetSubtype; workflowType?: "migration-preview" | "project-bundle" }): void;
   loadingDelayMs?: number;
 };
 
@@ -316,8 +316,8 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                   <Button size="sm" variant="outline" onClick={() => updateFilter("scope", "all")}>
                     Clear scope filter
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => onOpenBackup({ subtype: filters.subtype === "all" ? undefined : filters.subtype })}>
-                    Prepare import in Backup / Migration
+                  <Button size="sm" variant="outline" onClick={() => onOpenBackup({ subtype: filters.subtype === "all" ? undefined : filters.subtype, workflowType: "project-bundle" })}>
+                    Open Project Bundle
                   </Button>
                 </div>
               </div>
@@ -437,8 +437,11 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype })}>
-                    Prepare backup / migration
+                  <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype, workflowType: "migration-preview" })}>
+                    Preview in Backup / Migration
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype, workflowType: "project-bundle" })}>
+                    Open Project Bundle
                   </Button>
                 </div>
               </div>

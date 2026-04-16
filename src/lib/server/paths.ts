@@ -18,3 +18,9 @@ export function getSessionBackupsRoot(): string {
   if (override && override.trim().length) return expandHome(override.trim());
   return path.join(getAgentStorageManagerDir(), "backups");
 }
+
+export function getProjectBundlesRoot(): string {
+  const override = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT;
+  if (override && override.trim().length) return expandHome(override.trim());
+  return path.join(getAgentStorageManagerDir(), "project-bundles");
+}
