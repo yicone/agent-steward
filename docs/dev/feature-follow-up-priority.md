@@ -1,100 +1,109 @@
 # Feature Follow-Up Priority
 
-Updated: 2026-04-15
+Updated: 2026-04-17
 
 This document is the control-thread view of follow-up sequencing after the
-`Backup / Migration` foundation line.
+`Backup / Migration` expansion line (`bulk session backup` → `migration preview`
+→ `project bundle foundation`) has shipped and been archived.
 
 It is not a roadmap or implementation spec. It exists to:
 
 - keep intentionally deferred scope visible
 - preserve priority order between candidate feature lines
-- make the next decision faster once the current PR is merged
+- make the next decision faster once the current line has merged and archived
 
 Execution tracking still belongs in GitHub Issues.
 
-## 1. Current In-Flight Line
+## 1. Current Status
 
-### P1: Migration Preview
+The recent `Backup / Migration` follow-up line is complete:
 
-- Issue: `#54 Track migration preview follow-up`
-- Status: active proposal
-- Goal:
-  - add a preview-only portability workflow under `Backup / Migration`
-  - require explicit source, target, and scope context
-  - classify selected items as portable, degraded, unsupported, or blocked
-  - stop at preview result with no migration apply, project bundle packaging, or
-    vendor-runtime restore
+- `bulk-session-backup`: shipped and archived
+- `migration-preview`: shipped and archived
+- `project-bundle-foundation`: shipped and archived
 
-This is the current primary line because `bulk-session-backup` has shipped and
-been archived, leaving migration preview as the next P1 follow-up.
+There is no active `openspec/changes/*` line at the moment.
 
-## 2. Completed or Deferred Follow-Ups
+## 2. Candidate Feature-Line Priority
 
-These items were deliberately excluded from `backup-migration-foundation`. Items
-listed as shipped are preserved for history, not as active deferred work.
+The recommended next priority order is now:
 
-### P1: Bulk Session Backup
-
-- Issue: `#53 Track bulk session backup follow-up`
-- Status: shipped and archived
-- Why it was deferred:
-  - not required to replace the placeholder
-  - increases workflow-state complexity sharply
-  - needs multi-select, mixed eligibility, and partial-failure semantics
-
-Why it is next-tier priority:
-
-- it extends an already real workflow instead of creating a new product area
-- it is valuable once the single-session workflow has stabilized
-
-### P2: Project Bundle Foundation
-
-- Issue: `#52 Track project bundle foundation follow-up`
-- Why it was deferred:
-  - it needs its own scope boundary and workflow identity
-  - it has broader packaging and validation implications
-  - it would otherwise over-expand the first `Backup / Migration` change
-
-Why it is lower priority than the other two:
-
-- it is more product-definitional
-- it will likely need another proposal / UX convergence pass before
-  implementation
-
-## 3. Candidate Feature-Line Priority
-
-Assuming `migration-preview` merges cleanly, the recommended next priority order
-is:
-
-1. `project-bundle-foundation`
-2. `privacy-redaction`
+1. `backup-migration-hardening`
+2. `cross-agent-management / context-governance` research and proposal
+3. `privacy-redaction`
 
 Reasoning:
 
-- `project-bundle-foundation` becomes the next natural `Backup / Migration`
-  expansion after migration preview clarifies portability boundaries.
-- `privacy-redaction` cuts across diagnostics, exports, backups, and review
-  tooling; it remains important but should not be mixed into migration preview.
+- `backup-migration-hardening` is the most execution-ready follow-up. It can
+  tighten validation, routed continuity, result inspection, QA coverage, and
+  workflow stability without re-opening product scope.
+- `cross-agent-management / context-governance` remains strategically valuable,
+  but it is still a research/proposal line rather than a ready implementation
+  slice.
+- `privacy-redaction` is a legitimate long-term risk area, but current use is
+  personal and local-only, so it is not the highest-value next slice.
 
-## 4. Other Open Work
+## 3. Candidate Lines
 
-### Privacy Redaction
+### P1: Backup / Migration Hardening
+
+- Status: next execution-ready line
+- Focus:
+  - tighten workflow consistency after the recent expansion sequence
+  - improve validation/result inspection where needed
+  - improve routed handoff degradation and post-result continuity
+  - raise QA confidence on edge cases and failure handling
+
+Why this is next:
+
+- it consolidates recently shipped behavior instead of creating a new product
+  area
+- it can produce a coherent, bounded slice with relatively low discovery cost
+
+### P2: Cross-Agent Management / Context Governance
+
+- Status: research/proposal line
+- Focus:
+  - clarify whether the next differentiated surface should be management of
+    shared rules/memory/skills/commands across tools and projects
+  - identify whether the right next slice is governance, distribution, health,
+    or diagnostics
+
+Why this is not immediately next:
+
+- current material is still research-heavy
+- it needs a sharper product boundary before implementation starts
+
+### P3: Privacy Redaction
 
 - Issue: `#7 Architecture Review v1: Privacy redaction options`
-- Priority: separate strategic thread, not next in sequence after
-  `backup-migration-foundation`
+- Status: open, intentionally deprioritized
+- Focus:
+  - export/copy safety rails for sensitive diagnostics or raw payloads
 
-Reason:
+Why this is lower priority right now:
 
-- it cuts across diagnostics, exports, backups, and review tooling
-- it should not be mixed into the current workflow-page stabilization cycle
+- current usage is personal and local-only
+- it remains important for future sharing/export flows, but it is not the most
+  urgent next slice while the product is not yet used in broader or less-trusted
+  contexts
 
-## 5. Recommended Decision Rule
+## 4. Recommended Decision Rule
 
-Once the current `migration-preview` PR is merged:
+Choose `backup-migration-hardening` next if:
 
-- choose `project-bundle-foundation` next if the product conversation is ready
-  to commit to bundle boundaries and packaging promises
-- choose `privacy-redaction` next if sensitive diagnostics, exports, or package
-  contents become the dominant risk before more portability features
+- the immediate goal is to stabilize the newly shipped workflow stack
+- the team wants a bounded implementation slice with low discovery cost
+
+Choose `cross-agent-management / context-governance` next if:
+
+- the product conversation is ready to define a new project-level management
+  surface beyond `Backup / Migration`
+- the next goal is to sharpen long-term differentiation rather than harden
+  existing workflow surfaces
+
+Keep `privacy-redaction` deferred unless:
+
+- exports or copied diagnostics begin to leave the local machine more often
+- sensitive local paths, tokens, or payloads become a more immediate operational
+  risk
