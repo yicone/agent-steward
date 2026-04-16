@@ -73,7 +73,7 @@ describe("project bundle route", () => {
       memberInventory: [],
       memberReferences: [],
       packageId: "project-bundle-1",
-      filePath: "/tmp/project-bundle-1.bundle.json",
+      filePath: `${process.env.HOME}/.agent-storage-manager/project-bundle-1.bundle.json`,
     });
 
     const response = await POST(
@@ -104,6 +104,8 @@ describe("project bundle route", () => {
 
     expect(response.status).toBe(200);
     expect(generateProjectBundleMock).toHaveBeenCalledTimes(1);
+    const json = await response.json();
+    expect(json.filePath).toBe("~/.agent-storage-manager/project-bundle-1.bundle.json");
     const [selection, configuration] = generateProjectBundleMock.mock.calls[0]!;
     expect(selection.scopeHint).toBe("overview-routed project context");
     expect(selection.sessionSelections).toHaveLength(1);

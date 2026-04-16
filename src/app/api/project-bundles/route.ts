@@ -1,3 +1,5 @@
+import os from "node:os";
+
 import { NextResponse } from "next/server";
 
 import {
@@ -30,6 +32,12 @@ function normalizeConfiguration(input?: ProjectBundleConfiguration | null): Proj
     bundleName: input?.bundleName?.trim() ?? "",
     notes: input?.notes?.trim() || undefined,
   };
+}
+
+function redactDisplayPath(filePath: string): string {
+  return filePath
+    .replace(os.homedir(), "~")
+    .replace(/\\/g, "/");
 }
 
 export async function POST(req: Request) {
@@ -87,7 +95,10 @@ export async function POST(req: Request) {
   try {
     if (body.mode === "generate") {
       const generated = await generateProjectBundle(selection, configuration);
-      return NextResponse.json(generated);
+      return NextResponse.json({
+        ...generated,
+        filePath: redactDisplayPath(generated.filePath),
+      });
     }
 
     const validation = await validateProjectBundle(selection, configuration);
