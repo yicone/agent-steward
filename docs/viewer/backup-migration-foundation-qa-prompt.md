@@ -3,10 +3,10 @@
 Use this prompt with an external QA agent that can operate the local app through a browser.
 
 ```text
-You are QA-ing the `migration-preview` and `bulk-session-backup` implementation for the local-first Agent Storage Manager project.
+You are QA-ing the `project-bundle`, `migration-preview`, and `bulk-session-backup` implementation for the local-first Agent Storage Manager project.
 
 Repository: <repo-path>
-Branch under test: feat/migration-preview
+Branch under test: <branch-under-test>
 
 Goal:
 Verify that the new `Backup / Migration` page behaves as a bounded workflow-first foundation surface. It should support:
@@ -15,13 +15,13 @@ Verify that the new `Backup / Migration` page behaves as a bounded workflow-firs
 - import backup
 - validate package
 - migration preview
+- project bundle
 - routed handoff from `Project Overview`, `Sessions`, `Assets`, and `Analysis`
 - compact recent operations
 
 It must not behave like:
 - a generic tools drawer
 - a migration apply surface
-- a project bundle implementation
 - a vendor runtime restore UI
 
 Setup:
@@ -43,7 +43,6 @@ Primary smoke checks:
    - result / recent operations region
 6. Confirm copy clearly states bounded foundation behavior and does not imply:
    - migration apply
-   - project bundle execution
    - vendor-runtime restore
 
 Workflow selector / idle checks:
@@ -54,7 +53,7 @@ Workflow selector / idle checks:
    - import backup
    - validate package
    - migration preview
-3. Confirm `project bundle` is not presented as an active workflow.
+   - project bundle
 
 Session backup workflow checks:
 1. Enter the `session backup` workflow from `Backup / Migration`.
@@ -136,19 +135,63 @@ Migration preview workflow checks:
 9. Confirm aggregate counts are shown for all four preview classifications.
 10. Confirm degraded / unsupported / blocked rows offer inspection or repair-oriented follow-up wording without executing work inline.
 
+Project bundle workflow checks:
+1. Enter the `project bundle` workflow from `Backup / Migration`.
+2. Confirm the workflow follows this full path only:
+   - selection
+   - configuration
+   - validation
+   - confirmation
+   - execution
+   - result
+3. Confirm selection presents default bundle member categories:
+   - sessions
+   - rules
+   - memory
+   - skills
+   - commands
+   - package-level metadata
+   - project-level metadata
+4. Confirm generation is not available before validation and confirmation.
+5. Add at least one explicit session reference if the UI allows it, then validate.
+6. If the selected session has no existing backup package, confirm validation shows a warning rather than a blocker.
+7. Confirm warnings remain visible through confirmation and do not silently remove the selected session.
+8. Execute generation and confirm the result shows:
+   - package identity
+   - local file path
+   - member count
+   - validation summary
+   - member inventory / references
+9. Confirm result copy does not promise:
+   - restore/apply
+   - vendor-runtime reopen
+   - cloud sync
+   - app snapshot
+   - team collaboration semantics
+10. If bundle file inspection is available, confirm it includes:
+   - bundle manifest
+   - package metadata
+   - project metadata
+   - member inventory
+   - member references
+   - validation summary
+   - lightweight metadata snapshots
+
 Routed handoff checks:
 1. From `Sessions`, if available, route into `Backup / Migration` for a selected session.
 2. Confirm `Backup / Migration` opens the `session backup` workflow with the session prefilled and a compact origin cue.
 3. If `Sessions` exposes explicit multi-selection under this branch, route that selection into `Backup / Migration`.
 4. Confirm the destination opens `bulk session backup` with the selected sessions prefilled and no silently dropped entries.
-5. From `Assets`, trigger a route into `Backup / Migration` if available.
-6. Confirm the destination page may open migration preview with explicit asset scope context only, while missing source product or target context remains editable.
-7. From `Analysis`, trigger a preservation-oriented route into `Backup / Migration` if available.
-8. Confirm preservation-oriented analysis routes still open `session backup` and preserve the issue/preservation warning context.
-9. From `Analysis`, trigger a migration-preview route into `Backup / Migration` if available.
-10. Confirm migration-preview analysis routes open `migration preview`, preserve issue context, and do not invent missing source or target.
-11. From `Project Overview`, trigger a route into single backup, bulk backup, import, validation, and migration preview if available.
-12. Confirm routed context opens the correct workflow and degrades safely to selection/configuration if preview context is incomplete.
+5. From `Assets`, trigger both migration-preview and project-bundle routes into `Backup / Migration` if available.
+6. Confirm assets-routed project bundle preserves only explicit object refs / scope hints and still opens at bundle selection instead of skipping composition.
+7. Confirm the assets migration-preview route may open migration preview with explicit asset scope context only, while missing source product or target context remains editable.
+8. From `Analysis`, trigger a preservation-oriented route into `Backup / Migration` if available.
+9. Confirm preservation-oriented analysis routes still open `session backup` and preserve the issue/preservation warning context.
+10. From `Analysis`, trigger both migration-preview and project-bundle routes into `Backup / Migration` if available.
+11. Confirm analysis-routed project bundle preserves issue context as a cue only and does not auto-decide final composition.
+12. Confirm migration-preview analysis routes open `migration preview`, preserve issue context, and do not invent missing source or target.
+13. From `Project Overview`, trigger a route into single backup, bulk backup, import, validation, migration preview, and project bundle if available.
+14. Confirm routed context opens the correct workflow and degrades safely to selection/configuration when context is incomplete.
 
 Recent operations checks:
 1. After completing or simulating at least one workflow, confirm a compact recent-operations region appears.
@@ -159,22 +202,24 @@ Recent operations checks:
    - status
    - session count for bulk runs
    - selected preview scope for migration preview runs
+   - package identity for project bundle runs
 3. Confirm it reads as a secondary result/history strip, not a persistent audit console.
 4. Confirm a bulk run produces one recent-operation entry for the batch, not one entry per selected session.
 5. Confirm a migration preview entry routes back to preview detail and does not claim migration was applied.
+6. Confirm a project bundle entry routes back to bundle result detail and does not claim restore, apply, or sync.
 
 Regression checks:
 1. `Sessions` still works as before, including existing viewer behavior and direct session backup.
 2. `Assets` and `Analysis` routing into `Backup / Migration` does not break their own page roles.
 3. Top-level navigation away from `Backup / Migration` clears stale routed workflow context when appropriate.
-4. `Backup / Migration` does not expose migration apply or project bundle execution accidentally through copy or buttons.
+4. Existing single backup, bulk backup, import, validate package, and migration preview behavior does not regress.
 
 Boundary checks:
 1. No button or copy should imply:
    - unscoped or implicit batch backup
    - migration apply
-   - project bundle packaging
-   - runtime continuation in third-party tools
+    - runtime continuation in third-party tools
+    - automatic project bundle composition from routed context
 2. If any such implication exists, record it as a blocker or strong concern.
 
 Report format:

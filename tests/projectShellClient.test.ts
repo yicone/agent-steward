@@ -363,6 +363,24 @@ describe("backup handoff builders", () => {
     expect(handoff).not.toHaveProperty("migrationPreviewTargetContext");
   });
 
+  it("builds an assets project-bundle handoff with explicit refs only", () => {
+    const handoff = buildBackupHandoffFromAssets({
+      assetId: "asset-skill-global-generated",
+      subtype: "skill",
+      workflowType: "project-bundle",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "assets",
+      workflowType: "project-bundle",
+      assetId: "asset-skill-global-generated",
+      assetSubtype: "skill",
+      projectBundleObjectRefs: ["asset-skill-global-generated"],
+      projectBundleScopeHint: "skill asset scope",
+    });
+    expect(handoff).not.toHaveProperty("migrationPreviewTargetContext");
+  });
+
   it("keeps preservation-oriented analysis backup handoff on session backup", () => {
     const handoff = buildBackupHandoffFromAnalysis({
       findingId: "finding-preserve-before-migration",
@@ -402,6 +420,24 @@ describe("backup handoff builders", () => {
     expect(handoff.subtitle).toContain("Preview migration compatibility");
   });
 
+  it("builds an analysis project-bundle handoff without auto-deciding composition", () => {
+    const handoff = buildBackupHandoffFromAnalysis({
+      findingId: "finding-conflicted-skill",
+      title: "Conflicted OpenSpec helper skill",
+      routeLabel: "Bundle project context",
+      backupWorkflowType: "project-bundle",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "analysis",
+      workflowType: "project-bundle",
+      findingId: "finding-conflicted-skill",
+      issueLabel: "Conflicted OpenSpec helper skill",
+      projectBundleObjectRefs: ["finding-conflicted-skill"],
+    });
+    expect(handoff.subtitle).toContain("Bundle project context");
+  });
+
   it("builds an overview handoff with an explicit workflow type", () => {
     const handoff = buildBackupHandoffFromOverview("import-backup");
 
@@ -438,5 +474,18 @@ describe("backup handoff builders", () => {
     expect(handoff).not.toHaveProperty("migrationPreviewTargetContext");
     expect(handoff).not.toHaveProperty("migrationPreviewScope");
     expect(handoff.subtitle).toContain("migration preview workflow");
+  });
+
+  it("builds an overview handoff for project bundle without inventing member refs", () => {
+    const handoff = buildBackupHandoffFromOverview("project-bundle");
+
+    expect(handoff).toMatchObject({
+      origin: "overview",
+      workflowType: "project-bundle",
+      projectBundleScopeHint: "overview-routed project context",
+    });
+    expect(handoff).not.toHaveProperty("sessions");
+    expect(handoff).not.toHaveProperty("projectBundleObjectRefs");
+    expect(handoff.subtitle).toContain("project bundle workflow");
   });
 });

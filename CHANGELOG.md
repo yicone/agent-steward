@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-16` — Project bundle foundation
+  - Added a bounded `project bundle` workflow to `Backup / Migration` with explicit `selection -> configuration -> validation -> confirmation -> execution -> result` flow
+  - Added local `project-bundle/v1` generation with bundle manifest, package/project metadata, member inventory, member references, validation summary, and lightweight member snapshots
+  - Reused existing session backup packages for session members, preserved missing-package sessions as unresolved references with warnings, and added routed handoff into project bundle from `Project Overview`, `Assets`, and `Analysis`
+
 - `2026-04-15` — Migration preview workflow
   - Added a bounded `migration preview` workflow to `Backup / Migration` with explicit source context, target context, and bounded scope state flow (`selection -> configuration -> validation -> result`)
   - Added preview-only classification and aggregate reporting for `portable`, `degraded`, `unsupported`, and `blocked` items, plus recent-operation entries that route back to preview detail without implying migration apply

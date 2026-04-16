@@ -6,6 +6,7 @@ import {
   BackupMigrationFoundation,
   buildBulkConfirmationDetails,
   resolveInitialBulkSelections,
+  resolveInitialProjectBundleSessionSelections,
   OperationResultPanel,
   resolveMigrationPreviewInvalidWorkflowState,
   ValidationPanel,
@@ -167,7 +168,8 @@ describe("BackupMigrationFoundation", () => {
     expect(html).toContain("Start Import Backup");
     expect(html).toContain("Start Validate Package");
     expect(html).toContain("Start Migration Preview");
-    expect(html).toContain("does not support migration apply, project bundle packaging, vendor-runtime restore, or cloud sync");
+    expect(html).toContain("Start Project Bundle");
+    expect(html).toContain("does not support migration apply, vendor-runtime restore, or cloud sync");
   });
 
   it("renders routed session-backup workflow with prefilling context", () => {
@@ -269,6 +271,24 @@ describe("BackupMigrationFoundation", () => {
     expect(html).toContain("session-2");
     expect(html).toContain("Pre-selected from routed handoff.");
   });
+
+  it("renders routed project-bundle workflow without skipping selection", () => {
+    const html = renderBackupMigrationFoundation({
+      origin: "assets",
+      subtitle: "Open Project Bundle with skill asset context starting from asset-skill-global-generated.",
+      workflowType: "project-bundle",
+      projectBundleScopeHint: "skill asset scope",
+      projectBundleObjectRefs: ["asset-skill-global-generated"],
+      continueLabel: "Assets may prefill explicit object references and compact hints only. Final bundle composition still happens in Backup / Migration.",
+      returnLabel: "Return to Assets for object-level review.",
+    });
+
+    expect(html).toContain("Project Bundle");
+    expect(html).toContain("Select Bundle Scope");
+    expect(html).toContain("Final bundle composition still happens");
+    expect(html).toContain("No explicit sessions listed yet");
+  });
+
 });
 
 describe("BackupMigrationFoundation helpers", () => {
@@ -287,6 +307,21 @@ describe("BackupMigrationFoundation helpers", () => {
     ).toEqual([
       { sessionId: "session-1", source: "codex", rootId: "root-a", includeSourceCopy: false, unresolvedReason: undefined },
       { sessionId: "session-2", source: "windsurf", rootId: undefined, includeSourceCopy: false, unresolvedReason: undefined },
+    ]);
+  });
+
+  it("resolves initial project bundle sessions from routed handoff", () => {
+    expect(
+      resolveInitialProjectBundleSessionSelections({
+        origin: "analysis",
+        subtitle: "Bundle context from analysis.",
+        workflowType: "project-bundle",
+        sessionId: "session-1",
+        source: "codex",
+        rootId: "root-a",
+      })
+    ).toEqual([
+      { sessionId: "session-1", source: "codex", rootId: "root-a", includeSourceCopy: false, unresolvedReason: undefined },
     ]);
   });
 
@@ -349,5 +384,52 @@ describe("BackupMigrationFoundation panels", () => {
     expect(html).toContain("preview-with-blockers");
     expect(html).toContain("blocked");
     expect(html).toContain("missing-asset-ref");
+  });
+
+  it("renders project bundle result details with package identity and unresolved refs", () => {
+    const html = renderToStaticMarkup(
+      <OperationResultPanel
+        result={{
+          id: "op-bundle-1",
+          workflowType: "project-bundle",
+          status: "success-with-warnings",
+          timestamp: "2026-04-16T13:00:00Z",
+          summary: "Project bundle project-bundle-1 generated with 3 member references.",
+          packageId: "project-bundle-1",
+          filePath: "/tmp/project-bundle-1.bundle.json",
+          memberCount: 3,
+          projectBundleValidationSummary: {
+            warningCount: 1,
+            blockerCount: 0,
+            selectedCategoryCount: 7,
+            selectedSessionCount: 1,
+            resolvedReferenceCount: 2,
+            unresolvedReferenceCount: 1,
+          },
+          projectBundleMemberInventory: [
+            { category: "sessions", selected: true, includedCount: 1, status: "warning", detail: "1 member reference included." },
+          ],
+          projectBundleMemberReferences: [
+            {
+              id: "sessions:codex:session-1",
+              category: "sessions",
+              label: "session-1",
+              referenceType: "session-backup-package",
+              referenceId: "codex:session-1",
+              status: "missing-package",
+              detail: "No existing session backup package is available.",
+              snapshot: { id: "session-1", label: "session-1", category: "sessions" },
+            },
+          ],
+        }}
+        onNewWorkflow={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("project-bundle-1");
+    expect(html).toContain("/tmp/project-bundle-1.bundle.json");
+    expect(html).toContain("Bundle member inventory");
+    expect(html).toContain("missing-package");
+    expect(html).toContain("No restore or apply in foundation v1.");
   });
 });

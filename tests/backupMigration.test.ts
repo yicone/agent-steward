@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   addRecentOperation,
   buildBulkSessionValidationResult,
+  buildProjectBundleValidationSummary,
   buildMigrationPreviewItems,
   buildPackageValidationItems,
+  createDefaultProjectBundleSelection,
   buildBackupHandoffInstanceKey,
   buildSessionBackupExecutionRequest,
   canProceedFromValidation,
   createMigrationPreviewOperationResult,
+  createProjectBundleOperationResult,
   createBulkOperationSummary,
   createOperationResult,
   dedupeSessionSelections,
@@ -189,6 +192,7 @@ describe("formatWorkflowTypeLabel", () => {
     expect(formatWorkflowTypeLabel("import-backup")).toBe("Import Backup");
     expect(formatWorkflowTypeLabel("validate-package")).toBe("Validate Package");
     expect(formatWorkflowTypeLabel("migration-preview")).toBe("Migration Preview");
+    expect(formatWorkflowTypeLabel("project-bundle")).toBe("Project Bundle");
   });
 });
 
@@ -225,6 +229,105 @@ describe("getStepsForWorkflow", () => {
   it("returns steps for migration-preview", () => {
     const steps = getStepsForWorkflow("migration-preview");
     expect(steps).toEqual(["selection", "configuration", "validation", "result"]);
+  });
+
+  it("returns steps for project-bundle", () => {
+    const steps = getStepsForWorkflow("project-bundle");
+    expect(steps).toEqual(["selection", "configuration", "validation", "confirmation", "execution", "result"]);
+  });
+});
+
+describe("project bundle model tests", () => {
+  it("creates default project bundle selection with selectable categories enabled and foundation metadata implicit", () => {
+    const selection = createDefaultProjectBundleSelection({
+      origin: "overview",
+      subtitle: "Open Project Bundle from overview.",
+      workflowType: "project-bundle",
+      projectBundleScopeHint: "overview-routed project context",
+      projectBundleObjectRefs: ["asset-rule-project-codex"],
+    }, []);
+
+    expect(selection.includedCategories.sessions).toBe(true);
+    expect(Object.keys(selection.includedCategories)).toEqual(["sessions", "rules", "memory", "skills", "commands"]);
+    expect(selection.scopeHint).toBe("overview-routed project context");
+    expect(selection.objectRefs).toEqual(["asset-rule-project-codex"]);
+  });
+
+  it("builds project bundle validation summary counts", () => {
+    const summary = buildProjectBundleValidationSummary({
+      validationItems: [
+        { id: "warning-1", label: "Warn", severity: "warning", detail: "warning" },
+        { id: "block-1", label: "Block", severity: "block", detail: "block" },
+      ],
+      memberReferences: [
+        {
+          id: "ref-1",
+          category: "sessions",
+          label: "session-1",
+          referenceType: "session-backup-package",
+          referenceId: "codex:session-1",
+          status: "resolved",
+          detail: "Resolved",
+          snapshot: { id: "session-1", label: "session-1", category: "sessions" },
+        },
+        {
+          id: "ref-2",
+          category: "sessions",
+          label: "session-2",
+          referenceType: "session-backup-package",
+          referenceId: "codex:session-2",
+          status: "missing-package",
+          detail: "Missing",
+          snapshot: { id: "session-2", label: "session-2", category: "sessions" },
+        },
+      ],
+      memberInventory: [],
+      selectedCategoryCount: 3,
+      selectedSessionCount: 2,
+    });
+
+    expect(summary.warningCount).toBe(1);
+    expect(summary.blockerCount).toBe(1);
+    expect(summary.resolvedReferenceCount).toBe(1);
+    expect(summary.unresolvedReferenceCount).toBe(1);
+  });
+
+  it("creates project bundle operation results with package identity and inventory", () => {
+    const result = createProjectBundleOperationResult({
+      status: "success-with-warnings",
+      packageId: "project-bundle-1",
+      filePath: "/tmp/project-bundle-1.bundle.json",
+      summary: "Project bundle generated.",
+      validationSummary: {
+        warningCount: 1,
+        blockerCount: 0,
+        selectedCategoryCount: 7,
+        selectedSessionCount: 1,
+        resolvedReferenceCount: 6,
+        unresolvedReferenceCount: 1,
+      },
+      memberInventory: [
+        { category: "sessions", selected: true, includedCount: 1, status: "warning", detail: "1 member reference included." },
+      ],
+      memberReferences: [
+        {
+          id: "sessions:codex:session-1",
+          category: "sessions",
+          label: "session-1",
+          referenceType: "session-backup-package",
+          referenceId: "codex:session-1",
+          status: "missing-package",
+          detail: "No existing session backup package is available.",
+          snapshot: { id: "session-1", label: "session-1", category: "sessions" },
+        },
+      ],
+      warnings: ["Missing session backup package."],
+    });
+
+    expect(result.workflowType).toBe("project-bundle");
+    expect(result.packageId).toBe("project-bundle-1");
+    expect(result.filePath).toContain("project-bundle-1.bundle.json");
+    expect(result.projectBundleValidationSummary?.warningCount).toBe(1);
   });
 });
 
