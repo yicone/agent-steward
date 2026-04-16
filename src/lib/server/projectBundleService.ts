@@ -134,7 +134,7 @@ async function canPrepareBundleOutputRoot(): Promise<boolean> {
     }
     return false;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -544,6 +544,5 @@ export async function generateProjectBundle(
     memberReferences: composed.memberReferences,
     packageId: composed.packageMetadata.packageId,
     filePath,
-    bundle,
   };
 }

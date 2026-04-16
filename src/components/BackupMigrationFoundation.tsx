@@ -1152,7 +1152,6 @@ export function BackupMigrationFoundation({
         validationSummary: payload.summary,
         memberInventory: payload.memberInventory ?? [],
         memberReferences: payload.memberReferences ?? [],
-        bundle: payload.bundle,
         warnings,
       });
 

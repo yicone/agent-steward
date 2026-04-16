@@ -198,7 +198,6 @@ export type ProjectBundleValidationResponse = {
 export type ProjectBundleGenerateResponse = ProjectBundleValidationResponse & {
   packageId: string;
   filePath: string;
-  bundle: ProjectBundleDocument;
 };
 
 // ── Validation ──────────────────────────────────────────────────────────────
@@ -280,7 +279,6 @@ export type BackupOperationResult = {
   projectBundleValidationSummary?: ProjectBundleValidationSummary;
   projectBundleMemberInventory?: ProjectBundleMemberInventoryItem[];
   projectBundleMemberReferences?: ProjectBundleMemberReference[];
-  projectBundleDocument?: ProjectBundleDocument;
   issueLabel?: string;
 };
 
@@ -1030,7 +1028,6 @@ export function createOperationResult(input: {
   projectBundleValidationSummary?: ProjectBundleValidationSummary;
   projectBundleMemberInventory?: ProjectBundleMemberInventoryItem[];
   projectBundleMemberReferences?: ProjectBundleMemberReference[];
-  projectBundleDocument?: ProjectBundleDocument;
   issueLabel?: string;
 }): BackupOperationResult {
   operationCounter += 1;
@@ -1056,7 +1053,6 @@ export function createOperationResult(input: {
     projectBundleValidationSummary: input.projectBundleValidationSummary,
     projectBundleMemberInventory: input.projectBundleMemberInventory,
     projectBundleMemberReferences: input.projectBundleMemberReferences,
-    projectBundleDocument: input.projectBundleDocument,
     issueLabel: input.issueLabel,
   };
 }
@@ -1090,7 +1086,6 @@ export function createProjectBundleOperationResult(input: {
   validationSummary: ProjectBundleValidationSummary;
   memberInventory: ProjectBundleMemberInventoryItem[];
   memberReferences: ProjectBundleMemberReference[];
-  bundle: ProjectBundleDocument;
   warnings?: string[];
 }): BackupOperationResult {
   return createOperationResult({
@@ -1104,7 +1099,6 @@ export function createProjectBundleOperationResult(input: {
     projectBundleValidationSummary: input.validationSummary,
     projectBundleMemberInventory: input.memberInventory,
     projectBundleMemberReferences: input.memberReferences,
-    projectBundleDocument: input.bundle,
   });
 }
 

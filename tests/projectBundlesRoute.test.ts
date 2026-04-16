@@ -8,7 +8,7 @@ vi.mock("@/lib/server/projectBundleService", () => ({
   generateProjectBundle: (...args: unknown[]) => generateProjectBundleMock(...args),
 }));
 
-// @ts-ignore
+// @ts-expect-error Next.js route module typing does not match this Vitest import pattern in tests
 import { POST } from "@/app/api/project-bundles/route";
 
 afterEach(() => {
@@ -74,7 +74,6 @@ describe("project bundle route", () => {
       memberReferences: [],
       packageId: "project-bundle-1",
       filePath: "/tmp/project-bundle-1.bundle.json",
-      bundle: {},
     });
 
     const response = await POST(

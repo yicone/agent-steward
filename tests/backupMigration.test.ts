@@ -321,47 +321,6 @@ describe("project bundle model tests", () => {
           snapshot: { id: "session-1", label: "session-1", category: "sessions" },
         },
       ],
-      bundle: {
-        manifest: {
-          schemaVersion: "project-bundle/v1",
-          packageId: "project-bundle-1",
-          createdAt: "2026-04-16T00:00:00.000Z",
-          memberInventory: [],
-          memberReferences: [],
-          validationSummary: {
-            warningCount: 1,
-            blockerCount: 0,
-            selectedCategoryCount: 7,
-            selectedSessionCount: 1,
-            resolvedReferenceCount: 6,
-            unresolvedReferenceCount: 1,
-          },
-        },
-        packageMetadata: {
-          packageId: "project-bundle-1",
-          schemaVersion: "project-bundle/v1",
-          createdAt: "2026-04-16T00:00:00.000Z",
-          createdBy: "agent-storage-manager",
-          bundleName: "Bundle",
-        },
-        projectMetadata: {
-          projectName: "agent-storage-manager",
-          workspacePath: "/workspace",
-          packageName: "agent-storage-manager",
-          packageVersion: "0.1.0",
-          objectRefs: [],
-        },
-        memberInventory: [],
-        memberReferences: [],
-        validationSummary: {
-          warningCount: 1,
-          blockerCount: 0,
-          selectedCategoryCount: 7,
-          selectedSessionCount: 1,
-          resolvedReferenceCount: 6,
-          unresolvedReferenceCount: 1,
-        },
-      },
       warnings: ["Missing session backup package."],
     });
 
