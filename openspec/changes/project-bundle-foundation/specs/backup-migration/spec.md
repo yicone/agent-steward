@@ -17,10 +17,15 @@ The system SHALL provide a bounded `project-bundle` workflow inside `Backup / Mi
 ### Requirement: Project bundle SHALL define default member categories
 The system SHALL treat the following as default bundle member categories: sessions, rules, memory, skills, commands, package-level metadata, and project-level metadata.
 
-#### Scenario: Default member categories are presented at selection
+#### Scenario: Selectable member categories are presented at selection
 - **WHEN** the user enters the project bundle selection step
-- **THEN** the workflow presents sessions, rules, memory, skills, commands, package-level metadata, and project-level metadata as the default member categories
-- **AND** the user can deselect or adjust member inclusion before proceeding
+- **THEN** the workflow presents sessions, rules, memory, skills, and commands as the selectable member categories
+- **AND** the user can deselect or adjust those member categories before proceeding
+
+#### Scenario: Foundation metadata is always included
+- **WHEN** the user enters the project bundle selection step
+- **THEN** the workflow shows package-level metadata and project-level metadata as always included foundation metadata
+- **AND** foundation v1 does not expose deselection toggles for those metadata sections
 
 #### Scenario: Non-core objects are out of scope for v1
 - **WHEN** the user enters the project bundle selection step

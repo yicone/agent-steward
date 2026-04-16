@@ -39,6 +39,7 @@ import {
   summarizeSourceCopyConfiguration,
   validateBackupPackageRemote,
   PROJECT_BUNDLE_MEMBER_CATEGORIES,
+  PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES,
   WORKFLOW_DESCRIPTORS,
   type BackupSessionSelection,
   type BackupMigrationHandoff,
@@ -59,6 +60,7 @@ import {
   type ProjectBundleMemberCategory,
   type ProjectBundleMemberInventoryItem,
   type ProjectBundleMemberReference,
+  type ProjectBundleSelectableMemberCategory,
   type ProjectBundleSelectionState,
   type ProjectBundleValidationSummary,
   type RecentOperation,
@@ -834,7 +836,7 @@ export function BackupMigrationFoundation({
     setBulkDraftRootId("");
   }, [bulkDraftRootId, bulkDraftSessionId, bulkDraftSource]);
 
-  const toggleProjectBundleCategory = useCallback((category: ProjectBundleMemberCategory, selected: boolean) => {
+  const toggleProjectBundleCategory = useCallback((category: ProjectBundleSelectableMemberCategory, selected: boolean) => {
     setProjectBundleSelection((prev) => ({
       ...prev,
       includedCategories: {
@@ -1531,7 +1533,7 @@ export function BackupMigrationFoundation({
                   Project Bundle is a real Backup / Migration workflow. Routed context can prefill cues and explicit refs, but final composition still happens here before validation and generation.
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {PROJECT_BUNDLE_MEMBER_CATEGORIES.map((category) => (
+                  {PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.map((category) => (
                     <label key={category} className="flex items-center gap-2 rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
                       <input
                         type="checkbox"
@@ -1541,6 +1543,12 @@ export function BackupMigrationFoundation({
                       <span>{formatBundleCategoryLabel(category)}</span>
                     </label>
                   ))}
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
+                  Foundation metadata is always included:
+                  <span className="ml-1 font-medium text-foreground">Package Metadata</span>
+                  <span className="mx-1">and</span>
+                  <span className="font-medium text-foreground">Project Metadata</span>.
                 </div>
                 <div className="space-y-3 rounded-xl border border-border/60 bg-background/10 px-3 py-3">
                   <div className="text-xs uppercase tracking-[0.18em] text-muted">Explicit session refs</div>

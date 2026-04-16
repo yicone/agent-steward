@@ -238,7 +238,7 @@ describe("getStepsForWorkflow", () => {
 });
 
 describe("project bundle model tests", () => {
-  it("creates default project bundle selection with all default categories enabled", () => {
+  it("creates default project bundle selection with selectable categories enabled and foundation metadata implicit", () => {
     const selection = createDefaultProjectBundleSelection({
       origin: "overview",
       subtitle: "Open Project Bundle from overview.",
@@ -248,7 +248,7 @@ describe("project bundle model tests", () => {
     }, []);
 
     expect(selection.includedCategories.sessions).toBe(true);
-    expect(selection.includedCategories["project-metadata"]).toBe(true);
+    expect(Object.keys(selection.includedCategories)).toEqual(["sessions", "rules", "memory", "skills", "commands"]);
     expect(selection.scopeHint).toBe("overview-routed project context");
     expect(selection.objectRefs).toEqual(["asset-rule-project-codex"]);
   });

@@ -111,6 +111,11 @@ The default member categories are: sessions, rules, memory, skills, commands,
 package-level metadata, and project-level metadata. These align with the
 product's project-scoped context model.
 
+Sessions, rules, memory, skills, and commands are the selectable composition
+categories. Package-level metadata and project-level metadata remain mandatory
+foundation metadata in v1: they are always included in the generated bundle and
+should be shown as fixed sections rather than removable toggles.
+
 Items explicitly excluded from v1 membership: raw source copies, derived view
 caches, search indexes, internal cache / temp state, UI state, machine-local
 tokens / ports / secrets, repository full copy, and app preferences / global

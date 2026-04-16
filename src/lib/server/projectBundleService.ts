@@ -7,6 +7,7 @@ import path from "node:path";
 
 import {
   PROJECT_BUNDLE_MEMBER_CATEGORIES,
+  PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES,
   buildProjectBundleValidationSummary,
   dedupeSessionSelections,
   deriveValidationResult,
@@ -22,6 +23,7 @@ import {
   type ProjectBundleMetadataSnapshot,
   type ProjectBundlePackageMetadata,
   type ProjectBundleProjectMetadata,
+  type ProjectBundleSelectableMemberCategory,
   type ProjectBundleSelectionState,
   type ProjectBundleValidationResponse,
 } from "@/lib/backupMigration";
@@ -173,7 +175,7 @@ function buildContextAssetReferences(
   validationItems: BackupValidationItem[];
 } {
   const assets = createContextAssetSeeds();
-  const selectedSubtypes = new Map<ProjectBundleMemberCategory, string>([
+  const selectedSubtypes = new Map<ProjectBundleSelectableMemberCategory, string>([
     ["rules", "rule"],
     ["memory", "memory"],
     ["skills", "skill"],
@@ -240,17 +242,23 @@ async function composeProjectBundle(
   selection: ProjectBundleSelectionState,
   configuration: ProjectBundleConfiguration
 ): Promise<ComposeProjectBundleResult> {
-  const selectedCategories = PROJECT_BUNDLE_MEMBER_CATEGORIES.filter((category) => selection.includedCategories[category]);
+  const selectableCategories = PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.filter((category) => selection.includedCategories[category]);
+  const selectedCategories = PROJECT_BUNDLE_MEMBER_CATEGORIES.filter((category) => {
+    if (category === "package-metadata" || category === "project-metadata") {
+      return true;
+    }
+    return selection.includedCategories[category];
+  });
   const validationItems: BackupValidationItem[] = [];
   const memberReferences: ProjectBundleMemberReference[] = [];
   const now = new Date().toISOString();
 
-  if (selectedCategories.length === 0) {
+  if (selectableCategories.length === 0) {
     validationItems.push({
       id: "bundle-no-categories",
       label: "Bundle composition",
       severity: "block",
-      detail: "Select at least one bundle member category before validation.",
+      detail: "Select at least one non-metadata bundle member category before validation.",
     });
   }
 
@@ -352,7 +360,7 @@ async function composeProjectBundle(
   memberReferences.push(...contextAssets.memberReferences);
   validationItems.push(...contextAssets.validationItems);
 
-  if (selection.includedCategories["package-metadata"] && packageInfo) {
+  if (packageInfo) {
     memberReferences.push({
       id: "package-metadata:self",
       category: "package-metadata",
@@ -372,7 +380,7 @@ async function composeProjectBundle(
     });
   }
 
-  if (selection.includedCategories["project-metadata"] && packageInfo) {
+  if (packageInfo) {
     memberReferences.push({
       id: "project-metadata:self",
       category: "project-metadata",
@@ -430,7 +438,10 @@ async function composeProjectBundle(
   }
 
   const memberInventory: ProjectBundleMemberInventoryItem[] = PROJECT_BUNDLE_MEMBER_CATEGORIES.map((category) => {
-    const selected = selection.includedCategories[category];
+    const selected =
+      category === "package-metadata" || category === "project-metadata"
+        ? true
+        : selection.includedCategories[category];
     const includedCount =
       !selected
         ? 0

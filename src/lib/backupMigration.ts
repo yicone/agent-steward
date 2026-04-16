@@ -76,14 +76,24 @@ export type MigrationPreviewAggregateCounts = Record<MigrationPreviewClassificat
 
 // ── Project bundle ──────────────────────────────────────────────────────────
 
-export const PROJECT_BUNDLE_MEMBER_CATEGORIES = [
+export const PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES = [
   "sessions",
   "rules",
   "memory",
   "skills",
   "commands",
+] as const;
+export type ProjectBundleSelectableMemberCategory = (typeof PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES)[number];
+
+export const PROJECT_BUNDLE_FOUNDATION_METADATA_CATEGORIES = [
   "package-metadata",
   "project-metadata",
+] as const;
+export type ProjectBundleFoundationMetadataCategory = (typeof PROJECT_BUNDLE_FOUNDATION_METADATA_CATEGORIES)[number];
+
+export const PROJECT_BUNDLE_MEMBER_CATEGORIES = [
+  ...PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES,
+  ...PROJECT_BUNDLE_FOUNDATION_METADATA_CATEGORIES,
 ] as const;
 export type ProjectBundleMemberCategory = (typeof PROJECT_BUNDLE_MEMBER_CATEGORIES)[number];
 
@@ -138,7 +148,7 @@ export type ProjectBundleMemberInventoryItem = {
 };
 
 export type ProjectBundleSelectionState = {
-  includedCategories: Record<ProjectBundleMemberCategory, boolean>;
+  includedCategories: Record<ProjectBundleSelectableMemberCategory, boolean>;
   sessionSelections: BackupSessionSelection[];
   objectRefs: string[];
   originCue?: string;
@@ -438,8 +448,6 @@ export function createDefaultProjectBundleSelection(
       memory: true,
       skills: true,
       commands: true,
-      "package-metadata": true,
-      "project-metadata": true,
     },
     sessionSelections: dedupeSessionSelections(sessionSelections),
     objectRefs: Array.from(new Set((handoff?.projectBundleObjectRefs ?? []).map((item) => item.trim()).filter(Boolean))),
@@ -450,9 +458,9 @@ export function createDefaultProjectBundleSelection(
 }
 
 export function summarizeProjectBundleSelection(selection: ProjectBundleSelectionState): string {
-  const selectedCategories = PROJECT_BUNDLE_MEMBER_CATEGORIES.filter((category) => selection.includedCategories[category]);
+  const selectedCategories = PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.filter((category) => selection.includedCategories[category]);
   const sessionCount = dedupeSessionSelections(selection.sessionSelections).length;
-  return `${selectedCategories.length} categories selected, ${sessionCount} explicit session reference${sessionCount === 1 ? "" : "s"}.`;
+  return `${selectedCategories.length} selectable categories selected, 2 foundation metadata sections included, ${sessionCount} explicit session reference${sessionCount === 1 ? "" : "s"}.`;
 }
 
 export function buildProjectBundleValidationSummary(input: {
