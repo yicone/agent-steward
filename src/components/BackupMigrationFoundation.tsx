@@ -635,6 +635,13 @@ export function BackupMigrationFoundation({
   const descriptor = activeWorkflow ? getWorkflowDescriptor(activeWorkflow) : null;
   const normalizedBackupId = normalizeBackupId(backupIdInput);
   const dedupedBulkSelections = useMemo(() => dedupeSessionSelections(bulkSelections), [bulkSelections]);
+  const hasSelectedProjectBundleCategories = useMemo(
+    () =>
+      PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.some(
+        (category) => projectBundleSelection.includedCategories[category]
+      ),
+    [projectBundleSelection]
+  );
   const bulkConfirmationDetails = useMemo(
     () => buildBulkConfirmationDetails({ selections: dedupedBulkSelections, validationResult }),
     [dedupedBulkSelections, validationResult]
@@ -1618,7 +1625,20 @@ export function BackupMigrationFoundation({
                 <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm text-muted">
                   {summarizeProjectBundleSelection(projectBundleSelection)}
                 </div>
-                <Button size="sm" onClick={advanceState}>
+                {!hasSelectedProjectBundleCategories ? (
+                  <div id="project-bundle-selection-hint" className="text-xs text-muted">
+                    Select at least one bundle category before continuing to configuration and validation.
+                  </div>
+                ) : null}
+                <Button
+                  size="sm"
+                  aria-describedby={!hasSelectedProjectBundleCategories ? "project-bundle-selection-hint" : undefined}
+                  disabled={!hasSelectedProjectBundleCategories}
+                  onClick={() => {
+                    if (!hasSelectedProjectBundleCategories) return;
+                    advanceState();
+                  }}
+                >
                   Continue to Configuration
                 </Button>
               </div>

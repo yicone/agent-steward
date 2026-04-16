@@ -129,9 +129,10 @@ describe("project bundle route", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: "bundle failed",
+      error: "Project bundle validation failed.",
       code: "PROJECT_BUNDLE_FAILED",
       title: "Bundle validation failed",
+      hint: "Review bundle selection and configuration, then retry validation.",
     });
   });
 

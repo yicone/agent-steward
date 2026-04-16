@@ -104,11 +104,17 @@ export async function POST(req: Request) {
     const validation = await validateProjectBundle(selection, configuration);
     return NextResponse.json(validation);
   } catch (error) {
+    console.error("Project bundle route failed.", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : String(error),
+        error: body.mode === "generate"
+          ? "Project bundle generation failed."
+          : "Project bundle validation failed.",
         code: "PROJECT_BUNDLE_FAILED",
         title: body.mode === "generate" ? "Bundle generation failed" : "Bundle validation failed",
+        hint: body.mode === "generate"
+          ? "Review validation output and bundle configuration, then try generation again."
+          : "Review bundle selection and configuration, then retry validation.",
       },
       { status: 400 }
     );

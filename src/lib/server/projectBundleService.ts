@@ -275,11 +275,12 @@ async function composeProjectBundle(
   try {
     packageInfo = await readPackageMetadata();
   } catch (error) {
+    console.error("Failed to read package metadata for project bundle validation.", error);
     validationItems.push({
       id: "bundle-package-metadata-missing",
       label: "Package metadata",
       severity: "block",
-      detail: `Required package metadata could not be read. ${error instanceof Error ? error.message : String(error)}`,
+      detail: "Required package metadata could not be read from the current workspace.",
     });
   }
 

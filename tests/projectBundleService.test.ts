@@ -206,6 +206,9 @@ describe("project bundle service", () => {
       const projectMetadata = result.memberInventory.find((item) => item.category === "project-metadata");
 
       expect(result.validation.items.some((item) => item.id === "bundle-package-metadata-missing")).toBe(true);
+      expect(
+        result.validation.items.find((item) => item.id === "bundle-package-metadata-missing")?.detail
+      ).toBe("Required package metadata could not be read from the current workspace.");
       expect(packageMetadata?.status).toBe("blocked");
       expect(projectMetadata?.status).toBe("blocked");
     } finally {

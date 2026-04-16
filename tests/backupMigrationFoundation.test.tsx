@@ -288,6 +288,7 @@ describe("BackupMigrationFoundation", () => {
     expect(html).toContain("Final bundle composition still happens");
     expect(html).toContain("No explicit sessions listed yet");
   });
+
 });
 
 describe("BackupMigrationFoundation helpers", () => {
