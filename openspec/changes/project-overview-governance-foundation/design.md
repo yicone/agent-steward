@@ -149,7 +149,8 @@ restores the prior static overview surface.
 ## Open Questions
 
 - Whether the first implementation should read only existing seed data or also
-  include lightweight live session source counts when available.
+  include already-exposed session source status or count metadata, without
+  adding new scanning, indexing, or provider probes.
 - Whether `Project Header` should expose local root/source diagnostics now or
   defer richer project identity controls.
 - Whether `Attention Needed` should show exactly three items or use a compact

@@ -73,7 +73,7 @@ The system SHALL surface the highest-priority governance issues in `Attention Ne
 The system SHALL provide compact Quick Actions that route into existing pages and bounded workflow entry points without executing work on Overview.
 
 #### Scenario: Quick action starts bounded workflow by route
-- **WHEN** the user selects a backup, migration preview, project bundle, import, or validation quick action
+- **WHEN** the user selects an existing session-backup, bulk-session-backup, migration-preview, project-bundle, import-backup, or validate-package quick action
 - **THEN** the app routes to `Backup / Migration` with workflow handoff context
 - **AND** the workflow selector and applicable workflow states remain inside `Backup / Migration`
 - **AND** preview-only workflows do not gain confirmation or execution states from the Overview route

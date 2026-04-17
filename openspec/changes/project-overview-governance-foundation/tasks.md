@@ -25,6 +25,7 @@
 - [ ] 3.4 Ensure Recent Sessions route to `Sessions` with explicit session context only.
 - [ ] 3.5 Ensure Attention Needed routes to the owning page with compact issue/object/workflow context.
 - [ ] 3.6 Add shell routing tests for each module route and stale/missing context degradation.
+- [ ] 3.7 Ensure Backup / Migration quick actions use only accepted workflow identities and degrade stale or partial workflow context to safe destination states.
 
 ## 4. Boundaries
 
