@@ -14,6 +14,16 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { AnalysisFindingStatus, AnalysisHandoff, AnalysisIssueClass, AnalysisObjectType, AnalysisSeverity } from "@/lib/analysisFindings";
 import type { AssetsHandoff, ContextAssetScope, ContextAssetStatus, ContextAssetSubtype } from "@/lib/contextAssets";
+import {
+  deriveProjectOverviewSummary,
+  type ProjectOverviewAssetSummary,
+  type ProjectOverviewAttentionItem,
+  type ProjectOverviewQuickAction,
+  type ProjectOverviewRoute,
+  type ProjectOverviewSessionSummary,
+  type ProjectOverviewSnapshotCue,
+  type ProjectOverviewSummary,
+} from "@/lib/projectOverview";
 import { cancelPendingUrlSync } from "@/lib/urlState";
 import { cn } from "@/lib/utils";
 import type { Source } from "@/lib/types";
@@ -394,192 +404,284 @@ function clearSessionViewerUrlState(): void {
   window.history.replaceState(window.history.state, "", url);
 }
 
-function ProjectOverviewSurface(props: {
-  onNavigate(page: ProjectShellPage): void;
-  onOpenAssets(handoff: AssetsHandoff): void;
-  onOpenAnalysis(handoff: AnalysisHandoff): void;
-  onOpenBackup(handoff: BackupMigrationHandoff): void;
+function formatSourceLabel(source: Source): string {
+  if (source === "antigravity") return "Antigravity";
+  if (source === "windsurf") return "Windsurf";
+  return "Codex";
+}
+
+function formatCompactLabel(value: string): string {
+  return value
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function ProjectOverviewEmptyModule(props: {
+  title: string;
+  body: string;
 }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+    <div className="rounded-xl border border-dashed border-border/70 bg-background/25 p-4 text-sm text-muted">
+      <div className="font-medium text-foreground">{props.title}</div>
+      <p className="mt-1 leading-6">{props.body}</p>
+    </div>
+  );
+}
+
+function ProjectOverviewSnapshotCueButton(props: {
+  cue: ProjectOverviewSnapshotCue;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => props.onRoute(props.cue.route)}
+      className={cn(
+        "rounded-xl border p-3 text-left transition-colors hover:border-accent/50",
+        props.cue.status === "issue"
+          ? "border-warn/50 bg-warn/10"
+          : props.cue.status === "unknown"
+            ? "border-border/70 bg-background/25"
+            : "border-border/70 bg-background/35"
+      )}
+    >
+      <div className="text-xs uppercase tracking-[0.18em] text-muted">{props.cue.label}</div>
+      <div className="mt-1 text-lg font-semibold">{props.cue.value}</div>
+      <p className="mt-1 text-xs leading-5 text-muted">{props.cue.detail}</p>
+      <div className="mt-3 text-xs font-medium text-accent">{props.cue.route.label}</div>
+    </button>
+  );
+}
+
+function ProjectOverviewAssetButton(props: {
+  asset: ProjectOverviewAssetSummary;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => props.onRoute(props.asset.route)}
+      className="rounded-xl border border-border/70 bg-background/35 p-3 text-left transition-colors hover:border-accent/50"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={props.asset.status === "active" ? "ok" : "warn"}>{formatCompactLabel(props.asset.status)}</Badge>
+        <Badge variant="default">{formatCompactLabel(props.asset.subtype)}</Badge>
+        <Badge variant="default">{formatCompactLabel(props.asset.scope)}</Badge>
+      </div>
+      <div className="mt-2 font-medium">{props.asset.title}</div>
+      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted">{props.asset.usageCue}</p>
+      <div className="mt-3 text-xs font-medium text-accent">Open in Assets</div>
+    </button>
+  );
+}
+
+function ProjectOverviewSessionButton(props: {
+  session: ProjectOverviewSessionSummary;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => props.onRoute(props.session.route)}
+      className="rounded-xl border border-border/70 bg-background/35 p-3 text-left transition-colors hover:border-accent/50"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="default">{formatSourceLabel(props.session.source)}</Badge>
+        <Badge variant="default">{props.session.recencyCue}</Badge>
+      </div>
+      <div className="mt-2 font-medium">{props.session.title}</div>
+      <p className="mt-1 text-xs leading-5 text-muted">{props.session.statusCue}</p>
+      <div className="mt-3 text-xs font-medium text-accent">Open in Sessions</div>
+    </button>
+  );
+}
+
+function ProjectOverviewAttentionButton(props: {
+  item: ProjectOverviewAttentionItem;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => props.onRoute(props.item.route)}
+      className="rounded-xl border border-warn/45 bg-warn/10 p-3 text-left transition-colors hover:border-warn/70"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant={props.item.severity === "high" ? "warn" : "default"}>
+          {formatCompactLabel(props.item.severity)}
+        </Badge>
+        <Badge variant="default">{formatCompactLabel(props.item.issueClass)}</Badge>
+        <Badge variant="default">{formatCompactLabel(props.item.affectedObjectType)}</Badge>
+      </div>
+      <div className="mt-2 font-medium">{props.item.title}</div>
+      <p className="mt-1 text-xs leading-5 text-muted">{props.item.reason}</p>
+      <div className="mt-3 text-xs font-medium text-accent">{props.item.route.label}</div>
+    </button>
+  );
+}
+
+function ProjectOverviewQuickActionButton(props: {
+  action: ProjectOverviewQuickAction;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  return (
+    <Button
+      className="h-auto w-full justify-start whitespace-normal text-left"
+      variant="outline"
+      size="sm"
+      onClick={() => props.onRoute(props.action.route)}
+    >
+      <span>
+        <span className="block font-medium">{props.action.label}</span>
+        <span className="block text-xs font-normal text-muted">{props.action.detail}</span>
+      </span>
+    </Button>
+  );
+}
+
+export function ProjectOverviewSurface(props: {
+  summary?: ProjectOverviewSummary;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  const summary = props.summary ?? deriveProjectOverviewSummary();
+  const issueState = summary.state === "issue";
+  const loadingState = summary.state === "loading";
+  const emptyState = summary.state === "no-project-context";
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-4">
         <Card className="p-4">
-          <div className="mb-2 flex items-center gap-2">
-            <Badge variant="ok">Project-first</Badge>
-            <Badge variant="default">local context</Badge>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <Badge variant={issueState ? "warn" : emptyState ? "default" : "ok"}>
+              {issueState ? "attention state" : emptyState ? "no project context" : "governance foundation"}
+            </Badge>
+            <Badge variant="default">{summary.identity.scopeLabel}</Badge>
           </div>
-          <h2 className="text-xl font-semibold">Project context command surface</h2>
+          <h2 className="text-xl font-semibold">{summary.identity.title}</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-            This foundation view frames the app around a local project and routes into evidence, context assets,
-            analysis, and backup workflows. It intentionally avoids inventing aggregate findings before the underlying
-            data contracts exist.
+            Project-scoped agent context governance derived from local evidence. Use this surface to see what context is
+            present, what is in effect, what changed recently, what needs attention, and where to continue.
           </p>
+          <div className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">{summary.identity.evidenceLabel}</div>
         </Card>
+
+        {loadingState ? (
+          <Card className="p-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted">Loading Project Overview</div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {["Context Snapshot", "In-Effect Assets", "Recent Sessions", "Attention Needed"].map((label) => (
+                <div key={label} className="h-24 animate-pulse rounded-xl border border-border/70 bg-background/40 p-3">
+                  <div className="text-sm font-medium text-muted">{label}</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
+        <Card className="p-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-muted">Context Snapshot</div>
+          <h3 className="mt-2 font-semibold">Current project-scoped agent context</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {summary.contextSnapshot.map((cue) => (
+              <ProjectOverviewSnapshotCueButton key={cue.id} cue={cue} onRoute={props.onRoute} />
+            ))}
+          </div>
+        </Card>
+
+        {issueState ? (
+          <Card className="border-warn/45 bg-warn/5 p-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted">Attention Needed</div>
+            <h3 className="mt-2 font-semibold">Highest-priority governance issues</h3>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              Compact issue cues only. Open the owning surface for findings, object review, session evidence, or backup workflow state.
+            </p>
+            <div className="mt-4 grid gap-3">
+              {summary.attentionItems.length > 0 ? (
+                summary.attentionItems.map((item) => (
+                  <ProjectOverviewAttentionButton key={item.id} item={item} onRoute={props.onRoute} />
+                ))
+              ) : (
+                <ProjectOverviewEmptyModule
+                  title="No current attention items"
+                  body="No local issue evidence is available, so Overview will not invent project problems."
+                />
+              )}
+            </div>
+          </Card>
+        ) : null}
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="p-4">
             <div className="text-xs uppercase tracking-[0.2em] text-muted">In-Effect Assets</div>
-            <h3 className="mt-2 font-semibold">Project-level reusable assets route into a bounded object view</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Start from in-effect or scope-oriented asset context without turning the overview into a hidden inventory.
-              The Assets page keeps subtype, scope, provenance, and usage visible while you inspect the routed object.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                onClick={() =>
-                  props.onOpenAssets(
-                    buildAssetsHandoffFromOverview({
-                      subtitle: "Review project-scoped rules that are currently in effect.",
-                      subtype: "rule",
-                      scope: "project",
-                      assetId: "asset-rule-project-codex",
-                    })
-                  )
-                }
-              >
-                Review In-Effect Rules
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  props.onOpenAssets(
-                    buildAssetsHandoffFromOverview({
-                      subtitle: "Inspect stale memory items that may need cleanup.",
-                      subtype: "memory",
-                      status: "stale",
-                      issueLabel: "stale asset",
-                    })
-                  )
-                }
-              >
-                Review Stale Memory
-              </Button>
+            <h3 className="mt-2 font-semibold">Reusable context currently in effect</h3>
+            <div className="mt-4 grid gap-3">
+              {summary.inEffectAssets.length > 0 ? (
+                summary.inEffectAssets.map((asset) => (
+                  <ProjectOverviewAssetButton key={asset.id} asset={asset} onRoute={props.onRoute} />
+                ))
+              ) : (
+                <ProjectOverviewEmptyModule
+                  title="No in-effect assets"
+                  body="No reusable context assets are currently marked in effect from available local evidence."
+                />
+              )}
             </div>
           </Card>
 
           <Card className="p-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-muted">Attention Needed</div>
-            <h3 className="mt-2 font-semibold">Diagnostics and unresolved context issues stay routed</h3>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              Use the Sessions page for current source diagnostics and session evidence. Future analysis summaries will
-              appear here only after they can route to a concrete object or workflow.
-            </p>
-            <Button className="mt-4" variant="outline" size="sm" onClick={() => props.onNavigate("sessions")}>
-              Review Sessions
-            </Button>
-            <Button
-              className="ml-2 mt-4"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                props.onOpenAnalysis(
-                  buildAnalysisHandoffFromOverview({
-                    subtitle: "Review preservation-sensitive findings from project attention context.",
-                    issueClass: "preservation",
-                    severity: "high",
-                    objectType: "backup",
-                    findingId: "finding-preserve-before-migration",
-                    issueLabel: "preservation",
-                  })
-                )
-              }
-            >
-              Review Analysis
-            </Button>
+            <div className="text-xs uppercase tracking-[0.2em] text-muted">Recent Sessions</div>
+            <h3 className="mt-2 font-semibold">Compact session activity cues</h3>
+            <div className="mt-4 grid gap-3">
+              {summary.recentSessions.length > 0 ? (
+                summary.recentSessions.map((session) => (
+                  <ProjectOverviewSessionButton key={`${session.source}:${session.rootId ?? "no-root"}:${session.id}`} session={session} onRoute={props.onRoute} />
+                ))
+              ) : (
+                <ProjectOverviewEmptyModule
+                  title="No recent sessions"
+                  body="No session references are available from the current project context."
+                />
+              )}
+            </div>
           </Card>
         </div>
+
+        {!issueState ? (
+          <Card className="p-4">
+            <div className="text-xs uppercase tracking-[0.2em] text-muted">Attention Needed</div>
+            <h3 className="mt-2 font-semibold">Governance issue summary</h3>
+            <div className="mt-4 grid gap-3">
+              {summary.attentionItems.length > 0 ? (
+                summary.attentionItems.map((item) => (
+                  <ProjectOverviewAttentionButton key={item.id} item={item} onRoute={props.onRoute} />
+                ))
+              ) : (
+                <ProjectOverviewEmptyModule
+                  title="No current attention items"
+                  body="No unresolved issue evidence is available, so Overview will not create synthetic findings."
+                />
+              )}
+            </div>
+          </Card>
+        ) : null}
       </div>
 
       <Card className="p-4">
-        <div className="text-xs uppercase tracking-[0.2em] text-muted">Quick Routes</div>
+        <div className="text-xs uppercase tracking-[0.2em] text-muted">Quick Actions</div>
+        <h3 className="mt-2 font-semibold">Route-first next steps</h3>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Actions open existing pages or bounded workflow entries. Overview does not run workflows or expose internals.
+        </p>
         <div className="mt-4 space-y-2">
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              props.onOpenAssets(
-                buildAssetsHandoffFromOverview({
-                  subtitle: "Inspect reusable context assets across the current project scope.",
-                  subtype: "rule",
-                })
-              )
-            }
-          >
-            Inspect context assets
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              props.onOpenAnalysis(
-                buildAnalysisHandoffFromOverview({
-                  subtitle: "Review open context findings across this local project.",
-                  issueLabel: "project attention",
-                })
-              )
-            }
-          >
-            Review analysis
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("session-backup"))}
-          >
-            Start session backup
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("bulk-session-backup"))}
-          >
-            Start bulk session backup
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("import-backup"))}
-          >
-            Import backup package
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("validate-package"))}
-          >
-            Validate backup package
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("migration-preview"))}
-          >
-            Open migration preview
-          </Button>
-          <Button
-            className="w-full justify-start"
-            variant="outline"
-            size="sm"
-            onClick={() => props.onOpenBackup(buildBackupHandoffFromOverview("project-bundle"))}
-          >
-            Open project bundle
-          </Button>
-          <Button className="w-full justify-start" variant="outline" size="sm" onClick={() => props.onNavigate("backup")}>
-            Browse backup workflows
-          </Button>
+          {summary.quickActions.map((action) => (
+            <ProjectOverviewQuickActionButton key={action.id} action={action} onRoute={props.onRoute} />
+          ))}
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          Assets, Analysis, and Backup / Migration are now bounded foundation surfaces.
-          Working session backup also remains available from a selected session.
+          Scope boundary: no runtime orchestration, cross-agent sync, migration apply, vendor-runtime restore, cloud sync,
+          privacy redaction, full transcript rendering, full asset inventory, findings table, or workflow execution body.
         </p>
       </Card>
     </div>
@@ -756,6 +858,62 @@ export default function ProjectShellClient() {
     setActivePage("backup");
   }, [leaveSessionsSurface]);
 
+  const handleOpenOverviewRoute = useCallback((route: ProjectOverviewRoute) => {
+    if (route.target === "sessions") {
+      setAssetsHandoff(null);
+      setAnalysisHandoff(null);
+      setBackupHandoff(null);
+      setActivePage("sessions");
+      if (route.sessionId && route.source) {
+        setExternalSelection((prev) =>
+          buildExternalSessionSelection({
+            requestId: (prev?.requestId ?? 0) + 1,
+            sessionId: route.sessionId!,
+            source: route.source!,
+            rootId: route.rootId,
+          })
+        );
+      }
+      return;
+    }
+
+    if (route.target === "assets") {
+      handleOpenAssets(
+        buildAssetsHandoffFromOverview({
+          subtitle: route.subtitle ?? "Review reusable context assets from Project Overview.",
+          subtype: route.subtype,
+          scope: route.scope,
+          status: route.status,
+          assetId: route.assetId,
+          issueLabel: route.issueLabel,
+        })
+      );
+      return;
+    }
+
+    if (route.target === "analysis") {
+      handleOpenAnalysis(
+        buildAnalysisHandoffFromOverview({
+          subtitle: route.subtitle ?? "Review project-level issue context from Project Overview.",
+          issueClass: route.issueClass,
+          severity: route.severity,
+          objectType: route.objectType,
+          status: route.findingStatus,
+          findingId: route.findingId,
+          issueLabel: route.issueLabel,
+        })
+      );
+      return;
+    }
+
+    if (route.target === "backup" && route.workflowType) {
+      handleOpenBackup(buildBackupHandoffFromOverview(route.workflowType));
+      return;
+    }
+
+    handleNavigate("backup");
+  }, [handleNavigate, handleOpenAnalysis, handleOpenAssets, handleOpenBackup]);
+
   const activeNav = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0]!;
 
   return (
@@ -815,10 +973,7 @@ export default function ProjectShellClient() {
 
           {activePage === "overview" ? (
             <ProjectOverviewSurface
-              onNavigate={handleNavigate}
-              onOpenAssets={handleOpenAssets}
-              onOpenAnalysis={handleOpenAnalysis}
-              onOpenBackup={handleOpenBackup}
+              onRoute={handleOpenOverviewRoute}
             />
           ) : null}
           {activePage === "sessions" ? (
