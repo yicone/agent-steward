@@ -124,10 +124,19 @@ describe("deriveProjectOverviewSummary", () => {
           title: "Conflicted skill",
           issueClass: "conflict",
           severity: "high",
-          status: "open",
+          status: "watching",
           affectedObjectType: "asset",
           affectedObjectLabel: "Skill",
           whyItMatters: "High priority conflict.",
+          routes: [
+            {
+              target: "assets",
+              label: "Open affected asset",
+              assetId: "asset-skill-global-generated",
+              assetSubtype: "skill",
+              assetStatus: "conflicted",
+            },
+          ],
         }),
         normalizeAnalysisFinding({
           id: "high-preservation",
@@ -147,6 +156,7 @@ describe("deriveProjectOverviewSummary", () => {
       "finding:high-conflict",
       "finding:low",
     ]);
+    expect(summary.attentionItems.map((item) => item.status)).toEqual(["open", "watching", "open"]);
   });
 
   it("keeps module route descriptors compact and scoped to owning pages", () => {

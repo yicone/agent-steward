@@ -90,6 +90,7 @@ export type ProjectOverviewAttentionItem = {
   id: string;
   title: string;
   severity: AnalysisSeverity;
+  status: AnalysisFindingStatus;
   issueClass: AnalysisIssueClass;
   affectedObjectType: AnalysisObjectType;
   affectedObjectLabel: string;
@@ -506,6 +507,7 @@ function buildAttentionItems(input: {
       id: `finding:${finding.id}`,
       title: finding.title,
       severity: finding.severity,
+      status: finding.status,
       issueClass: finding.issueClass,
       affectedObjectType: finding.affectedObjectType,
       affectedObjectLabel: finding.affectedObjectLabel,
@@ -525,6 +527,7 @@ function buildAttentionItems(input: {
       id: `asset:${asset.id}`,
       title: `${asset.title} needs review`,
       severity: asset.status === "conflicted" ? "high" : "medium",
+      status: "open",
       issueClass: asset.status === "conflicted" ? "conflict" : asset.status === "stale" ? "stale" : "provenance",
       affectedObjectType: "asset",
       affectedObjectLabel: asset.title,
@@ -544,7 +547,7 @@ function buildAttentionItems(input: {
   return [...analysisItems, ...assetIssueItems]
     .sort((a, b) =>
       SEVERITY_PRIORITY[a.severity] - SEVERITY_PRIORITY[b.severity] ||
-      STATUS_PRIORITY[a.route.findingStatus ?? "open"] - STATUS_PRIORITY[b.route.findingStatus ?? "open"] ||
+      STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status] ||
       ISSUE_CLASS_PRIORITY[a.issueClass] - ISSUE_CLASS_PRIORITY[b.issueClass] ||
       a.title.localeCompare(b.title)
     )
