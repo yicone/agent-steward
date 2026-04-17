@@ -453,7 +453,7 @@ function ProjectOverviewSnapshotCueButton(props: {
       className={cn(
         "rounded-xl border p-3 text-left transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
         props.cue.status === "issue"
-          ? "border-warn/50 bg-warn/10"
+          ? "border-amber-400/50 bg-amber-400/10"
           : props.cue.status === "unknown"
             ? "border-border/70 bg-background/25"
             : "border-border/70 bg-background/35"
@@ -518,7 +518,7 @@ function ProjectOverviewAttentionButton(props: {
     <button
       type="button"
       onClick={() => props.onRoute(props.item.route)}
-      className="rounded-xl border border-warn/45 bg-warn/10 p-3 text-left transition-colors hover:border-warn/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+      className="rounded-xl border border-amber-400/45 bg-amber-400/10 p-3 text-left transition-colors hover:border-amber-400/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={props.item.severity === "high" ? "warn" : "default"}>
@@ -615,7 +615,7 @@ export function ProjectOverviewSurface(props: {
         </Card>
 
         {issueState ? (
-          <Card className="border-warn/45 bg-warn/5 p-4">
+          <Card className="border-amber-400/45 bg-amber-400/5 p-4">
             <div className="text-xs uppercase tracking-[0.2em] text-muted">Attention Needed</div>
             <h3 className="mt-2 font-semibold">Highest-priority governance issues</h3>
             <p className="mt-2 text-sm leading-6 text-muted">
