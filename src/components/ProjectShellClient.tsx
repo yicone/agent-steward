@@ -451,7 +451,7 @@ function ProjectOverviewSnapshotCueButton(props: {
       type="button"
       onClick={() => props.onRoute(props.cue.route)}
       className={cn(
-        "rounded-xl border p-3 text-left transition-colors hover:border-accent/50",
+        "rounded-xl border p-3 text-left transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
         props.cue.status === "issue"
           ? "border-warn/50 bg-warn/10"
           : props.cue.status === "unknown"
@@ -475,7 +475,7 @@ function ProjectOverviewAssetButton(props: {
     <button
       type="button"
       onClick={() => props.onRoute(props.asset.route)}
-      className="rounded-xl border border-border/70 bg-background/35 p-3 text-left transition-colors hover:border-accent/50"
+      className="rounded-xl border border-border/70 bg-background/35 p-3 text-left transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={props.asset.status === "active" ? "ok" : "warn"}>{formatCompactLabel(props.asset.status)}</Badge>
@@ -497,7 +497,7 @@ function ProjectOverviewSessionButton(props: {
     <button
       type="button"
       onClick={() => props.onRoute(props.session.route)}
-      className="rounded-xl border border-border/70 bg-background/35 p-3 text-left transition-colors hover:border-accent/50"
+      className="rounded-xl border border-border/70 bg-background/35 p-3 text-left transition-colors hover:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="default">{formatSourceLabel(props.session.source)}</Badge>
@@ -518,7 +518,7 @@ function ProjectOverviewAttentionButton(props: {
     <button
       type="button"
       onClick={() => props.onRoute(props.item.route)}
-      className="rounded-xl border border-warn/45 bg-warn/10 p-3 text-left transition-colors hover:border-warn/70"
+      className="rounded-xl border border-warn/45 bg-warn/10 p-3 text-left transition-colors hover:border-warn/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={props.item.severity === "high" ? "warn" : "default"}>

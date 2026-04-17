@@ -6,7 +6,7 @@ import type {
   AnalysisRoute,
   AnalysisSeverity,
 } from "@/lib/analysisFindings";
-import { createAnalysisFindingSeeds, summarizeAnalysisFindings } from "@/lib/analysisFindings";
+import { createAnalysisFindingSeeds, formatAnalysisIssueClassLabel, summarizeAnalysisFindings } from "@/lib/analysisFindings";
 import type { BackupWorkflowType } from "@/lib/backupMigration";
 import { BACKUP_WORKFLOW_TYPES, formatWorkflowTypeLabel } from "@/lib/backupMigration";
 import type {
@@ -377,7 +377,7 @@ function routeFromAnalysisRoute(route: AnalysisRoute, finding: AnalysisFinding):
       subtype: route.assetSubtype,
       status: route.assetStatus,
       assetId: route.assetId,
-      issueLabel: finding.issueClass,
+      issueLabel: formatAnalysisIssueClassLabel(finding.issueClass),
     });
   }
 
