@@ -75,7 +75,8 @@ The system SHALL provide compact Quick Actions that route into existing pages an
 #### Scenario: Quick action starts bounded workflow by route
 - **WHEN** the user selects a backup, migration preview, project bundle, import, or validation quick action
 - **THEN** the app routes to `Backup / Migration` with workflow handoff context
-- **AND** the workflow selector, steps, validation, confirmation, execution, and result remain inside `Backup / Migration`
+- **AND** the workflow selector and applicable workflow states remain inside `Backup / Migration`
+- **AND** preview-only workflows do not gain confirmation or execution states from the Overview route
 
 #### Scenario: Quick actions do not imply unsupported scope
 - **WHEN** Quick Actions are rendered
