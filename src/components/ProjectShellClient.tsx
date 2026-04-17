@@ -548,37 +548,48 @@ export function ProjectOverviewSurface(props: {
   const issueState = summary.state === "issue";
   const loadingState = summary.state === "loading";
   const emptyState = summary.state === "no-project-context";
+  const headerCard = (
+    <Card className="p-4">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge variant={issueState ? "warn" : emptyState ? "default" : "ok"}>
+          {issueState ? "attention state" : emptyState ? "no project context" : "governance foundation"}
+        </Badge>
+        <Badge variant="default">{summary.identity.scopeLabel}</Badge>
+      </div>
+      <h2 className="text-xl font-semibold">{summary.identity.title}</h2>
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
+        Project-scoped agent context governance derived from local evidence. Use this surface to see what context is
+        present, what is in effect, what changed recently, what needs attention, and where to continue.
+      </p>
+      <div className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">{summary.identity.evidenceLabel}</div>
+    </Card>
+  );
+
+  if (loadingState) {
+    return (
+      <div className="grid gap-4">
+        {headerCard}
+        <Card className="p-4">
+          <div className="text-xs uppercase tracking-[0.2em] text-muted">Loading Project Overview</div>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Resolving local project evidence before showing governance summaries, routes, or workflow actions.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {["Context Snapshot", "In-Effect Assets", "Recent Sessions", "Attention Needed"].map((label) => (
+              <div key={label} className="h-24 animate-pulse rounded-xl border border-border/70 bg-background/40 p-3">
+                <div className="text-sm font-medium text-muted">{label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-4">
-        <Card className="p-4">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <Badge variant={issueState ? "warn" : emptyState ? "default" : "ok"}>
-              {issueState ? "attention state" : emptyState ? "no project context" : "governance foundation"}
-            </Badge>
-            <Badge variant="default">{summary.identity.scopeLabel}</Badge>
-          </div>
-          <h2 className="text-xl font-semibold">{summary.identity.title}</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-            Project-scoped agent context governance derived from local evidence. Use this surface to see what context is
-            present, what is in effect, what changed recently, what needs attention, and where to continue.
-          </p>
-          <div className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">{summary.identity.evidenceLabel}</div>
-        </Card>
-
-        {loadingState ? (
-          <Card className="p-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-muted">Loading Project Overview</div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {["Context Snapshot", "In-Effect Assets", "Recent Sessions", "Attention Needed"].map((label) => (
-                <div key={label} className="h-24 animate-pulse rounded-xl border border-border/70 bg-background/40 p-3">
-                  <div className="text-sm font-medium text-muted">{label}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        ) : null}
+        {headerCard}
 
         <Card className="p-4">
           <div className="text-xs uppercase tracking-[0.2em] text-muted">Context Snapshot</div>

@@ -41,7 +41,11 @@ describe("ProjectOverviewSurface", () => {
     expect(html).toContain("Project Overview");
     expect(html).toContain("Loading Project Overview");
     expect(html).toContain("Context Snapshot");
-    expect(html).toContain("Quick Actions");
+    expect(html).toContain("Resolving local project evidence");
+    expect(html).not.toContain("Quick Actions");
+    expect(html).not.toContain("Session Backup");
+    expect(html).not.toContain("Preserve session evidence before migration cleanup");
+    expect(html).not.toContain("Project coding rules");
   });
 
   it("renders no-project-context state with starting routes and explicit zero cues", () => {
