@@ -65,6 +65,10 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 - When the user designates a conversation as the control thread, use it to coordinate scope, PR state, validation status, and next-step prompts.
 - Suggest a new conversation when an execution line becomes large, requires a separate context window, or can proceed independently with a focused prompt.
 - Use subagents only when explicitly authorized by the user. Prefer reusing an existing suitable subagent; when spawning a new one, do not fork the full conversation context unless the task requires it.
+- In a control-thread workflow, keep the control thread focused on orchestration: scope convergence, artifact acceptance, PR state, validation synthesis, and final decisions. Delegate bounded execution to suitable authorized subagents instead of absorbing every task locally.
+- Prefer subagents for: OpenSpec artifact review, large OpenSpec implementation, browser QA / Playwright runtime verification, broad codebase audits, and parallel research that can report back as evidence.
+- Keep in the control thread: product decisions, ambiguous scope tradeoffs, review-comment classification, final integration judgment, merge readiness, and any action that changes GitHub issue / PR state.
+- When delegating, give each subagent a bounded objective, explicit source-of-truth files, allowed write scope, required validation commands, and expected final report format. Fold the result back into the control thread before PR or issue state changes.
 - Prefer the agent's native branch/worktree handling. Do not use third-party worktree helpers unless the user explicitly asks.
 
 ## Branching workflow

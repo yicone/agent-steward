@@ -15,7 +15,7 @@ This document defines the recommended human + agent workflow for pull request re
 | ---- | -------------- |
 | Human maintainer | Owns scope decisions, product naming, merge timing, and final acceptance. |
 | Copilot code review | Provides automatic review comments and low-cost second-pass feedback. |
-| Codex control thread | Triage comments, cluster actionable work, implement approved fixes, run validation, and update PR status. |
+| Codex control thread | Triage comments, cluster actionable work, coordinate delegated fixes or QA, synthesize validation, and update PR status. |
 | QA agent | Performs browser QA for UI flows that need real runtime verification. |
 | GitHub PR | Serves as the execution boundary for the current change. |
 
@@ -26,6 +26,23 @@ When the user designates a conversation as the control thread, keep it responsib
 - PR status, validation state, and merge readiness.
 - Deciding whether work should continue in the current thread, a focused new conversation, a subagent, or an external coding agent.
 - Producing concise prompts for external agents and folding their reports back into the PR workflow.
+
+The control thread should not become the default executor for every task once the user has authorized subagents. Keep it focused on coordination and use bounded delegated work when that reduces context risk or enables independent verification.
+
+Good delegation targets:
+
+- OpenSpec artifact review before implementation.
+- Large OpenSpec implementation slices with clear write scope.
+- Browser QA / Playwright runtime verification.
+- Broad codebase audits or parallel research.
+- Retests that should be independent from the implementation thread.
+
+Keep local to the control thread:
+
+- Product decisions and ambiguous scope tradeoffs.
+- Review-comment classification and final accept/reject judgment.
+- PR, issue, and merge-readiness state changes.
+- Small review fixes where delegating would add more coordination cost than risk reduction.
 
 Do not treat "control thread" as a permanent repository role. It is active only when the user explicitly chooses that coordination style.
 

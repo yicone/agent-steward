@@ -18,7 +18,7 @@ Use this repository-specific workflow together with `docs/dev/pr-review-agent-wo
 2. Fetch PR metadata plus review comments. Prefer thread-aware `gh api graphql` when resolution state matters; use the GitHub connector for flat PR/comment context when sufficient.
 3. Classify each comment before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 4. Ask the user before changing product names, product scope, placeholder commitments, security/privacy behavior, backup/migration semantics, or any ambiguous `should-fix`.
-5. Implement confirmed `must-fix` and `should-fix` items only.
+5. Implement confirmed `must-fix` and `should-fix` items only. If the fix is large, runtime-dependent, or benefits from independent verification, delegate it to an authorized subagent and fold the result back into this workflow.
 6. Run targeted tests, `pnpm build`, and `openspec validate <change-id> --strict` when an OpenSpec change is active.
 7. Commit review fixes separately from workflow/process documentation.
 8. Push the PR branch and request Copilot re-review with `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when available.

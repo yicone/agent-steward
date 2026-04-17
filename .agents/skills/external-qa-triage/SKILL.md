@@ -19,11 +19,12 @@ Use this for QA reports that affect PR readiness.
    - `blocker`: violates spec, breaks core flow, corrupts state, leaks sensitive context, or blocks ready-for-review.
    - `non-blocker`: worth tracking but not required before merge.
    - `needs-confirmation`: unclear, environment-specific, or product-scope dependent.
-3. Fix confirmed blockers in the PR branch when they are in scope.
-4. Preserve the original QA result. If fixed, add a dated re-test or resolution note rather than deleting the failure.
-5. Run targeted tests, `pnpm build`, and OpenSpec validation when applicable.
-6. Commit QA fixes separately from unrelated process docs or follow-up features.
-7. Do not commit browser runner artifacts such as `.playwright-cli/` unless intentionally requested.
+3. If runtime verification or browser retest is needed and the user has authorized subagents, prefer assigning it to a QA subagent instead of running it in the control thread.
+4. Fix confirmed blockers in the PR branch when they are in scope.
+5. Preserve the original QA result. If fixed, add a dated re-test or resolution note rather than deleting the failure.
+6. Run targeted tests, `pnpm build`, and OpenSpec validation when applicable.
+7. Commit QA fixes separately from unrelated process docs or follow-up features.
+8. Do not commit browser runner artifacts such as `.playwright-cli/` unless intentionally requested.
 
 ## Output
 
