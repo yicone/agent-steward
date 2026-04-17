@@ -35,6 +35,7 @@ import {
   getWorkflowDescriptor,
   isTerminalState,
   normalizeBackupId,
+  resolveValidatePackageTerminalState,
   resolveWorkflowFromHandoff,
   resolveRoutedWorkflowState,
   summarizeProjectBundleSelection,
@@ -1180,7 +1181,7 @@ export function BackupMigrationFoundation({
 
   const finishValidateOnly = useCallback(() => {
     if (!validationResult) return;
-    commitCompletedOperation(createValidatePackageOperationResult(validationResult), "result");
+    commitCompletedOperation(createValidatePackageOperationResult(validationResult), resolveValidatePackageTerminalState(validationResult));
   }, [commitCompletedOperation, validationResult]);
 
   const finishMigrationPreview = useCallback(() => {

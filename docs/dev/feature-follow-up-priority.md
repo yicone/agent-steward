@@ -22,7 +22,9 @@ The recent `Backup / Migration` follow-up line is complete:
 - `migration-preview`: shipped and archived
 - `project-bundle-foundation`: shipped and archived
 
-There is no active `openspec/changes/*` line at the moment.
+The active OpenSpec line is now:
+
+- `backup-migration-validation-result-hardening`: draft PR / validation in progress
 
 ## 2. Candidate Feature-Line Priority
 

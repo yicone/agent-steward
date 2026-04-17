@@ -33,6 +33,7 @@ import {
   normalizeBackupId,
   resolveWorkflowFromHandoff,
   resolveRoutedWorkflowState,
+  resolveValidatePackageTerminalState,
   validateBackupPackageRemote,
   BACKUP_WORKFLOW_TYPES,
   type BackupMigrationHandoff,
@@ -721,6 +722,36 @@ describe("completed result helpers", () => {
     expect(op.terminalStatusLabel).toBe("valid-with-warnings");
     expect(getOperationStatusLabel(op)).toBe("valid-with-warnings");
     expect(op.summary).toBe("Package validation completed: valid-with-warnings.");
+  });
+
+  it("maps invalid validate-package terminal results to failed workflow state", () => {
+    expect(
+      resolveValidatePackageTerminalState({
+        status: "invalid",
+        items: [
+          {
+            id: "schema",
+            label: "Schema",
+            severity: "block",
+            detail: "Package is not readable.",
+          },
+        ],
+      })
+    ).toBe("failed");
+
+    expect(
+      resolveValidatePackageTerminalState({
+        status: "valid-with-warnings",
+        items: [
+          {
+            id: "warning",
+            label: "Provenance",
+            severity: "warning",
+            detail: "Package provenance is incomplete.",
+          },
+        ],
+      })
+    ).toBe("result");
   });
 });
 
