@@ -12,7 +12,7 @@ describe("deriveProjectOverviewSummary", () => {
     expect(summary.identity.evidenceLabel).toContain("Derived from local project evidence");
     expect(summary.contextSnapshot.map((cue) => cue.id)).toEqual(["sessions", "assets", "analysis", "backup"]);
     expect(summary.inEffectAssets.length).toBeGreaterThan(0);
-    expect(summary.recentSessions.length).toBeGreaterThan(0);
+    expect(summary.recentSessions).toEqual([]);
     expect(summary.attentionItems[0]).toMatchObject({
       severity: "high",
       issueClass: "preservation",
@@ -160,7 +160,16 @@ describe("deriveProjectOverviewSummary", () => {
   });
 
   it("keeps module route descriptors compact and scoped to owning pages", () => {
-    const summary = deriveProjectOverviewSummary();
+    const summary = deriveProjectOverviewSummary({
+      sessions: [
+        {
+          id: "session-1",
+          source: "codex",
+          rootId: "root-a",
+          title: "Codex session 1",
+        },
+      ],
+    });
 
     expect(summary.contextSnapshot.map((cue) => cue.route.target)).toEqual([
       "sessions",

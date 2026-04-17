@@ -210,62 +210,6 @@ function normalizeWorkflowTypes(workflows: BackupWorkflowType[] | null | undefin
   return Array.from(new Set((workflows ?? []).filter((workflow) => ACCEPTED_OVERVIEW_WORKFLOWS.has(workflow))));
 }
 
-function collectSessionsFromEvidence(assets: ContextAsset[], findings: AnalysisFinding[]): ProjectOverviewSessionInput[] {
-  const sessions = new Map<string, ProjectOverviewSessionInput>();
-  const addSession = (input: {
-    sessionId?: string;
-    source?: Source;
-    rootId?: string;
-    label?: string;
-    statusCue?: string;
-  }) => {
-    if (!input.sessionId || !input.source) return;
-    const key = `${input.source}:${input.rootId ?? "no-root"}:${input.sessionId}`;
-    if (sessions.has(key)) return;
-    sessions.set(key, {
-      id: input.sessionId,
-      title: input.label ?? input.sessionId,
-      source: input.source,
-      rootId: input.rootId,
-      recencyCue: "Local evidence reference",
-      statusCue: input.statusCue ?? "Referenced by project context",
-    });
-  };
-
-  for (const asset of assets) {
-    addSession({
-      sessionId: asset.sourceReference?.sessionId,
-      source: asset.sourceReference?.source,
-      rootId: asset.sourceReference?.rootId,
-      label: asset.sourceReference?.label ? `${asset.sourceReference.label}: ${asset.title}` : asset.title,
-      statusCue: `${asset.subtype} asset ${asset.status}`,
-    });
-  }
-
-  for (const finding of findings) {
-    for (const evidence of finding.evidence) {
-      addSession({
-        sessionId: evidence.sessionId,
-        source: evidence.source,
-        rootId: evidence.rootId,
-        label: evidence.label,
-        statusCue: `${finding.severity} ${finding.issueClass} finding`,
-      });
-    }
-    for (const route of finding.routes) {
-      addSession({
-        sessionId: route.sessionId,
-        source: route.source,
-        rootId: route.rootId,
-        label: route.label,
-        statusCue: `${finding.severity} ${finding.issueClass} finding`,
-      });
-    }
-  }
-
-  return Array.from(sessions.values());
-}
-
 function buildContextSnapshot(input: {
   assets: ContextAsset[];
   assetsAvailable: boolean;
@@ -612,7 +556,7 @@ export function deriveProjectOverviewSummary(input: ProjectOverviewSummaryInput 
   const backupAvailable = input.backupAvailable ?? input.backupWorkflows !== null;
   const assets = assetsAvailable ? (input.assets ?? createContextAssetSeeds()) : [];
   const findings = analysisAvailable ? (input.findings ?? createAnalysisFindingSeeds()) : [];
-  const sessions = sessionsAvailable ? (input.sessions ?? collectSessionsFromEvidence(assets, findings)) : [];
+  const sessions = sessionsAvailable ? (input.sessions ?? []) : [];
   const backupWorkflows = backupAvailable ? normalizeWorkflowTypes(input.backupWorkflows ?? [...BACKUP_WORKFLOW_TYPES]) : [];
   const contextSnapshot = buildContextSnapshot({
     assets,

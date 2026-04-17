@@ -351,7 +351,13 @@ export function buildBackupHandoffFromSessions(context: {
   };
 }
 
-export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType): BackupMigrationHandoff {
+export function buildBackupHandoffFromOverview(
+  workflowType: BackupWorkflowType,
+  context: {
+    findingId?: string;
+    issueLabel?: string;
+  } = {}
+): BackupMigrationHandoff {
   const subtitles = {
     "session-backup": "Start a bounded session backup workflow from Project Overview.",
     "bulk-session-backup": "Start a bounded bulk session backup workflow from Project Overview.",
@@ -361,13 +367,20 @@ export function buildBackupHandoffFromOverview(workflowType: BackupWorkflowType)
     "project-bundle": "Start a bounded project bundle workflow from Project Overview.",
   } satisfies Record<BackupWorkflowType, string>;
 
+  const issueSuffix = context.issueLabel ? ` Issue context: ${context.issueLabel}.` : "";
+
   return {
     origin: "overview",
-    subtitle: subtitles[workflowType],
-    continueLabel: "Workflow execution belongs to Backup / Migration.",
+    subtitle: `${subtitles[workflowType]}${issueSuffix}`,
+    continueLabel: context.issueLabel
+      ? "Overview preserves the routed issue cue, but workflow validation and execution stay inside Backup / Migration."
+      : "Workflow execution belongs to Backup / Migration.",
     returnLabel: "Return to Project Overview.",
     workflowType,
+    ...(context.findingId ? { findingId: context.findingId } : {}),
+    ...(context.issueLabel ? { issueLabel: context.issueLabel } : {}),
     projectBundleScopeHint: workflowType === "project-bundle" ? "overview-routed project context" : undefined,
+    ...(workflowType === "project-bundle" && context.findingId ? { projectBundleObjectRefs: [context.findingId] } : {}),
     migrationPreviewSourceContext: workflowType === "migration-preview" ? { kind: "project-overview" } : undefined,
   };
 }
@@ -918,7 +931,10 @@ export default function ProjectShellClient() {
     }
 
     if (route.target === "backup" && route.workflowType) {
-      handleOpenBackup(buildBackupHandoffFromOverview(route.workflowType));
+      handleOpenBackup(buildBackupHandoffFromOverview(route.workflowType, {
+        findingId: route.findingId,
+        issueLabel: route.issueLabel,
+      }));
       return;
     }
 
