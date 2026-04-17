@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addCompletedRecentOperation,
   addRecentOperation,
   buildBulkSessionValidationResult,
   buildProjectBundleValidationSummary,
@@ -12,6 +13,7 @@ import {
   canProceedFromValidation,
   createMigrationPreviewOperationResult,
   createProjectBundleOperationResult,
+  createValidatePackageOperationResult,
   createBulkOperationSummary,
   createOperationResult,
   dedupeSessionSelections,
@@ -22,6 +24,7 @@ import {
   formatWorkflowStateLabel,
   formatMigrationPreviewClassificationLabel,
   formatWorkflowTypeLabel,
+  getOperationStatusLabel,
   getNextState,
   getPreviousState,
   getStepsForWorkflow,
@@ -29,6 +32,7 @@ import {
   isTerminalState,
   normalizeBackupId,
   resolveWorkflowFromHandoff,
+  resolveRoutedWorkflowState,
   validateBackupPackageRemote,
   BACKUP_WORKFLOW_TYPES,
   type BackupMigrationHandoff,
@@ -692,6 +696,34 @@ describe("addRecentOperation", () => {
   });
 });
 
+describe("completed result helpers", () => {
+  it("adds recent operations only for completed terminal states", () => {
+    const op = createOperationResult({ workflowType: "session-backup", status: "success", summary: "Completed backup." });
+
+    expect(addCompletedRecentOperation([], op, "validation")).toEqual([]);
+    expect(addCompletedRecentOperation([], op, "result")).toEqual([op]);
+  });
+
+  it("preserves validate-package terminal vocabulary in result metadata", () => {
+    const op = createValidatePackageOperationResult({
+      status: "valid-with-warnings",
+      items: [
+        {
+          id: "warning",
+          label: "Provenance",
+          severity: "warning",
+          detail: "Missing non-fatal provenance detail.",
+        },
+      ],
+    });
+
+    expect(op.status).toBe("success-with-warnings");
+    expect(op.terminalStatusLabel).toBe("valid-with-warnings");
+    expect(getOperationStatusLabel(op)).toBe("valid-with-warnings");
+    expect(op.summary).toBe("Package validation completed: valid-with-warnings.");
+  });
+});
+
 describe("resolveWorkflowFromHandoff", () => {
   it("returns null for null handoff", () => {
     expect(resolveWorkflowFromHandoff(null)).toBeNull();
@@ -744,6 +776,40 @@ describe("resolveWorkflowFromHandoff", () => {
       subtitle: "Test",
     };
     expect(resolveWorkflowFromHandoff(handoff)).toBeNull();
+  });
+});
+
+describe("resolveRoutedWorkflowState", () => {
+  it("keeps partial migration-preview handoff on selection", () => {
+    expect(
+      resolveRoutedWorkflowState("migration-preview", {
+        origin: "assets",
+        subtitle: "Partial migration preview context.",
+        workflowType: "migration-preview",
+        migrationPreviewSourceContext: { kind: "context-asset" },
+      })
+    ).toBe("selection");
+  });
+
+  it("lets fully explicit preview source handoff continue at configuration", () => {
+    expect(
+      resolveRoutedWorkflowState("migration-preview", {
+        origin: "analysis",
+        subtitle: "Preview with explicit source context.",
+        workflowType: "migration-preview",
+        migrationPreviewSourceContext: { product: "codex", kind: "analysis-context" },
+      })
+    ).toBe("configuration");
+  });
+
+  it("keeps non-preview workflows on selection", () => {
+    expect(
+      resolveRoutedWorkflowState("project-bundle", {
+        origin: "overview",
+        subtitle: "Project bundle from overview.",
+        workflowType: "project-bundle",
+      })
+    ).toBe("selection");
   });
 });
 

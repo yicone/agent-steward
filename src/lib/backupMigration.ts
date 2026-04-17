@@ -271,6 +271,7 @@ export type BackupOperationResult = {
   id: string;
   workflowType: BackupWorkflowType;
   status: OperationResultStatus;
+  terminalStatusLabel?: string;
   timestamp: string;
   summary: string;
   backupId?: string;
@@ -502,6 +503,17 @@ export function getPreviousState(
 
 export function isTerminalState(state: BackupWorkflowState): boolean {
   return state === "result" || state === "failed";
+}
+
+export function resolveRoutedWorkflowState(
+  workflowType: BackupWorkflowType,
+  handoff: BackupMigrationHandoff | null
+): BackupWorkflowState {
+  if (workflowType !== "migration-preview") return "selection";
+
+  return handoff?.migrationPreviewSourceContext?.product && handoff.migrationPreviewSourceContext.kind
+    ? "configuration"
+    : "selection";
 }
 
 // ── Migration preview formatting and helper functions ───────────────────────
@@ -1019,6 +1031,7 @@ let operationCounter = 0;
 export function createOperationResult(input: {
   workflowType: BackupWorkflowType;
   status: OperationResultStatus;
+  terminalStatusLabel?: string;
   summary: string;
   backupId?: string;
   packageId?: string;
@@ -1043,6 +1056,7 @@ export function createOperationResult(input: {
     id: `op-${Date.now()}-${operationCounter}`,
     workflowType: input.workflowType,
     status: input.status,
+    terminalStatusLabel: input.terminalStatusLabel,
     timestamp: new Date().toISOString(),
     summary: input.summary,
     backupId: input.backupId,
@@ -1083,6 +1097,21 @@ export function createMigrationPreviewOperationResult(input: {
     previewCounts: counts,
     previewItems: input.items,
     issueLabel: input.issueLabel,
+  });
+}
+
+export function createValidatePackageOperationResult(validationResult: BackupValidationResult): BackupOperationResult {
+  return createOperationResult({
+    workflowType: "validate-package",
+    status:
+      validationResult.status === "invalid"
+        ? "failed"
+        : validationResult.status === "valid-with-warnings"
+          ? "success-with-warnings"
+          : "success",
+    terminalStatusLabel: validationResult.status,
+    summary: `Package validation completed: ${validationResult.status}.`,
+    warnings: validationResult.items.filter((item) => item.severity === "warning").map((item) => item.detail),
   });
 }
 
@@ -1182,6 +1211,20 @@ export function addRecentOperation(
   maxCount = 20
 ): RecentOperation[] {
   return [operation, ...operations].slice(0, maxCount);
+}
+
+export function addCompletedRecentOperation(
+  operations: RecentOperation[],
+  operation: RecentOperation,
+  workflowState: BackupWorkflowState,
+  maxCount = 20
+): RecentOperation[] {
+  if (!isTerminalState(workflowState)) return operations;
+  return addRecentOperation(operations, operation, maxCount);
+}
+
+export function getOperationStatusLabel(operation: BackupOperationResult): string {
+  return operation.terminalStatusLabel ?? operation.status;
 }
 
 export function resolveWorkflowFromHandoff(

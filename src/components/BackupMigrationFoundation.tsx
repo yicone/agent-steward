@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  addRecentOperation,
+  addCompletedRecentOperation,
   buildBulkSessionValidationResult,
   buildMigrationPreviewItems,
   createDefaultProjectBundleSelection,
@@ -25,6 +25,7 @@ import {
   formatMigrationPreviewSourceKindLabel,
   formatMigrationPreviewSourceProductLabel,
   formatMigrationPreviewTargetProfileLabel,
+  getOperationStatusLabel,
   formatWorkflowStateLabel,
   formatWorkflowTypeLabel,
   getBlockedSessionSelections,
@@ -35,6 +36,7 @@ import {
   isTerminalState,
   normalizeBackupId,
   resolveWorkflowFromHandoff,
+  resolveRoutedWorkflowState,
   summarizeProjectBundleSelection,
   summarizeSourceCopyConfiguration,
   validateBackupPackageRemote,
@@ -64,6 +66,7 @@ import {
   type ProjectBundleSelectionState,
   type ProjectBundleValidationSummary,
   type RecentOperation,
+  createValidatePackageOperationResult,
 } from "@/lib/backupMigration";
 import type { Source } from "@/lib/types";
 
@@ -313,7 +316,7 @@ export function OperationResultPanel(props: { result: BackupOperationResult; onN
       <div className="mb-3 flex items-center justify-between gap-3">
         <div className="text-xs uppercase tracking-[0.18em] text-muted">Operation Result</div>
         <Badge variant={getOperationStatusBadgeVariant(props.result.status)}>
-          {props.result.status}
+          {getOperationStatusLabel(props.result)}
         </Badge>
       </div>
       <div className="space-y-3">
@@ -549,7 +552,7 @@ function RecentOperationsPanel(props: { operations: RecentOperation[]; onSelectO
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Badge variant={getOperationStatusBadgeVariant(op.status)}>
-                  {op.status}
+                  {getOperationStatusLabel(op)}
                 </Badge>
                 <span className="font-medium">{formatWorkflowTypeLabel(op.workflowType)}</span>
               </div>
@@ -581,7 +584,9 @@ export function BackupMigrationFoundation({
   // ── State ──
   const initialWorkflow = resolveWorkflowFromHandoff(handoff);
   const [activeWorkflow, setActiveWorkflow] = useState<BackupWorkflowType | null>(initialWorkflow);
-  const [workflowState, setWorkflowState] = useState<BackupWorkflowState>(initialWorkflow ? "selection" : "idle");
+  const [workflowState, setWorkflowState] = useState<BackupWorkflowState>(
+    initialWorkflow ? resolveRoutedWorkflowState(initialWorkflow, handoff) : "idle"
+  );
   const [activeHandoff, setActiveHandoff] = useState<BackupMigrationHandoff | null>(handoff);
 
   // Session backup state
@@ -646,6 +651,12 @@ export function BackupMigrationFoundation({
     () => buildBulkConfirmationDetails({ selections: dedupedBulkSelections, validationResult }),
     [dedupedBulkSelections, validationResult]
   );
+
+  const commitCompletedOperation = useCallback((result: BackupOperationResult, nextState: Extract<BackupWorkflowState, "result" | "failed">) => {
+    setOperationResult(result);
+    setRecentOperations((prev) => addCompletedRecentOperation(prev, result, nextState));
+    setWorkflowState(nextState);
+  }, []);
 
   // ── Actions ──
   const resetWorkflow = useCallback(() => {
@@ -940,9 +951,7 @@ export function BackupMigrationFoundation({
         backupId: data.backupId,
         sessionCount: 1,
       });
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("result");
+      commitCompletedOperation(result, "result");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setExecutionError(message);
@@ -951,13 +960,11 @@ export function BackupMigrationFoundation({
         status: "failed",
         summary: `Session backup failed: ${message}`,
       });
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("failed");
+      commitCompletedOperation(result, "failed");
     } finally {
       setIsExecuting(false);
     }
-  }, [selectedSessionId, selectedSource, selectedRootId, includeSourceCopy]);
+  }, [commitCompletedOperation, includeSourceCopy, selectedRootId, selectedSessionId, selectedSource]);
 
   const executeBulkSessionBackup = useCallback(async () => {
     if (dedupedBulkSelections.length === 0) return;
@@ -1047,9 +1054,7 @@ export function BackupMigrationFoundation({
         sessionResults,
       });
 
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState(aggregateStatus === "failed" ? "failed" : "result");
+      commitCompletedOperation(result, aggregateStatus === "failed" ? "failed" : "result");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setExecutionError(message);
@@ -1060,13 +1065,11 @@ export function BackupMigrationFoundation({
         sessionCount: dedupedBulkSelections.length,
         sourceCopySummary: summarizeSourceCopyConfiguration(dedupedBulkSelections),
       });
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("failed");
+      commitCompletedOperation(result, "failed");
     } finally {
       setIsExecuting(false);
     }
-  }, [dedupedBulkSelections, validationResult]);
+  }, [commitCompletedOperation, dedupedBulkSelections, validationResult]);
 
   const executeImport = useCallback(async () => {
     if (!normalizedBackupId) return;
@@ -1105,9 +1108,7 @@ export function BackupMigrationFoundation({
         sessionCount: data.sessions?.length,
         warnings: ["Import restores product-readable state only. Sessions will not reopen inside a third-party agent runtime."],
       });
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("result");
+      commitCompletedOperation(result, "result");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setExecutionError(message);
@@ -1116,13 +1117,11 @@ export function BackupMigrationFoundation({
         status: "failed",
         summary: `Import failed: ${message}`,
       });
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("failed");
+      commitCompletedOperation(result, "failed");
     } finally {
       setIsExecuting(false);
     }
-  }, [normalizedBackupId]);
+  }, [commitCompletedOperation, normalizedBackupId]);
 
   const executeProjectBundle = useCallback(async () => {
     setIsExecuting(true);
@@ -1164,9 +1163,7 @@ export function BackupMigrationFoundation({
         warnings,
       });
 
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("result");
+      commitCompletedOperation(result, "result");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setExecutionError(message);
@@ -1175,26 +1172,16 @@ export function BackupMigrationFoundation({
         status: "failed",
         summary: `Project bundle generation failed: ${message}`,
       });
-      setOperationResult(result);
-      setRecentOperations((prev) => addRecentOperation(prev, result));
-      setWorkflowState("failed");
+      commitCompletedOperation(result, "failed");
     } finally {
       setIsExecuting(false);
     }
-  }, [activeHandoff, bundleConfig, projectBundleSelection]);
+  }, [activeHandoff, bundleConfig, commitCompletedOperation, projectBundleSelection]);
 
   const finishValidateOnly = useCallback(() => {
     if (!validationResult) return;
-    const result = createOperationResult({
-      workflowType: "validate-package",
-      status: validationResult.status === "invalid" ? "failed" : validationResult.status === "valid-with-warnings" ? "success-with-warnings" : "success",
-      summary: `Package validation: ${validationResult.status}.`,
-      warnings: validationResult.items.filter((i) => i.severity === "warning").map((i) => i.detail),
-    });
-    setOperationResult(result);
-    setRecentOperations((prev) => addRecentOperation(prev, result));
-    setWorkflowState("result");
-  }, [validationResult]);
+    commitCompletedOperation(createValidatePackageOperationResult(validationResult), "result");
+  }, [commitCompletedOperation, validationResult]);
 
   const finishMigrationPreview = useCallback(() => {
     const nextScope: MigrationPreviewScope = {
@@ -1219,10 +1206,8 @@ export function BackupMigrationFoundation({
       items,
       issueLabel: activeHandoff?.issueLabel,
     });
-    setOperationResult(result);
-    setRecentOperations((prev) => addRecentOperation(prev, result));
-    setWorkflowState("result");
-  }, [activeHandoff?.issueLabel, previewScope, previewScopeDraft, previewSourceContext, previewTargetContext]);
+    commitCompletedOperation(result, "result");
+  }, [activeHandoff?.issueLabel, commitCompletedOperation, previewScope, previewScopeDraft, previewSourceContext, previewTargetContext]);
 
   const handleSelectRecentOperation = useCallback((op: RecentOperation) => {
     setOperationResult(op);

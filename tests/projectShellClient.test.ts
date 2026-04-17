@@ -18,6 +18,7 @@ import {
   resolveInitialProjectShellPage,
   stripSessionViewerSearchParams,
 } from "@/components/ProjectShellClient";
+import { resolveRoutedWorkflowState } from "@/lib/backupMigration";
 
 describe("resolveInitialProjectShellPage", () => {
   it("opens project overview for a root URL", () => {
@@ -487,5 +488,42 @@ describe("backup handoff builders", () => {
     expect(handoff).not.toHaveProperty("sessions");
     expect(handoff).not.toHaveProperty("projectBundleObjectRefs");
     expect(handoff.subtitle).toContain("project bundle workflow");
+  });
+
+  it("keeps overview-routed migration preview on selection when only partial source context is provided", () => {
+    const handoff = buildBackupHandoffFromOverview("migration-preview");
+
+    expect(resolveRoutedWorkflowState("migration-preview", handoff)).toBe("selection");
+  });
+
+  it("keeps asset-routed migration preview on selection when target context is still missing", () => {
+    const handoff = buildBackupHandoffFromAssets({
+      assetId: "asset-skill-global-generated",
+      subtype: "skill",
+    });
+
+    expect(resolveRoutedWorkflowState("migration-preview", handoff)).toBe("selection");
+  });
+
+  it("keeps analysis-routed migration preview on selection when source product is still missing", () => {
+    const handoff = buildBackupHandoffFromAnalysis({
+      findingId: "finding-preserve-before-migration",
+      title: "Preserve session evidence before migration cleanup",
+      routeLabel: "Preview migration compatibility",
+      backupWorkflowType: "migration-preview",
+    });
+
+    expect(resolveRoutedWorkflowState("migration-preview", handoff)).toBe("selection");
+  });
+
+  it("keeps project-bundle routed handoff on selection instead of fabricating deeper continuity", () => {
+    const handoff = buildBackupHandoffFromAnalysis({
+      findingId: "finding-conflicted-skill",
+      title: "Conflicted OpenSpec helper skill",
+      routeLabel: "Bundle project context",
+      backupWorkflowType: "project-bundle",
+    });
+
+    expect(resolveRoutedWorkflowState("project-bundle", handoff)).toBe("selection");
   });
 });
