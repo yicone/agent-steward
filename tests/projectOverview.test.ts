@@ -159,6 +159,51 @@ describe("deriveProjectOverviewSummary", () => {
     expect(summary.attentionItems.map((item) => item.status)).toEqual(["open", "watching", "open"]);
   });
 
+  it("does not let resolved findings suppress current asset issue cues", () => {
+    const summary = deriveProjectOverviewSummary({
+      sessions: [],
+      assets: [
+        normalizeContextAsset({
+          id: "asset-still-stale",
+          title: "Still stale rule",
+          subtype: "rule",
+          scope: "project",
+          status: "stale",
+          usage: { state: "in_effect", summary: "Still needs review." },
+        }),
+      ],
+      findings: [
+        normalizeAnalysisFinding({
+          id: "resolved-stale-rule",
+          title: "Resolved stale rule",
+          issueClass: "stale",
+          severity: "medium",
+          status: "resolved",
+          affectedObjectType: "asset",
+          affectedObjectLabel: "Still stale rule",
+          whyItMatters: "Old resolved finding.",
+          routes: [
+            {
+              target: "assets",
+              label: "Open affected asset",
+              assetId: "asset-still-stale",
+              assetSubtype: "rule",
+              assetStatus: "stale",
+            },
+          ],
+        }),
+      ],
+    });
+
+    expect(summary.attentionItems).toEqual([
+      expect.objectContaining({
+        id: "asset:asset-still-stale",
+        issueClass: "stale",
+        status: "open",
+      }),
+    ]);
+  });
+
   it("keeps module route descriptors compact and scoped to owning pages", () => {
     const summary = deriveProjectOverviewSummary({
       sessions: [

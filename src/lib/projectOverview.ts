@@ -445,8 +445,8 @@ function buildAttentionItems(input: {
   findings: AnalysisFinding[];
   limit: number;
 }): ProjectOverviewAttentionItem[] {
-  const analysisItems = input.findings
-    .filter((finding) => finding.status !== "resolved")
+  const unresolvedFindings = input.findings.filter((finding) => finding.status !== "resolved");
+  const analysisItems = unresolvedFindings
     .map<ProjectOverviewAttentionItem>((finding) => ({
       id: `finding:${finding.id}`,
       title: finding.title,
@@ -460,7 +460,7 @@ function buildAttentionItems(input: {
     }));
 
   const findingAssetIds = new Set(
-    input.findings.flatMap((finding) => [
+    unresolvedFindings.flatMap((finding) => [
       ...finding.evidence.map((evidence) => evidence.assetId).filter(Boolean),
       ...finding.routes.map((route) => route.assetId).filter(Boolean),
     ])
