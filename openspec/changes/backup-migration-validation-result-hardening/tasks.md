@@ -17,14 +17,16 @@
 
 ## 4. Tests and QA
 
-- [ ] 4.1 Add or update model tests in `tests/backupMigration.test.ts` for continuation rules, severity boundaries, terminal result semantics, and recent-operation alignment.
-- [ ] 4.2 Add or update component tests in `tests/backupMigrationFoundation.test.tsx` for validation/result/recent-operation behavior and routed-degrade states.
-- [ ] 4.3 Add or update shell routing tests in `tests/projectShellClient.test.ts` for stale or partial handoff behavior.
-- [ ] 4.4 Update `docs/viewer/backup-migration-foundation-qa-prompt.md` only if the hardened semantics change the expected QA assertions.
-- [ ] 4.5 Run `pnpm test -- tests/backupMigration.test.ts tests/backupMigrationFoundation.test.tsx tests/projectShellClient.test.ts`.
-- [ ] 4.6 Run `pnpm exec tsc --noEmit`.
-- [ ] 4.7 Run `pnpm build`.
-- [ ] 4.8 Run `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec validate backup-migration-validation-result-hardening --strict`.
+- [ ] 4.1 Add or update model tests in `tests/backupMigration.test.ts` for continuation rules and severity-boundary regressions across the six workflow families.
+- [ ] 4.2 Add or update model tests in `tests/backupMigration.test.ts` proving existing workflow-specific terminal vocab remains valid for `validate-package`, `migration-preview`, and any other workflow with accepted custom status language.
+- [ ] 4.3 Add or update component tests in `tests/backupMigrationFoundation.test.tsx` for validation/result/recent-operation behavior and routed-degrade states.
+- [ ] 4.4 Add or update component tests in `tests/backupMigrationFoundation.test.tsx` proving non-completed degradations do not create recent-operation entries while validation-only and preview-only terminal results still can.
+- [ ] 4.5 Add or update shell routing tests in `tests/projectShellClient.test.ts` for stale or partial handoff behavior, including non-regression of existing workflow-specific degrade destinations.
+- [ ] 4.6 Update `docs/viewer/backup-migration-foundation-qa-prompt.md` only if the hardened semantics change the expected QA assertions.
+- [ ] 4.7 Run `pnpm test -- tests/backupMigration.test.ts tests/backupMigrationFoundation.test.tsx tests/projectShellClient.test.ts`.
+- [ ] 4.8 Run `pnpm exec tsc --noEmit`.
+- [ ] 4.9 Run `pnpm build`.
+- [ ] 4.10 Run `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec validate backup-migration-validation-result-hardening --strict`.
 
 ## 5. Post-Slice Decision
 

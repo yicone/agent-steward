@@ -3,9 +3,23 @@
 ### Requirement: Validation semantics SHALL remain coherent across shipped workflows
 The system SHALL keep validation semantics coherent across all shipped `Backup / Migration` workflows: `session-backup`, `bulk-session-backup`, `import-backup`, `validate-package`, `migration-preview`, and `project-bundle`.
 
+This coherence requirement does not replace workflow-specific terminal status
+vocabulary that is already defined elsewhere in the accepted `backup-migration`
+specification.
+
 #### Scenario: Comparable conditions keep comparable severity
 - **WHEN** two workflows encounter comparable non-structural issues such as incomplete provenance, unresolved but non-fatal references, or partial but usable context
 - **THEN** they classify those issues with comparable severity unless a workflow-specific rule explicitly justifies a different severity
+
+#### Scenario: Existing workflow-specific result vocab remains valid
+- **WHEN** a workflow already has accepted workflow-specific terminal status vocabulary
+- **THEN** this hardening change preserves that vocabulary
+- **AND** semantic alignment is achieved through clearer interpretation and continuation rules instead of forced enum normalization
+
+#### Scenario: Workflow-specific severity exceptions remain explicit
+- **WHEN** a superficially similar condition has intentionally different severity across workflow families
+- **THEN** the workflow-specific rule remains authoritative
+- **AND** the hardened semantics make that exception explicit rather than silently flattening it
 
 #### Scenario: Structural impossibility remains blocking
 - **WHEN** a workflow cannot form a legal request, cannot form a legal preview/package/result, or lacks required input to proceed safely
@@ -29,6 +43,11 @@ The system SHALL degrade stale, partial, or unresolved routed `Backup / Migratio
 - **THEN** the page degrades to the nearest safe state
 - **AND** it does not show a result or confirmation state that the current context cannot justify
 
+#### Scenario: Hardening does not broaden existing degrade destinations
+- **WHEN** a workflow already has an accepted degrade destination in the base `backup-migration` specification
+- **THEN** this hardening change may tighten or clarify the degrade behavior
+- **AND** it does not broaden that workflow to a looser or deeper landing state than the existing spec already allows
+
 ### Requirement: Terminal results and recent operations SHALL use aligned semantics
 The system SHALL keep primary result semantics and `Recent Operations` semantics aligned for all shipped workflows.
 
@@ -41,3 +60,12 @@ The system SHALL keep primary result semantics and `Recent Operations` semantics
 - **WHEN** the user reopens a workflow from `Recent Operations`
 - **THEN** the restored detail preserves the same terminal meaning shown when the workflow originally completed
 - **AND** it does not downgrade or exaggerate the original result state
+
+#### Scenario: Non-completed states do not create recent operations
+- **WHEN** a workflow degrades back to selection, configuration, or validation/input-adjacent state without completing a terminal result
+- **THEN** it does not create a recent-operation entry
+
+#### Scenario: Validation-only and preview-only completions still count as terminal results
+- **WHEN** a bounded workflow legitimately ends in `result` without confirmation or execution because its accepted contract is validation-only or preview-only
+- **THEN** it may still create a recent-operation entry
+- **AND** that entry uses workflow-appropriate terminal semantics rather than pretending an execution step occurred

@@ -58,6 +58,17 @@ one stable model:
 - when the workflow must remain in input/validation-adjacent state
 - what a terminal result means
 
+This hardening does not replace workflow-specific terminal status vocabulary
+that is already accepted in the base spec. For example:
+
+- `validate-package` may continue using `valid`, `valid-with-warnings`, and
+  `invalid`
+- `migration-preview` may continue using preview-specific aggregate statuses
+  such as `preview-clear`, `preview-with-concerns`, and
+  `preview-with-blockers`
+
+The requirement is semantic coherence, not forced enum normalization.
+
 Alternative considered: leave each workflow with mostly local semantics.
 Rejected because it increases QA ambiguity and makes routed continuity harder to
 trust.
@@ -73,6 +84,11 @@ in:
 
 It should not preserve a deeper state if doing so creates false confidence about
 what is selected, valid, or completed.
+
+This hardening does not broaden allowed degrade destinations beyond what the
+accepted base spec already permits for each workflow. Existing workflow-specific
+degrade rules remain authoritative; this change only tightens and clarifies
+them.
 
 Alternative considered: preserve more continuity to reduce user interruption.
 Rejected because misleading continuity is worse than a small amount of extra
@@ -91,6 +107,12 @@ This means hardening:
 - reopen behavior
 - interpretation of warning vs failure vs preview-only outcomes
 
+Only completed terminal results should create recent-operation entries.
+Validation-only and preview-only workflows still count as completed terminal
+results when they legitimately end in `result`. States that degrade back to
+selection, configuration, or validation/input work should not create
+recent-operation entries.
+
 Alternative considered: let recent operations stay as a looser secondary
 summary. Rejected because it undermines trust in result states.
 
@@ -108,6 +130,9 @@ language too.
 
 - Over-normalization risk -> workflows still have different jobs; hardening
   should align semantics without forcing artificial uniformity.
+- Exception-table risk -> superficially similar conditions may still justify
+  different severities across workflow families; this change should make those
+  exceptions explicit where they matter.
 - UI churn risk -> wording and state transitions may change in visible ways;
   keep the work focused on semantics, not visual redesign.
 - Scope creep risk -> `hardening` can turn into vague maintenance; keep this
