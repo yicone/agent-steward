@@ -73,7 +73,7 @@ Not recommended:
    - `product-decision`: naming, scope, visual taste, or roadmap choice requiring human confirmation.
    - `ignore`: stale, duplicate, low-confidence, or contrary to the active spec.
 5. Human confirms any `product-decision` or ambiguous `should-fix` item.
-6. Codex implements approved fixes only, with changes traceable to review comments.
+6. Codex implements approved fixes only, with changes traceable to review comments. Batch all actionable comments from the same review round into one fix pass instead of pushing one commit per comment.
 7. Codex runs targeted tests, `pnpm exec tsc --noEmit`, `pnpm build`, and OpenSpec validation when an OpenSpec change is active.
 8. Codex pushes the fix commit to the PR branch.
 9. Human or Codex requests Copilot re-review manually.
@@ -84,6 +84,39 @@ Keep commits easy to review:
 - Use review-fix commits for code and tests that address review threads.
 - Use separate process/documentation commits for workflow changes such as `AGENTS.md`, skills, or review playbooks.
 - Do not combine follow-up feature scope with review-fix scope.
+
+## Review Loop Budget
+
+Copilot review is useful, but every re-review triggers another CI/review loop. Treat re-review as a finite quality gate, not an open-ended goal to reach zero comments.
+
+Default policy:
+
+- First Copilot pass: fix all confirmed `must-fix` and in-scope `should-fix` comments.
+- Second Copilot pass: fix new correctness, spec, security/privacy, data-loss, accessibility, or low-risk maintainability issues.
+- Third and later passes: continue only for `must-fix` comments, clear regressions introduced by review fixes, or explicitly accepted `should-fix` items. Otherwise stop the loop and either merge, resolve as stale/handled, or open a follow-up issue.
+
+Stop conditions:
+
+- CI is green, required local validation has passed, QA evidence is recorded when needed, and remaining comments are stale, duplicate, low-confidence, or out of scope.
+- Remaining comments are valid but non-blocking follow-up work and have been moved to a GitHub Issue.
+- Further re-review would only chase cosmetic or preference comments with no meaningful change to product correctness.
+
+Do not stop when comments involve:
+
+- security, privacy, local path/token leakage, data loss, backup/migration integrity, parser correctness, source attach, or failed CI;
+- active OpenSpec violations;
+- browser QA blockers for the changed flow.
+
+## Ready Checklist
+
+Before marking a PR ready for review or recommending merge:
+
+- CI is green.
+- Local validation relevant to the change has passed.
+- Active OpenSpec changes validate with `openspec validate <change-id> --strict`.
+- Browser QA is recorded for UI/runtime flows when required.
+- Unresolved review threads are triaged: fixed and resolved, stale/duplicate and resolved with evidence, or moved to a follow-up issue.
+- The PR body or control-thread summary states any remaining accepted follow-up issues.
 
 ## Re-Review Trigger
 
@@ -186,11 +219,14 @@ Use the repository workflow in docs/dev/pr-review-agent-workflow.md.
 Tasks:
 1. Fetch review comments and unresolved review threads.
 2. Cluster comments into must-fix / should-fix / product-decision / ignore.
-3. Do not modify code until product-decision or ambiguous items are called out.
-4. Fix all confirmed must-fix and should-fix items.
-5. Run targeted tests, pnpm exec tsc --noEmit, pnpm build, and OpenSpec validation if applicable.
-6. Push the fix commit.
-7. Tell me whether Copilot re-review should be requested manually or whether you were able to request it via gh.
+3. Batch comments from the current review round; do not push one fix per comment.
+4. Do not modify code until product-decision or ambiguous items are called out.
+5. Fix all confirmed must-fix and in-scope should-fix items.
+6. Run targeted tests, pnpm exec tsc --noEmit, pnpm build, and OpenSpec validation if applicable.
+7. Push the fix commit.
+8. Check unresolved review threads before recommending ready/merge.
+9. Tell me whether Copilot re-review should be requested manually or whether you were able to request it via gh.
+10. If this is the third or later Copilot pass, recommend whether to stop the loop and move remaining non-blocking work to follow-up issues.
 ```
 
 ## Scope Rules
