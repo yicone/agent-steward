@@ -11,7 +11,7 @@ import {
   resolveMigrationPreviewInvalidWorkflowState,
   ValidationPanel,
 } from "@/components/BackupMigrationFoundation";
-import type { BackupMigrationHandoff } from "@/lib/backupMigration";
+import { createValidatePackageOperationResult, type BackupMigrationHandoff } from "@/lib/backupMigration";
 
 function renderBackupMigrationFoundation(handoff: BackupMigrationHandoff | null) {
   return renderToStaticMarkup(
@@ -151,6 +151,25 @@ function renderMigrationPreviewBlockerResultPanel() {
   );
 }
 
+function renderValidatePackageResultPanel() {
+  return renderToStaticMarkup(
+    <OperationResultPanel
+      result={createValidatePackageOperationResult({
+        status: "valid-with-warnings",
+        items: [
+          {
+            id: "warning",
+            label: "Provenance",
+            severity: "warning",
+            detail: "Package provenance is incomplete but still readable.",
+          },
+        ],
+      })}
+      onNewWorkflow={vi.fn()}
+    />
+  );
+}
+
 describe("BackupMigrationFoundation", () => {
   it("keeps invalid migration preview validation on the owning input step", () => {
     expect(resolveMigrationPreviewInvalidWorkflowState({ sourceContext: {} })).toBe("selection");
@@ -235,6 +254,24 @@ describe("BackupMigrationFoundation", () => {
     expect(html).toContain("Migration Preview");
     expect(html).toContain("Select Source Context");
     expect(html).not.toContain("Choose a bounded workflow below.");
+  });
+
+  it("degrades fully explicit preview handoff to configuration instead of fabricating validation or result", () => {
+    const html = renderBackupMigrationFoundation({
+      origin: "analysis",
+      subtitle: "Preview explicit analysis-routed source context.",
+      workflowType: "migration-preview",
+      continueLabel: "Preview remains bounded and input-adjacent until validation completes.",
+      migrationPreviewSourceContext: {
+        product: "codex",
+        kind: "analysis-context",
+        label: "finding-1",
+      },
+    });
+
+    expect(html).toContain("Migration Preview");
+    expect(html).toContain("Configure Preview");
+    expect(html).not.toContain("Operation Result");
   });
 
   it("renders overview-routed validate-package workflow as a direct routed entry", () => {
@@ -431,5 +468,13 @@ describe("BackupMigrationFoundation panels", () => {
     expect(html).toContain("Bundle member inventory");
     expect(html).toContain("missing-package");
     expect(html).toContain("No restore or apply in foundation v1.");
+  });
+
+  it("renders validate-package terminal vocabulary instead of generic success wording", () => {
+    const html = renderValidatePackageResultPanel();
+
+    expect(html).toContain("valid-with-warnings");
+    expect(html).toContain("Package validation completed: valid-with-warnings.");
+    expect(html).not.toContain(">success-with-warnings<");
   });
 });
