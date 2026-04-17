@@ -3,9 +3,16 @@ const nextConfig = {
   output: "standalone",
   webpack: (config, { dev }) => {
     if (dev) {
+      const existingIgnored = config.watchOptions?.ignored;
+      const agentStorageIgnored = /(?:^|[/\\])(?:\.next|node_modules|\.agent|\.agents|\.codex|\.github|\.windsurf|\.git|output)(?:[/\\]|$)/;
+
       config.watchOptions = {
         ...config.watchOptions,
-        ignored: /(?:^|[/\\])(?:\.next|node_modules|\.agent|\.agents|\.codex|\.github|\.windsurf|\.git|output)(?:[/\\]|$)/,
+        ignored: Array.isArray(existingIgnored)
+          ? [...existingIgnored, agentStorageIgnored]
+          : existingIgnored
+            ? [existingIgnored, agentStorageIgnored]
+            : agentStorageIgnored,
       };
     }
     return config;
