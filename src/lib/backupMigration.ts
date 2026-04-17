@@ -1121,6 +1121,12 @@ export function resolveValidatePackageTerminalState(
   return canProceedFromValidation(validationResult) ? "result" : "failed";
 }
 
+export function resolveOperationTerminalWorkflowState(
+  operation: Pick<BackupOperationResult, "status">
+): Extract<BackupWorkflowState, "result" | "failed"> {
+  return operation.status === "failed" ? "failed" : "result";
+}
+
 export function createProjectBundleOperationResult(input: {
   status: BackupOperationStatus;
   packageId: string;

@@ -32,6 +32,7 @@ import {
   isTerminalState,
   normalizeBackupId,
   resolveWorkflowFromHandoff,
+  resolveOperationTerminalWorkflowState,
   resolveRoutedWorkflowState,
   resolveValidatePackageTerminalState,
   validateBackupPackageRemote,
@@ -752,6 +753,12 @@ describe("completed result helpers", () => {
         ],
       })
     ).toBe("result");
+  });
+
+  it("restores failed recent operations into failed terminal workflow state", () => {
+    expect(resolveOperationTerminalWorkflowState({ status: "failed" })).toBe("failed");
+    expect(resolveOperationTerminalWorkflowState({ status: "success-with-warnings" })).toBe("result");
+    expect(resolveOperationTerminalWorkflowState({ status: "preview-with-blockers" })).toBe("result");
   });
 });
 

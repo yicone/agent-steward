@@ -35,6 +35,7 @@ import {
   getWorkflowDescriptor,
   isTerminalState,
   normalizeBackupId,
+  resolveOperationTerminalWorkflowState,
   resolveValidatePackageTerminalState,
   resolveWorkflowFromHandoff,
   resolveRoutedWorkflowState,
@@ -1224,7 +1225,7 @@ export function BackupMigrationFoundation({
       setProjectBundleMemberInventory(op.projectBundleMemberInventory ?? []);
       setProjectBundleMemberReferences(op.projectBundleMemberReferences ?? []);
     }
-    setWorkflowState("result");
+    setWorkflowState(resolveOperationTerminalWorkflowState(op));
   }, []);
 
   const reopenMigrationPreviewConfiguration = useCallback(() => {
