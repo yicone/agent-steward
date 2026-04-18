@@ -21,7 +21,6 @@ import {
   formatContextAssetSourceLabel,
   formatContextAssetStatusLabel,
   formatContextAssetSubtypeLabel,
-  isIssueContextAsset,
   resolveContextAssetSelection,
   summarizeContextAssets,
   type AssetsHandoff,
