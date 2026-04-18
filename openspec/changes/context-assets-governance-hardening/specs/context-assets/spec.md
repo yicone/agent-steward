@@ -10,6 +10,12 @@ silently inventing missing source facts.
 - **THEN** the Assets surface explains that the asset is currently in effect
 - **AND** it shows the provenance or usage reason that supports that claim
 
+#### Scenario: Active asset without usage metadata stays informational
+- **WHEN** an asset has `active` status but lacks in-effect usage metadata
+- **THEN** the Assets surface may show it as active inventory
+- **AND** it does not claim that the asset is currently in effect by inference
+  alone
+
 #### Scenario: Stale asset explains freshness risk
 - **WHEN** an asset has `stale` status
 - **THEN** the Assets surface marks it as needing freshness review
@@ -38,6 +44,7 @@ silently inventing missing source facts.
   explanation
 - **AND** it does not treat the asset as active, unused, stale, or conflicted
   by inference alone
+- **AND** it offers source inspection only when source evidence exists
 
 ### Requirement: Assets SHALL summarize governance issues by class
 The system SHALL summarize affected reusable context assets by governance issue
@@ -54,6 +61,12 @@ class while keeping the inventory and filters visible.
 - **THEN** the summary may show no known issues
 - **AND** it does not claim that every local source runtime has been completely
   scanned unless provider evidence exists
+
+#### Scenario: Foundation provider data is labeled
+- **WHEN** the Assets surface is backed by foundation seed or partial provider
+  data rather than a complete live project inventory
+- **THEN** the page shows a visible foundation or provider data cue
+- **AND** it keeps unknown, unavailable, or unsupported evidence visible
 
 ### Requirement: Asset detail SHALL show bounded governance inspection
 The system SHALL make selected asset detail sufficient for bounded governance

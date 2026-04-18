@@ -57,11 +57,16 @@ make future provider integration harder.
 
 Health classification should start from existing status values:
 
-- `active` with in-effect data means healthy/in-effect.
-- `stale` means freshness review is needed.
-- `conflicted` means multiple local copies or interpretations disagree.
-- `orphaned` means evidence exists but no durable canonical owner is known.
-- `unknown` means the system lacks enough metadata and must say so explicitly.
+- `active` with in-effect data maps to `healthy`.
+- `active` without in-effect data maps to `informational`; it is active
+  inventory, not proof that the asset currently affects the project.
+- `stale` maps to `warning` because freshness review is needed.
+- `conflicted` maps to `warning` because multiple local copies or
+  interpretations disagree.
+- `orphaned` maps to `warning` because evidence exists but no durable
+  canonical owner is known.
+- `unknown` maps to `unknown`; it must be explicit, but it is not
+  automatically blocking.
 
 Usage and provenance should refine the explanation, not silently override the
 status.
@@ -98,9 +103,10 @@ but not required for this hardening slice and risks expanding route semantics.
 
 ### Decision 5: Treat seed data honesty as part of governance hardening
 
-If Assets still uses seed/provider data, the page should not imply that every
-count is a live project scan. It can still demonstrate governance semantics,
-but unknown/unavailable data must stay visible.
+If Assets still uses seed/provider data, the page should show an explicit
+foundation/provider data cue similar to Project Overview. It can still
+demonstrate governance semantics, but unknown/unavailable data must stay
+visible and counts must not be framed as a complete live project scan.
 
 Alternative considered: wait for real inventory before hardening Assets.
 Rejected because Project Overview already routes into Assets and needs a
@@ -138,8 +144,5 @@ backend APIs are affected.
 
 ## Open Questions
 
-- Whether the first implementation should add a visible "sample/provider data"
-  cue on Assets similar to Project Overview, or defer that until a live asset
-  inventory provider exists.
-- Whether `unknown` should be visually neutral or warning-level in the summary.
-  The spec treats it as explicit but not automatically blocking.
+None for this slice. Future source-provider work may revisit whether
+`unknown` deserves stronger visual emphasis once live inventory evidence exists.

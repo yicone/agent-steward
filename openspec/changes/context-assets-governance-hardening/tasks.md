@@ -11,7 +11,7 @@
 - [ ] 2.2 Update selected asset detail to show health explanation, provenance, in-effect relevance, and route ownership.
 - [ ] 2.3 Keep recommended actions as routes to Sessions, Analysis, Backup / Migration, or Overview; do not add inline edit, repair, sync, deploy, restore, or workflow execution controls.
 - [ ] 2.4 Ensure stale/conflicted/orphaned/unknown assets use inspection or review copy rather than mutation promises.
-- [ ] 2.5 Decide and implement whether Assets needs an explicit seed/provider data cue similar to Project Overview, based on design open question and current UI copy.
+- [ ] 2.5 Add an explicit foundation/provider data cue when Assets is backed by seed or partial provider data rather than complete live project inventory.
 
 ## 3. Routed Continuity
 
