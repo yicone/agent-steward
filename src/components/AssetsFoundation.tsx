@@ -15,6 +15,7 @@ import {
   buildFiltersFromAssetsHandoff,
   createContextAssetSeeds,
   createDefaultContextAssetFilters,
+  deriveContextAssetGovernanceHealth,
   deriveAssetsSurfaceState,
   formatContextAssetScopeLabel,
   formatContextAssetSourceLabel,
@@ -26,6 +27,7 @@ import {
   type AssetsHandoff,
   type ContextAsset,
   type ContextAssetFilters,
+  type ContextAssetGovernanceSeverity,
   type ContextAssetScope,
   type ContextAssetSource,
   type ContextAssetStatus,
@@ -102,6 +104,13 @@ function renderStatusBadge(status: ContextAssetStatus) {
   return <Badge variant="warn">{formatContextAssetStatusLabel(status)}</Badge>;
 }
 
+function renderSeverityBadge(severity: ContextAssetGovernanceSeverity) {
+  if (severity === "healthy") return <Badge variant="ok">healthy</Badge>;
+  if (severity === "warning") return <Badge variant="warn">warning</Badge>;
+  if (severity === "unknown") return <Badge variant="default">unknown</Badge>;
+  return <Badge variant="default">informational</Badge>;
+}
+
 export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpenBackup, loadingDelayMs = LOADING_DELAY_MS }: AssetsFoundationProps) {
   const assets = useMemo(() => createContextAssetSeeds(), []);
   const initialFilters = buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters());
@@ -158,6 +167,10 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
     () => filteredAssets.find((asset) => asset.id === selectedAssetId) ?? null,
     [filteredAssets, selectedAssetId]
   );
+  const selectedAssetHealth = useMemo(
+    () => selectedAsset ? deriveContextAssetGovernanceHealth(selectedAsset) : null,
+    [selectedAsset]
+  );
   const summary = useMemo(() => summarizeContextAssets(filteredAssets), [filteredAssets]);
   const surfaceState = deriveAssetsSurfaceState({
     isLoading,
@@ -203,6 +216,9 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
             <p className="max-w-3xl text-sm leading-6 text-muted">
               Inspect rules, memory, skills, and commands by subtype, scope, source, status, provenance, and in-effect relevance without turning this page into a generic editor or migration workflow.
             </p>
+            <div className="rounded-xl border border-amber-400/30 bg-amber-400/8 px-3 py-2 text-xs leading-5 text-muted">
+              Foundation data cue: this Assets inventory is backed by local seed/provider-shaped data, not a complete live project scan. Unknown, unavailable, and unsupported evidence remains visible.
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <FilterSelect
@@ -252,7 +268,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                   <div className="mt-1 font-semibold text-foreground">{summary.inEffect}</div>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background/15 px-3 py-2">
-                  <div className="text-xs uppercase tracking-[0.18em]">Needs review</div>
+                  <div className="text-xs uppercase tracking-[0.18em]">Governance issues</div>
                   <div className="mt-1 font-semibold text-foreground">{summary.issueCount}</div>
                 </div>
               </div>
@@ -264,10 +280,27 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                 </Badge>
               ))}
             </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Badge variant={summary.governanceIssueCounts.freshness > 0 ? "warn" : "default"}>
+                Freshness {summary.governanceIssueCounts.freshness}
+              </Badge>
+              <Badge variant={summary.governanceIssueCounts.conflict > 0 ? "warn" : "default"}>
+                Conflict {summary.governanceIssueCounts.conflict}
+              </Badge>
+              <Badge variant={summary.governanceIssueCounts.orphaned > 0 ? "warn" : "default"}>
+                Orphaned {summary.governanceIssueCounts.orphaned}
+              </Badge>
+              <Badge variant={summary.governanceIssueCounts.unknown > 0 ? "default" : "default"}>
+                Unknown {summary.governanceIssueCounts.unknown}
+              </Badge>
+            </div>
+            <p className="mt-3 text-xs leading-5 text-muted">
+              No known issue count means no stale, conflicted, orphaned, or unknown asset in the filtered seed/provider inventory; it does not prove every local runtime has been scanned.
+            </p>
             {surfaceState === "issue" ? (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/8 px-3 py-3 text-sm text-muted">
                 <div>
-                  The current inventory contains stale, conflicted, or orphaned assets. Use Analysis for grouped interpretation when object-level review is not enough.
+                  The current inventory contains warning-class assets. Use Analysis for grouped interpretation when object-level inspection is not enough.
                 </div>
                 <Button
                   size="sm"
@@ -281,7 +314,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                     })
                   }
                 >
-                  Open Analysis
+                  Route to Analysis
                 </Button>
               </div>
             ) : null}
@@ -327,6 +360,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
               <div className="space-y-3">
                 {filteredAssets.map((asset) => {
                   const selected = asset.id === selectedAssetId;
+                  const health = deriveContextAssetGovernanceHealth(asset);
                   return (
                     <button
                       key={asset.id}
@@ -347,6 +381,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                             <div className="font-medium text-foreground">{asset.title}</div>
                             <Badge variant="default">{formatContextAssetSubtypeLabel(asset.subtype)}</Badge>
                             {renderStatusBadge(asset.status)}
+                            {renderSeverityBadge(health.severity)}
                           </div>
                           <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted">
                             <span>{formatContextAssetScopeLabel(asset.scope)}</span>
@@ -357,6 +392,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                         <div className="flex shrink-0 flex-wrap gap-2">
                           {asset.usage.state === "in_effect" ? <Badge variant="ok">in effect</Badge> : null}
                           {isIssueContextAsset(asset) ? <Badge variant="warn">needs attention</Badge> : null}
+                          {health.severity === "unknown" ? <Badge variant="default">non-blocking unknown</Badge> : null}
                         </div>
                       </div>
                     </button>
@@ -385,6 +421,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                     <Badge variant="default">{formatContextAssetScopeLabel(selectedAsset.scope)}</Badge>
                     <Badge variant="default">{formatContextAssetSourceLabel(selectedAsset.source)}</Badge>
                     {renderStatusBadge(selectedAsset.status)}
+                    {selectedAssetHealth ? renderSeverityBadge(selectedAssetHealth.severity) : null}
                   </div>
                 </div>
 
@@ -399,8 +436,20 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                 )}
 
                 <div className="space-y-2 rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
+                  <div className="text-xs uppercase tracking-[0.18em] text-muted">Governance Health</div>
+                  <div className="leading-6 text-muted">{selectedAssetHealth?.explanation}</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant={selectedAssetHealth?.issueClass === "none" ? "ok" : selectedAssetHealth?.issueClass === "unknown" ? "default" : "warn"}>
+                      issue class: {selectedAssetHealth?.issueClass}
+                    </Badge>
+                    <Badge variant="default">route owner: {selectedAssetHealth?.recommendedRoute.owner}</Badge>
+                  </div>
+                  <div className="text-xs leading-5 text-muted">{selectedAssetHealth?.recommendedRoute.reason}</div>
+                </div>
+
+                <div className="space-y-2 rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm">
                   <div className="text-xs uppercase tracking-[0.18em] text-muted">Provenance</div>
-                  <div className="leading-6 text-muted">{selectedAsset.provenance}</div>
+                  <div className="leading-6 text-muted">{selectedAssetHealth?.provenanceExplanation}</div>
                   <div className="flex flex-wrap gap-2">
                     {selectedAsset.sourceReference?.target === "session" && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
                       <Button
@@ -414,7 +463,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                           })
                         }
                       >
-                        {selectedAsset.sourceReference.label}
+                        Route to Sessions: {selectedAsset.sourceReference.label}
                       </Button>
                     ) : null}
                     {selectedAsset.sourceReference?.target === "analysis" ? (
@@ -430,7 +479,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                           })
                         }
                       >
-                        {selectedAsset.sourceReference.label}
+                        Route to Analysis: {selectedAsset.sourceReference.label}
                       </Button>
                     ) : null}
                   </div>
@@ -438,10 +487,10 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
 
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype, workflowType: "migration-preview" })}>
-                    Preview in Backup / Migration
+                    Route to Backup / Migration: preview scope
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => onOpenBackup({ assetId: selectedAsset.id, subtype: selectedAsset.subtype, workflowType: "project-bundle" })}>
-                    Open Project Bundle
+                    Route to Backup / Migration: project bundle
                   </Button>
                 </div>
               </div>
@@ -464,7 +513,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                 {selectedAsset.usage.state === "unknown" ? <Badge variant="default">unavailable</Badge> : null}
               </div>
               <div className="rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-sm leading-6 text-muted">
-                {selectedAsset.usage.summary}
+                {selectedAssetHealth?.inEffectExplanation}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
                 {selectedAsset.sourceReference?.target === "session" && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
@@ -479,7 +528,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                       })
                     }
                   >
-                    Review related session
+                    Route to Sessions: review related session
                   </Button>
                 ) : null}
                 <Button
@@ -494,7 +543,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                     })
                   }
                 >
-                  Review in Analysis
+                  Route to Analysis: review usage context
                 </Button>
               </div>
             </Card>

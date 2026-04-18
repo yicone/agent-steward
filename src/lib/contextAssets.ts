@@ -10,6 +10,9 @@ export type ContextAssetScope = (typeof CONTEXT_ASSET_SCOPES)[number];
 export type ContextAssetSource = (typeof CONTEXT_ASSET_SOURCES)[number];
 export type ContextAssetStatus = (typeof CONTEXT_ASSET_STATUSES)[number];
 export type ContextAssetUsageState = "in_effect" | "not_in_effect" | "unknown";
+export type ContextAssetGovernanceSeverity = "healthy" | "informational" | "warning" | "unknown";
+export type ContextAssetGovernanceIssueClass = "none" | "freshness" | "conflict" | "orphaned" | "unknown";
+export type ContextAssetRouteOwner = "Sessions" | "Analysis" | "Backup / Migration" | "Project Overview";
 
 export type ContextAssetSourceReference = {
   label: string;
@@ -60,10 +63,28 @@ export type ContextAssetFilters = {
   status: ContextAssetStatus | "all";
 };
 
+export type ContextAssetRouteDescriptor = {
+  owner: ContextAssetRouteOwner;
+  label: string;
+  reason: string;
+  target: "session" | "analysis" | "backup" | "overview";
+};
+
+export type ContextAssetGovernanceHealth = {
+  severity: ContextAssetGovernanceSeverity;
+  issueClass: ContextAssetGovernanceIssueClass;
+  explanation: string;
+  inEffectExplanation: string;
+  provenanceExplanation: string;
+  recommendedRoute: ContextAssetRouteDescriptor;
+};
+
 export type ContextAssetSummary = {
   total: number;
   inEffect: number;
   issueCount: number;
+  governanceIssueCounts: Record<ContextAssetGovernanceIssueClass, number>;
+  severityCounts: Record<ContextAssetGovernanceSeverity, number>;
   subtypeCounts: Record<ContextAssetSubtype, number>;
   statusCounts: Record<ContextAssetStatus, number>;
 };
@@ -86,7 +107,8 @@ export type AssetsHandoff = {
 
 export type AssetsSurfaceState = "loading" | "empty" | "normal" | "selected" | "issue";
 
-const ISSUE_STATUSES = new Set<ContextAssetStatus>(["stale", "conflicted", "orphaned"]);
+const GOVERNANCE_ISSUE_CLASSES: ContextAssetGovernanceIssueClass[] = ["none", "freshness", "conflict", "orphaned", "unknown"];
+const GOVERNANCE_SEVERITIES: ContextAssetGovernanceSeverity[] = ["healthy", "informational", "warning", "unknown"];
 
 const DEFAULT_USAGE: ContextAssetUsage = {
   state: "unknown",
@@ -279,23 +301,125 @@ export function applyContextAssetFilters(assets: ContextAsset[], filters: Contex
   });
 }
 
+function buildRouteDescriptor(asset: ContextAsset, issueClass: ContextAssetGovernanceIssueClass): ContextAssetRouteDescriptor {
+  if (asset.status === "conflicted" || issueClass === "conflict") {
+    return {
+      owner: "Analysis",
+      target: "analysis",
+      label: "Review grouped interpretation in Analysis",
+      reason: "Analysis owns disagreement triage; Assets only shows object-level context.",
+    };
+  }
+
+  if (asset.sourceReference?.target === "session" && asset.sourceReference.sessionId && asset.sourceReference.source) {
+    return {
+      owner: "Sessions",
+      target: "session",
+      label: "Inspect source evidence in Sessions",
+      reason: "Sessions owns source evidence reading without embedding transcripts inside Assets.",
+    };
+  }
+
+  if (asset.sourceReference?.target === "backup") {
+    return {
+      owner: "Backup / Migration",
+      target: "backup",
+      label: "Prepare workflow context in Backup / Migration",
+      reason: "Backup / Migration owns workflow validation and execution.",
+    };
+  }
+
+  if (asset.status === "unknown" || issueClass === "unknown") {
+    return {
+      owner: "Project Overview",
+      target: "overview",
+      label: "Return to Project Overview",
+      reason: "Project Overview owns summary-level governance context when object evidence is incomplete.",
+    };
+  }
+
+  return {
+    owner: "Analysis",
+    target: "analysis",
+    label: "Review asset context in Analysis",
+    reason: "Analysis owns grouped interpretation when object-level inspection is not enough.",
+  };
+}
+
+export function deriveContextAssetGovernanceHealth(asset: ContextAsset): ContextAssetGovernanceHealth {
+  const provenanceExplanation = asset.provenance || "Provenance unavailable.";
+  const usageSummary = asset.usage.summary || DEFAULT_USAGE.summary;
+  const inEffectExplanation = asset.usage.state === "in_effect"
+    ? `In effect: ${usageSummary}`
+    : asset.usage.state === "not_in_effect"
+      ? `Not currently in effect: ${usageSummary}`
+      : "In-effect data is unavailable; Assets will not infer whether this asset is unused or active in the project.";
+
+  let severity: ContextAssetGovernanceSeverity = "informational";
+  let issueClass: ContextAssetGovernanceIssueClass = "none";
+  let explanation = "Asset is available for inspection, but no stronger governance state is inferred.";
+
+  if (asset.status === "active" && asset.usage.state === "in_effect") {
+    severity = "healthy";
+    explanation = `Active and currently in effect. ${usageSummary}`;
+  } else if (asset.status === "active") {
+    severity = "informational";
+    explanation = "Active inventory is present, but current in-effect usage is not proven by metadata.";
+  } else if (asset.status === "stale") {
+    severity = "warning";
+    issueClass = "freshness";
+    explanation = `Needs freshness review. ${provenanceExplanation}`;
+  } else if (asset.status === "conflicted") {
+    severity = "warning";
+    issueClass = "conflict";
+    explanation = "Governance issue: multiple local copies or interpretations disagree.";
+  } else if (asset.status === "orphaned") {
+    severity = "warning";
+    issueClass = "orphaned";
+    explanation = "Governance issue: evidence exists without a durable canonical owner.";
+  } else if (asset.status === "unknown") {
+    severity = "unknown";
+    issueClass = "unknown";
+    explanation = "Health unknown: metadata is unavailable, so Assets will not classify this asset as active, stale, conflicted, or unused by inference.";
+  } else if (asset.status === "archived") {
+    severity = "informational";
+    explanation = "Archived inventory is retained for inspection, but it is not treated as active project context.";
+  }
+
+  return {
+    severity,
+    issueClass,
+    explanation,
+    inEffectExplanation,
+    provenanceExplanation,
+    recommendedRoute: buildRouteDescriptor(asset, issueClass),
+  };
+}
+
 export function summarizeContextAssets(assets: ContextAsset[]): ContextAssetSummary {
   const subtypeCounts = Object.fromEntries(CONTEXT_ASSET_SUBTYPES.map((key) => [key, 0])) as Record<ContextAssetSubtype, number>;
   const statusCounts = Object.fromEntries(CONTEXT_ASSET_STATUSES.map((key) => [key, 0])) as Record<ContextAssetStatus, number>;
+  const governanceIssueCounts = Object.fromEntries(GOVERNANCE_ISSUE_CLASSES.map((key) => [key, 0])) as Record<ContextAssetGovernanceIssueClass, number>;
+  const severityCounts = Object.fromEntries(GOVERNANCE_SEVERITIES.map((key) => [key, 0])) as Record<ContextAssetGovernanceSeverity, number>;
   let inEffect = 0;
   let issueCount = 0;
 
   for (const asset of assets) {
+    const health = deriveContextAssetGovernanceHealth(asset);
     subtypeCounts[asset.subtype] += 1;
     statusCounts[asset.status] += 1;
+    governanceIssueCounts[health.issueClass] += 1;
+    severityCounts[health.severity] += 1;
     if (asset.usage.state === "in_effect") inEffect += 1;
-    if (ISSUE_STATUSES.has(asset.status)) issueCount += 1;
+    if (health.issueClass !== "none") issueCount += 1;
   }
 
   return {
     total: assets.length,
     inEffect,
     issueCount,
+    governanceIssueCounts,
+    severityCounts,
     subtypeCounts,
     statusCounts
   };
@@ -313,8 +437,8 @@ export function deriveAssetsSurfaceState(input: {
     ? input.filteredAssets.find((asset) => asset.id === input.selectedAssetId)
     : undefined;
 
-  const issueVisible = input.filteredAssets.some((asset) => ISSUE_STATUSES.has(asset.status));
-  if (selected && ISSUE_STATUSES.has(selected.status)) return "issue";
+  const issueVisible = input.filteredAssets.some((asset) => deriveContextAssetGovernanceHealth(asset).severity === "warning");
+  if (selected && deriveContextAssetGovernanceHealth(selected).severity === "warning") return "issue";
   if (issueVisible) return "issue";
   if (selected) return "selected";
   return "normal";
@@ -364,5 +488,5 @@ export function formatContextAssetSourceLabel(source: ContextAssetSource): strin
 }
 
 export function isIssueContextAsset(asset: ContextAsset): boolean {
-  return ISSUE_STATUSES.has(asset.status);
+  return deriveContextAssetGovernanceHealth(asset).severity === "warning";
 }

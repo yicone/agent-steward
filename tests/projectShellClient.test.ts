@@ -165,38 +165,69 @@ describe("assets handoff builders", () => {
   });
 
   it("builds an overview handoff with scope and object context", () => {
-    expect(
-      buildAssetsHandoffFromOverview({
-        subtitle: "Review project rules.",
-        subtype: "rule",
-        scope: "project",
-        assetId: "asset-rule-project-codex",
-      })
-    ).toMatchObject({
+    const handoff = buildAssetsHandoffFromOverview({
+      subtitle: "Review project rules.",
+      subtype: "rule",
+      scope: "project",
+      status: "active",
+      assetId: "asset-rule-project-codex",
+      issueLabel: "in-effect rule",
+    });
+
+    expect(handoff).toMatchObject({
       origin: "overview",
       subtitle: "Review project rules.",
       subtype: "rule",
       scope: "project",
+      status: "active",
       assetId: "asset-rule-project-codex",
+      issueLabel: "in-effect rule",
     });
+    expect(Object.keys(handoff).sort()).toEqual([
+      "assetId",
+      "continueLabel",
+      "issueLabel",
+      "origin",
+      "returnLabel",
+      "scope",
+      "status",
+      "subtitle",
+      "subtype",
+    ]);
+    expect(handoff).not.toHaveProperty("summary");
+    expect(handoff).not.toHaveProperty("workflowType");
+    expect(handoff).not.toHaveProperty("operations");
   });
 
   it("builds an analysis handoff that preserves issue framing", () => {
-    expect(
-      buildAssetsHandoffFromAnalysis({
-        subtitle: "Review conflicted skill.",
-        subtype: "skill",
-        status: "conflicted",
-        assetId: "asset-skill-global-generated",
-        issueLabel: "conflicted asset",
-      })
-    ).toMatchObject({
+    const handoff = buildAssetsHandoffFromAnalysis({
+      subtitle: "Review conflicted skill.",
+      subtype: "skill",
+      status: "conflicted",
+      assetId: "asset-skill-global-generated",
+      issueLabel: "conflicted asset",
+    });
+
+    expect(handoff).toMatchObject({
       origin: "analysis",
       subtype: "skill",
       status: "conflicted",
       assetId: "asset-skill-global-generated",
       issueLabel: "conflicted asset",
     });
+    expect(Object.keys(handoff).sort()).toEqual([
+      "assetId",
+      "continueLabel",
+      "issueLabel",
+      "origin",
+      "returnLabel",
+      "status",
+      "subtitle",
+      "subtype",
+    ]);
+    expect(handoff).not.toHaveProperty("findings");
+    expect(handoff).not.toHaveProperty("evidence");
+    expect(handoff).not.toHaveProperty("mutationInstructions");
   });
 });
 
