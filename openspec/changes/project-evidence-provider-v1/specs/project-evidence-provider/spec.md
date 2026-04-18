@@ -12,10 +12,12 @@ repository without scanning arbitrary source files or external runtime stores.
 - **AND** each item includes a project-relative path and evidence source label
 
 #### Scenario: Known skill workflow prompt and hook files are discovered
-- **WHEN** the current repository contains files under known agent skill,
-  workflow, prompt, hook, or command directories
+- **WHEN** the current repository contains files matching the provider's
+  recognized agent-facing path allowlist for skills, workflows, prompts, hooks,
+  or commands
 - **THEN** the provider reports those files as local project evidence
 - **AND** it identifies the file class when the path pattern is recognized
+- **AND** it does not traverse outside the current repository root
 
 #### Scenario: Arbitrary source files are not scanned
 - **WHEN** the repository contains ordinary application source files
@@ -69,7 +71,7 @@ surfaces can distinguish available, empty, partial, and unavailable evidence.
   fabricated assets
 
 #### Scenario: Provider has unreadable evidence
-- **WHEN** one or more expected evidence paths cannot be read
+- **WHEN** one or more repo-local allowlist evidence paths cannot be read
 - **THEN** the provider status is `partial` or `unavailable` depending on whether
   other evidence remains available
 - **AND** diagnostics describe the unreadable evidence without leaking sensitive

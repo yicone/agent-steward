@@ -7,7 +7,8 @@ findings while clearly distinguishing them from seed/test interpretations.
 #### Scenario: Provider diagnostics become bounded findings
 - **WHEN** the project evidence provider reports unreadable, ambiguous,
   duplicate, or conflicting evidence diagnostics
-- **THEN** Analysis may render those diagnostics as local findings
+- **THEN** Analysis renders those diagnostics as bounded local findings when
+  provider-backed analysis is available
 - **AND** each finding preserves evidence references and route targets separately
 
 #### Scenario: Provider-backed no-finding state stays explicit

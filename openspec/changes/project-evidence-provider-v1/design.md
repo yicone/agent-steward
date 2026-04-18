@@ -43,10 +43,12 @@ skills, commands, and governance concepts.
 
 ### Decision 1: Provider reads explicit repo-local agent-facing files only
 
-The provider SHALL discover known local paths and file classes that are already
-agent-facing: repository instruction files, Copilot/Codex/Windsurf/Antigravity
-skills or workflows, prompts, hooks, and project-level agent rules. It SHALL NOT
-recursively classify arbitrary source files.
+The provider SHALL discover known local paths and file classes from a recognized
+repo-local allowlist that is already agent-facing: repository instruction files,
+Copilot/Codex/Windsurf/Antigravity skills or workflows, prompts, hooks, and
+project-level agent rules. It SHALL NOT treat whole directories like `.codex`,
+`.agents`, `.agent`, `.github`, or `.windsurf` as broad recursive scan roots,
+and it SHALL NOT recursively classify arbitrary source files.
 
 Rationale: this gives real project evidence without over-promising analysis or
 turning Assets into a general repository browser.
@@ -66,6 +68,13 @@ The provider should return a small model containing:
 
 Surfaces consume this model and decide how to render it. The provider does not
 own routing, selection state, or workflow execution.
+
+### Decision 2a: v1 discovery is wired into the server-to-shell data path
+
+v1 discovery runs in the server layer for the current repository root and passes
+normalized provider output into Project Overview, Assets, and Analysis. Provider
+helpers remain pure and fixture-testable, but the v1 slice includes UI wiring for
+provider-backed states rather than stopping at a library-only implementation.
 
 ### Decision 3: Mapping is conservative and explainable
 
@@ -127,9 +136,10 @@ findings from file content in this slice.
    false` / `analysisAvailable: false` or labeled seed fallback into the affected
    surfaces while preserving the provider library behind tests.
 
-## Open Questions
+### Decision 6: Expected evidence paths are repo-local allowlist attempts
 
-- Should provider discovery run synchronously from the server layer and pass data
-  into the client shell, or should v1 keep provider helpers pure until a later API
-  integration step? The implementation should choose the smallest path that keeps
-  `pnpm build` and browser QA stable.
+For unreadable diagnostics, an "expected evidence path" means a repo-local path
+that the provider attempts because it matches the recognized allowlist or is
+found while enumerating an allowlisted directory. It does not include user-global
+runtime stores, external paths, cloud sources, session transcript stores, or paths
+outside the repository root.
