@@ -18,7 +18,7 @@ Use this repository-specific workflow together with `docs/dev/pr-review-agent-wo
 2. Fetch PR metadata plus review comments. Prefer thread-aware `gh api graphql` when resolution state matters; use the GitHub connector for flat PR/comment context when sufficient.
 3. Classify each comment before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 4. Ask the user before changing product names, product scope, placeholder commitments, security/privacy behavior, backup/migration semantics, or any ambiguous `should-fix`.
-5. Implement confirmed `must-fix` and in-scope `should-fix` items only. Batch all actionable comments from the same review round into one fix pass instead of pushing one commit per comment. If the fix is large, runtime-dependent, or benefits from independent verification, delegate it to an authorized subagent and fold the result back into this workflow.
+5. Implement confirmed `must-fix` and in-scope `should-fix` items only. Batch all actionable comments from the same review round into one fix pass instead of pushing one commit per comment. If the fix is large, runtime-dependent, or benefits from independent verification, delegate it to an authorized subagent and fold the result back into this workflow. If the user has granted standing subagent authorization for the control-thread workflow, treat that as sufficient authorization for bounded review-fix delegation.
 6. Run targeted tests, `pnpm build`, and `openspec validate <change-id> --strict` when an OpenSpec change is active.
 7. Commit review fixes separately from workflow/process documentation.
 8. Check unresolved review threads before recommending ready/merge. Resolve only with explicit user authorization, or move non-blocking leftovers to follow-up issues.

@@ -64,7 +64,8 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 
 - When the user designates a conversation as the control thread, use it to coordinate scope, PR state, validation status, and next-step prompts.
 - Suggest a new conversation when an execution line becomes large, requires a separate context window, or can proceed independently with a focused prompt.
-- Use subagents only when explicitly authorized by the user. Prefer reusing an existing suitable subagent; when spawning a new one, do not fork the full conversation context unless the task requires it.
+- Use subagents only when explicitly authorized by the user. Authorization may be one-off or standing for the current project/control-thread workflow; when standing authorization is granted, Codex may delegate within this framework without asking again unless the user revokes or narrows it.
+- Prefer reusing an existing suitable subagent; when spawning a new one, do not fork the full conversation context unless the task requires it.
 - In a control-thread workflow, keep the control thread focused on orchestration: scope convergence, artifact acceptance, PR state, validation synthesis, and final decisions. Delegate bounded execution to suitable authorized subagents instead of absorbing every task locally.
 - Prefer subagents for: OpenSpec artifact review, large OpenSpec implementation, browser QA / Playwright runtime verification, broad codebase audits, and parallel research that can report back as evidence.
 - Keep in the control thread: product decisions, ambiguous scope tradeoffs, review-comment classification, final integration judgment, merge readiness, and any action that changes GitHub issue / PR state.
@@ -73,6 +74,12 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 
 ## Branching workflow
 
+- Formal PR branches should use project-semantic prefixes rather than agent-identity prefixes:
+  - `feat/<change>` for feature or OpenSpec implementation/proposal lines
+  - `spec/<change>` for spec-only or OpenSpec archive work when it will be reviewed as a standalone PR
+  - `docs/<change>` for documentation/process-only changes
+  - `fix/<change>` for bugfix or hardening-only changes
+- Reserve `codex/<change>` for temporary Codex-local branches, experiments, or short-lived work that will not be the durable PR branch unless the user explicitly accepts that naming.
 - Open a draft PR for each coherent, validated feature slice.
 - If follow-up work depends on an unmerged PR, either wait for merge and branch from updated `main`, or explicitly create stacked work from the PR branch.
 - If follow-up work does not depend on an unmerged PR, it may proceed in parallel from updated `main`.
