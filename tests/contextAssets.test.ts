@@ -118,6 +118,28 @@ describe("context asset governance health", () => {
     expect(health.inEffectExplanation).toContain("will not infer");
   });
 
+  it("keeps active not-in-effect assets informational without claiming usage is unproven", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "active-not-in-effect",
+        title: "Active archived rule",
+        status: "active",
+        usage: {
+          state: "not_in_effect",
+          summary: "A newer project rule takes precedence.",
+        },
+      })
+    );
+
+    expect(health).toMatchObject({
+      severity: "informational",
+      issueClass: "none",
+    });
+    expect(health.explanation).toContain("not currently in effect");
+    expect(health.explanation).not.toContain("not proven");
+  });
+
+
   it("maps stale, conflicted, and orphaned assets to warning issue classes", () => {
     expect(deriveContextAssetGovernanceHealth(normalizeContextAsset({ id: "stale", title: "Stale", status: "stale" }))).toMatchObject({
       severity: "warning",

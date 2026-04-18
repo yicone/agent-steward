@@ -366,6 +366,9 @@ export function deriveContextAssetGovernanceHealth(asset: ContextAsset): Context
   if (asset.status === "active" && asset.usage.state === "in_effect") {
     severity = "healthy";
     explanation = `Active and currently in effect. ${usageSummary}`;
+  } else if (asset.status === "active" && asset.usage.state === "not_in_effect") {
+    severity = "informational";
+    explanation = `Active inventory is present, but the asset is not currently in effect. ${usageSummary}`;
   } else if (asset.status === "active") {
     severity = "informational";
     explanation = "Active inventory is present, but current in-effect usage is not proven by metadata.";
@@ -442,7 +445,10 @@ export function deriveAssetsSurfaceState(input: {
     : undefined;
 
   const selectedHealth = selected ? deriveContextAssetGovernanceHealth(selected) : null;
-  const issueVisible = input.filteredAssets.some((asset) => deriveContextAssetGovernanceHealth(asset).severity === "warning");
+  const issueVisible = input.filteredAssets.some((asset) => {
+    if (selected && asset.id === selected.id) return selectedHealth?.severity === "warning";
+    return deriveContextAssetGovernanceHealth(asset).severity === "warning";
+  });
   if (selectedHealth?.severity === "warning") return "issue";
   if (issueVisible) return "issue";
   if (selected) return "selected";
