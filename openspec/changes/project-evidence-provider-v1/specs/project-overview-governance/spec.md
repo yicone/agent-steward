@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Project Overview SHALL summarize provider-backed local evidence
-Project Overview SHALL derive asset and analysis summary cues from project
+The system SHALL derive asset and analysis summary cues from project
 evidence provider output when local evidence is available.
 
 #### Scenario: Overview labels provider-backed evidence

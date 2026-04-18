@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Analysis SHALL distinguish provider-derived findings from seed interpretations
-The Analysis surface SHALL consume provider diagnostics as bounded local
+The system SHALL consume provider diagnostics as bounded local
 findings while clearly distinguishing them from seed/test interpretations.
 
 #### Scenario: Provider diagnostics become bounded findings

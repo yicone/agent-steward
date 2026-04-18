@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Assets SHALL consume provider-backed project evidence
-The Assets surface SHALL use project evidence provider output as the primary
+The system SHALL use project evidence provider output as the primary
 source for reusable context assets when provider evidence is available.
 
 #### Scenario: Provider-backed assets replace seed inventory
