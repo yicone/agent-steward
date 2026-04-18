@@ -172,6 +172,15 @@ function createOutputRootBlocker(): BackupValidationItem {
   };
 }
 
+function isMissingPathError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
 async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> {
   try {
     const root = getProjectBundlesRoot();
@@ -182,7 +191,10 @@ async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> 
         return null;
       }
       return createOutputRootBlocker();
-    } catch {
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        return createOutputRootBlocker();
+      }
       // Root does not exist yet; fall back to nearest existing writable ancestor.
     }
     let current = path.dirname(root);
@@ -194,7 +206,10 @@ async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> 
         }
         await fs.access(current, fsConstants.W_OK | fsConstants.X_OK);
         return null;
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) {
+          return createOutputRootBlocker();
+        }
         const parent = path.dirname(current);
         if (parent === current) break;
         current = parent;

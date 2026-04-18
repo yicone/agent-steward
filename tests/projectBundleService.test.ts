@@ -35,6 +35,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (originalBundleRoot === undefined) {
     delete process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT;
   } else {
@@ -375,6 +376,44 @@ describe("project bundle service", () => {
     const blockedAncestor = path.join(tmpDir, "not-a-directory");
     await fs.writeFile(blockedAncestor, "not a directory", "utf8");
     process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(blockedAncestor, "project-bundles");
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+
+    expect(result.validation.status).toBe("invalid");
+    expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+  });
+
+  it("blocks validation when output root stat fails with a permission error", async () => {
+    const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
+    const originalStat = fs.stat.bind(fs);
+    vi.spyOn(fs, "stat").mockImplementation(async (target, options) => {
+      if (String(target) === bundleRoot) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException;
+        error.code = "EACCES";
+        throw error;
+      }
+      return originalStat(target, options);
+    });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+
+    expect(result.validation.status).toBe("invalid");
+    expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+  });
+
+  it("blocks validation when an existing output root ancestor is not accessible", async () => {
+    const inaccessibleAncestor = path.join(tmpDir, "inaccessible");
+    await fs.mkdir(inaccessibleAncestor, { recursive: true });
+    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(inaccessibleAncestor, "project-bundles");
+    const originalAccess = fs.access.bind(fs);
+    vi.spyOn(fs, "access").mockImplementation(async (target, mode) => {
+      if (String(target) === inaccessibleAncestor) {
+        const error = new Error("operation not permitted") as NodeJS.ErrnoException;
+        error.code = "EPERM";
+        throw error;
+      }
+      return originalAccess(target, mode);
+    });
 
     const result = await validateProjectBundle(makeSelection(), makeConfig());
 
