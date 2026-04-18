@@ -53,6 +53,7 @@ export type ProjectOverviewProjectIdentity = {
   title: string;
   scopeLabel: string;
   evidenceLabel: string;
+  evidenceKind: "loading" | "none" | "foundation-seed" | "local-evidence";
   state: ProjectOverviewPageState;
 };
 
@@ -554,6 +555,9 @@ export function deriveProjectOverviewSummary(input: ProjectOverviewSummaryInput 
   const analysisAvailable = input.analysisAvailable ?? input.findings !== null;
   const sessionsAvailable = input.sessionsAvailable ?? input.sessions !== null;
   const backupAvailable = input.backupAvailable ?? input.backupWorkflows !== null;
+  const usesFoundationSeedAssets = assetsAvailable && input.assets === undefined;
+  const usesFoundationSeedFindings = analysisAvailable && input.findings === undefined;
+  const usesFoundationSeeds = usesFoundationSeedAssets || usesFoundationSeedFindings;
   const assets = assetsAvailable ? (input.assets ?? createContextAssetSeeds()) : [];
   const findings = analysisAvailable ? (input.findings ?? createAnalysisFindingSeeds()) : [];
   const sessions = sessionsAvailable ? (input.sessions ?? []) : [];
@@ -583,16 +587,26 @@ export function deriveProjectOverviewSummary(input: ProjectOverviewSummaryInput 
       : hasHighPriorityIssue
         ? "issue"
         : "normal";
+  const evidenceKind: ProjectOverviewProjectIdentity["evidenceKind"] = input.isLoading
+    ? "loading"
+    : state === "no-project-context"
+      ? "none"
+      : usesFoundationSeeds
+        ? "foundation-seed"
+        : "local-evidence";
 
   return {
     identity: {
       title: input.projectTitle?.trim() || "Project Overview",
       scopeLabel: input.scopeLabel?.trim() || "Local project context",
-      evidenceLabel: input.isLoading
+      evidenceLabel: evidenceKind === "loading"
         ? "Loading local project evidence"
-        : state === "no-project-context"
+        : evidenceKind === "none"
           ? "No sessions or reusable assets found yet"
-          : "Derived from local project evidence",
+          : evidenceKind === "foundation-seed"
+            ? "Sample foundation data, not live project inventory"
+            : "Derived from explicit local project evidence",
+      evidenceKind,
       state,
     },
     contextSnapshot,

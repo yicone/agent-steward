@@ -90,6 +90,9 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Fixed
 
+- `2026-04-18` — Project Overview seed data labeling
+  - Marked the default Project Overview asset/finding/attention summary as foundation sample data instead of implying it is live project inventory
+
 - `2026-04-09` — Conversation list race condition when deep-linking to Codex
   - Fixed `loadList` AbortController to cancel in-flight fetches when source changes rapidly
   - Prevents Antigravity conversation list from overwriting Codex list on initial page load with `?source=codex` URL
