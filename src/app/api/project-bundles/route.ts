@@ -55,7 +55,7 @@ function hasExplicitComposition(selection: ProjectBundleRequestBody["selection"]
     return false;
   }
 
-  return PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.some((category) =>
+  return PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.every((category) =>
     Object.prototype.hasOwnProperty.call(selection.includedCategories, category)
   );
 }

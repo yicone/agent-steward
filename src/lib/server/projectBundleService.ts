@@ -160,7 +160,7 @@ async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> 
     try {
       const stat = await fs.stat(root);
       if (stat.isDirectory()) {
-        await fs.access(root, fsConstants.W_OK);
+        await fs.access(root, fsConstants.W_OK | fsConstants.X_OK);
         return null;
       }
       return createOutputRootBlocker();
@@ -174,7 +174,7 @@ async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> 
         if (!stat.isDirectory()) {
           return createOutputRootBlocker();
         }
-        await fs.access(current, fsConstants.W_OK);
+        await fs.access(current, fsConstants.W_OK | fsConstants.X_OK);
         return null;
       } catch {
         const parent = path.dirname(current);

@@ -42,6 +42,9 @@ describe("project bundle route", () => {
             includedCategories: {
               sessions: false,
               rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
             },
           },
           configuration: {
@@ -284,6 +287,9 @@ describe("project bundle route", () => {
             includedCategories: {
               sessions: false,
               rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
             },
           },
           configuration: {
