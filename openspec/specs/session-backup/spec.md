@@ -1,4 +1,11 @@
-## ADDED Requirements
+## Purpose
+
+Define the accepted behavior for local session backup and import. Session
+backup preserves canonical product-readable session records by default, keeps
+raw source preservation explicit, and produces package metadata that can be
+validated and reused by project bundle workflows.
+
+## Requirements
 
 ### Requirement: Session backup SHALL default to canonical session records
 The system SHALL define `Session Backup` as a preserved copy of canonical `Session Record` data instead of a rendered transcript or a raw source store.
@@ -6,7 +13,7 @@ The system SHALL define `Session Backup` as a preserved copy of canonical `Sessi
 #### Scenario: Default backup excludes transcript-only semantics
 - **WHEN** a user backs up a session without enabling advanced source-preservation options
 - **THEN** the backup package contains canonical session record data as the primary preserved object
-- **THEN** transcript or markdown output is not treated as the canonical backup artifact
+- **AND** transcript or markdown output is not treated as the canonical backup artifact
 
 #### Scenario: Backup remains useful without upstream runtime access
 - **WHEN** the original runtime interface, port, or private store is no longer available
@@ -22,7 +29,7 @@ The system SHALL treat raw source preservation as an opt-in `Source Backup` beha
 #### Scenario: Opt-in source preservation is copy-only
 - **WHEN** a user enables source preservation for a session backup
 - **THEN** the system stores a separate copy of the original source material in the backup package
-- **THEN** the system does not move, rewrite, or delete the upstream session source
+- **AND** the system does not move, rewrite, or delete the upstream session source
 
 ### Requirement: Session backup import SHALL restore product-readable state
 The system SHALL support importing session backups into this product so backed-up sessions can be read, searched, and analyzed without depending on the original source.

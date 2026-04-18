@@ -1,4 +1,11 @@
-## ADDED Requirements
+## Purpose
+
+Define the canonical session record contract used across indexing, analysis,
+migration, and backup. The model preserves stable session identity,
+provenance, normalized events, and schema-versioned evolution independently
+from source-specific payloads or rendered views.
+
+## Requirements
 
 ### Requirement: Canonical session records SHALL expose a backup-ready contract
 The system SHALL define a canonical `Session Record` representation that is stable enough to support indexing, analysis, migration, and backup across supported session sources.
@@ -17,7 +24,7 @@ The system SHALL preserve where a session came from and how the canonical record
 #### Scenario: Record keeps source reference by default
 - **WHEN** the system creates a canonical `Session Record`
 - **THEN** the record includes source identity and source-reference metadata sufficient to explain the original source location or retrieval path
-- **THEN** the record remains valid even if no raw source copy is embedded
+- **AND** the record remains valid even if no raw source copy is embedded
 
 #### Scenario: Record keeps derivation evidence
 - **WHEN** the system normalizes source-specific session data into a canonical record
@@ -29,7 +36,7 @@ The system SHALL treat rendered views such as `Transcript`, `Trajectory`, `Compa
 #### Scenario: Transcript is treated as a derived view
 - **WHEN** a transcript or markdown representation is available for a session
 - **THEN** the canonical `Session Record` is still the product's backup and migration object
-- **THEN** derived views are optional projections rather than required canonical fields
+- **AND** derived views are optional projections rather than required canonical fields
 
 #### Scenario: Record remains analyzable without cached views
 - **WHEN** a canonical `Session Record` is imported without embedded derived views
@@ -41,7 +48,7 @@ The system SHALL version canonical session records so future changes can evolve 
 #### Scenario: Import checks schema compatibility
 - **WHEN** the product imports a canonical session record from backup
 - **THEN** it evaluates the record's schema version before accepting the record
-- **THEN** unsupported versions are rejected or flagged with actionable compatibility messaging
+- **AND** unsupported versions are rejected or flagged with actionable compatibility messaging
 
 #### Scenario: Forward evolution preserves compatibility intent
 - **WHEN** the canonical session record contract changes in a future release
