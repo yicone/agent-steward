@@ -114,7 +114,7 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - bulk session backup requires explicit session selection, validates each selected session independently, and fans out through the existing single-session backup execution path
   - bulk results show aggregate status plus per-session detail, while recent operations record one compact batch entry instead of one entry per session
   - migration preview requires explicit source context, target context, and bounded scope, and ends at preview-only validation/result states without migration apply or bundle generation
-  - project bundle requires explicit composition and validation before generation, writes a real local `project-bundle/v1` file, and reuses existing session backup packages instead of inventing a second session archive format
+  - project bundle requires explicit composition and validation before generation, writes a real local `project-bundle/v1` file, shows display-safe bundle locations, preserves missing session packages as unresolved references, and reuses existing session backup packages instead of inventing a second session archive format
   - the foundation still does not implement migration apply, restore/apply for project bundles, vendor-runtime reopen, or cloud sync
 
 For detailed view semantics and cross-source alignment notes, see `docs/viewer/trajectory-view.md`.

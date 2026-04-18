@@ -42,6 +42,9 @@ describe("project bundle route", () => {
             includedCategories: {
               sessions: false,
               rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
             },
           },
           configuration: {
@@ -75,6 +78,8 @@ describe("project bundle route", () => {
       memberReferences: [],
       packageId: "project-bundle-1",
       filePath: `${os.homedir()}/.agent-storage-manager/project-bundle-1.bundle.json`,
+      createdAt: "2026-04-18T06:00:00.000Z",
+      document: { shouldNotLeak: true },
     });
 
     const response = await POST(
@@ -88,6 +93,13 @@ describe("project bundle route", () => {
             projectBundleScopeHint: "overview-routed project context",
           },
           selection: {
+            includedCategories: {
+              sessions: true,
+              rules: false,
+              memory: false,
+              skills: false,
+              commands: false,
+            },
             sessionSelections: [
               {
                 sessionId: "session-1",
@@ -107,6 +119,8 @@ describe("project bundle route", () => {
     expect(generateProjectBundleMock).toHaveBeenCalledTimes(1);
     const json = await response.json();
     expect(json.filePath).toBe("~/.agent-storage-manager/project-bundle-1.bundle.json");
+    expect(json.createdAt).toBe("2026-04-18T06:00:00.000Z");
+    expect(json.document).toBeUndefined();
     const [selection, configuration] = generateProjectBundleMock.mock.calls[0]!;
     expect(selection.scopeHint).toBe("overview-routed project context");
     expect(selection.sessionSelections).toHaveLength(1);
@@ -154,11 +168,48 @@ describe("project bundle route", () => {
     expect(validateProjectBundleMock).not.toHaveBeenCalled();
     expect(generateProjectBundleMock).not.toHaveBeenCalled();
     expect(await response.json()).toEqual({
-      error: "Unsupported mode: oops",
+      error: "Unsupported project bundle mode.",
       code: "INVALID_MODE",
       title: "Invalid request",
       hint: "Use mode validate or generate.",
     });
+  });
+
+  it("returns a structured 400 for invalid JSON", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: "{not json",
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(validateProjectBundleMock).not.toHaveBeenCalled();
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({
+      error: "Invalid JSON body",
+      code: "INVALID_REQUEST",
+      title: "Invalid request",
+      hint: "Send a JSON body with mode, selection, and configuration.",
+    });
+  });
+
+  it("rejects missing mode values instead of defaulting to validation", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          configuration: {
+            bundleName: "Missing mode",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(validateProjectBundleMock).not.toHaveBeenCalled();
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect((await response.json()).code).toBe("INVALID_MODE");
   });
 
   it("rejects generate mode when explicit selection or configuration is missing", async () => {
@@ -180,5 +231,150 @@ describe("project bundle route", () => {
       title: "Invalid request",
       hint: "Run explicit composition first, then submit selection and configuration for generation.",
     });
+  });
+
+  it("rejects generate mode when selection omits explicit category composition", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          selection: {
+            sessionSelections: [
+              {
+                sessionId: "session-1",
+                source: "codex",
+              },
+            ],
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(validateProjectBundleMock).not.toHaveBeenCalled();
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect((await response.json()).code).toBe("MISSING_GENERATE_INPUT");
+  });
+
+  it("rejects generate mode when explicit category composition values are not booleans", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          selection: {
+            includedCategories: {
+              sessions: "false",
+              rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
+              __proto__: { polluted: true },
+            },
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect((await response.json()).code).toBe("MISSING_GENERATE_INPUT");
+  });
+
+  it("converts non-home bundle file locations to display-safe paths", async () => {
+    generateProjectBundleMock.mockResolvedValue({
+      validation: { status: "valid", items: [] },
+      summary: {
+        warningCount: 0,
+        blockerCount: 0,
+        selectedCategoryCount: 1,
+        selectedSessionCount: 0,
+        resolvedReferenceCount: 1,
+        unresolvedReferenceCount: 0,
+      },
+      memberInventory: [],
+      memberReferences: [],
+      packageId: "project-bundle-2",
+      createdAt: "2026-04-18T06:01:00.000Z",
+      filePath: "/tmp/private-user/project-bundles/project-bundle-2.bundle.json",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          selection: {
+            includedCategories: {
+              sessions: false,
+              rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
+            },
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.filePath).toBe("project-bundles/project-bundle-2.bundle.json");
+    expect(JSON.stringify(json)).not.toContain("/tmp/private-user");
+  });
+
+  it("derives non-home display path prefixes from the actual bundle directory", async () => {
+    generateProjectBundleMock.mockResolvedValue({
+      validation: { status: "valid", items: [] },
+      summary: {
+        warningCount: 0,
+        blockerCount: 0,
+        selectedCategoryCount: 1,
+        selectedSessionCount: 0,
+        resolvedReferenceCount: 1,
+        unresolvedReferenceCount: 0,
+      },
+      memberInventory: [],
+      memberReferences: [],
+      packageId: "project-bundle-3",
+      createdAt: "2026-04-18T06:02:00.000Z",
+      filePath: "/tmp/private-user/custom-bundles/project-bundle-3.bundle.json",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          selection: {
+            includedCategories: {
+              sessions: false,
+              rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
+            },
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.filePath).toBe("custom-bundles/project-bundle-3.bundle.json");
+    expect(JSON.stringify(json)).not.toContain("/tmp/private-user");
   });
 });

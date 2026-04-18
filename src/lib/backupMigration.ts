@@ -207,6 +207,7 @@ export type ProjectBundleValidationResponse = {
 
 export type ProjectBundleGenerateResponse = ProjectBundleValidationResponse & {
   packageId: string;
+  createdAt: string;
   filePath: string;
 };
 
