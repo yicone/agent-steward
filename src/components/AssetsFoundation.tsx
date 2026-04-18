@@ -269,7 +269,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                   <div className="mt-1 font-semibold text-foreground">{summary.inEffect}</div>
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background/15 px-3 py-2">
-                  <div className="text-xs uppercase tracking-[0.18em]">Governance issues</div>
+                  <div className="text-xs uppercase tracking-[0.18em]">Warning issues</div>
                   <div className="mt-1 font-semibold text-foreground">{summary.issueCount}</div>
                 </div>
               </div>
@@ -392,7 +392,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-2">
                           {asset.usage.state === "in_effect" ? <Badge variant="ok">in effect</Badge> : null}
-                          {isIssueContextAsset(asset) ? <Badge variant="warn">needs attention</Badge> : null}
+                          {health.severity === "warning" ? <Badge variant="warn">needs attention</Badge> : null}
                           {health.severity === "unknown" ? <Badge variant="default">non-blocking unknown</Badge> : null}
                         </div>
                       </div>

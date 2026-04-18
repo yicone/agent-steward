@@ -92,7 +92,7 @@ describe("AssetsFoundation", () => {
 
     expect(html).toContain("Foundation data cue");
     expect(html).toContain("not a complete live project scan");
-    expect(html).toContain("Governance issues");
+    expect(html).toContain("Warning issues");
     expect(html).toContain("Freshness");
     expect(html).toContain("Conflict");
     expect(html).toContain("Orphaned");
