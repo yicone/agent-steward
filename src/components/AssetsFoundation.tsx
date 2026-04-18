@@ -291,7 +291,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
               <Badge variant={summary.governanceIssueCounts.orphaned > 0 ? "warn" : "default"}>
                 Orphaned {summary.governanceIssueCounts.orphaned}
               </Badge>
-              <Badge variant={summary.governanceIssueCounts.unknown > 0 ? "default" : "default"}>
+              <Badge variant="default">
                 Unknown {summary.governanceIssueCounts.unknown}
               </Badge>
             </div>

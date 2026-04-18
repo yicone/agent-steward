@@ -415,7 +415,7 @@ export function summarizeContextAssets(assets: ContextAsset[]): ContextAssetSumm
     governanceIssueCounts[health.issueClass] += 1;
     severityCounts[health.severity] += 1;
     if (asset.usage.state === "in_effect") inEffect += 1;
-    if (health.issueClass !== "none") issueCount += 1;
+    if (health.severity === "warning") issueCount += 1;
   }
 
   return {
@@ -441,8 +441,9 @@ export function deriveAssetsSurfaceState(input: {
     ? input.filteredAssets.find((asset) => asset.id === input.selectedAssetId)
     : undefined;
 
+  const selectedHealth = selected ? deriveContextAssetGovernanceHealth(selected) : null;
   const issueVisible = input.filteredAssets.some((asset) => deriveContextAssetGovernanceHealth(asset).severity === "warning");
-  if (selected && deriveContextAssetGovernanceHealth(selected).severity === "warning") return "issue";
+  if (selectedHealth?.severity === "warning") return "issue";
   if (issueVisible) return "issue";
   if (selected) return "selected";
   return "normal";
