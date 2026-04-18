@@ -481,7 +481,7 @@ describe("BackupMigrationFoundation panels", () => {
               id: "bundle-output-root-unwritable",
               label: "Project bundle output destination",
               severity: "block",
-              detail: "Project bundle output root is unavailable or not writable. Choose a writable local output location and retry.",
+              detail: "Project bundle output root is unavailable or not writable. Fix permissions for the configured output root, or set AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT to a writable local directory, then retry.",
             },
           ],
         }}
@@ -490,7 +490,7 @@ describe("BackupMigrationFoundation panels", () => {
 
     expect(html).toContain("Project bundle output destination");
     expect(html).toContain("block");
-    expect(html).toContain("Choose a writable local output location");
+    expect(html).toContain("AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT");
     expect(html).not.toContain("/Users/");
     expect(html).not.toContain("/tmp/");
   });
