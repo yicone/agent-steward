@@ -181,39 +181,59 @@ function isMissingPathError(error: unknown): boolean {
   );
 }
 
+async function checkWritableOutputDirectory(candidate: string): Promise<"ok" | "missing" | "blocked"> {
+  let entryStat: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    entryStat = await fs.lstat(candidate);
+  } catch (error) {
+    return isMissingPathError(error) ? "missing" : "blocked";
+  }
+
+  let targetStat = entryStat;
+  if (entryStat.isSymbolicLink()) {
+    try {
+      targetStat = await fs.stat(candidate);
+    } catch {
+      return "blocked";
+    }
+  }
+
+  if (!targetStat.isDirectory()) {
+    return "blocked";
+  }
+
+  try {
+    await fs.access(candidate, fsConstants.W_OK | fsConstants.X_OK);
+    return "ok";
+  } catch {
+    return "blocked";
+  }
+}
+
 async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> {
   try {
     const root = getProjectBundlesRoot();
-    try {
-      const stat = await fs.stat(root);
-      if (stat.isDirectory()) {
-        await fs.access(root, fsConstants.W_OK | fsConstants.X_OK);
-        return null;
-      }
-      return createOutputRootBlocker();
-    } catch (error) {
-      if (!isMissingPathError(error)) {
-        return createOutputRootBlocker();
-      }
-      // Root does not exist yet; fall back to nearest existing writable ancestor.
+    const rootCheck = await checkWritableOutputDirectory(root);
+    if (rootCheck === "ok") {
+      return null;
     }
+    if (rootCheck === "blocked") {
+      return createOutputRootBlocker();
+    }
+
+    // Root does not exist yet; fall back to nearest existing writable ancestor.
     let current = path.dirname(root);
     while (true) {
-      try {
-        const stat = await fs.stat(current);
-        if (!stat.isDirectory()) {
-          return createOutputRootBlocker();
-        }
-        await fs.access(current, fsConstants.W_OK | fsConstants.X_OK);
+      const currentCheck = await checkWritableOutputDirectory(current);
+      if (currentCheck === "ok") {
         return null;
-      } catch (error) {
-        if (!isMissingPathError(error)) {
-          return createOutputRootBlocker();
-        }
-        const parent = path.dirname(current);
-        if (parent === current) break;
-        current = parent;
       }
+      if (currentCheck === "blocked") {
+        return createOutputRootBlocker();
+      }
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
     }
     return createOutputRootBlocker();
   } catch {

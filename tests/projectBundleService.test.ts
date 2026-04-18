@@ -383,17 +383,38 @@ describe("project bundle service", () => {
     expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
   });
 
-  it("blocks validation when output root stat fails with a permission error", async () => {
+  it("blocks validation when output root lstat fails with a permission error", async () => {
     const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
-    const originalStat = fs.stat.bind(fs);
-    vi.spyOn(fs, "stat").mockImplementation(async (target, options) => {
+    const originalLstat = fs.lstat.bind(fs);
+    vi.spyOn(fs, "lstat").mockImplementation(async (target, options) => {
       if (String(target) === bundleRoot) {
         const error = new Error("permission denied") as NodeJS.ErrnoException;
         error.code = "EACCES";
         throw error;
       }
-      return originalStat(target, options);
+      return originalLstat(target, options);
     });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+
+    expect(result.validation.status).toBe("invalid");
+    expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+  });
+
+  it("blocks validation when the configured output root is a broken symlink", async () => {
+    const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
+    await fs.symlink(path.join(tmpDir, "missing-target"), bundleRoot, "dir");
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+
+    expect(result.validation.status).toBe("invalid");
+    expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+  });
+
+  it("blocks validation when a missing output root has a broken symlink ancestor", async () => {
+    const brokenAncestor = path.join(tmpDir, "broken-ancestor");
+    await fs.symlink(path.join(tmpDir, "missing-target"), brokenAncestor, "dir");
+    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(brokenAncestor, "project-bundles");
 
     const result = await validateProjectBundle(makeSelection(), makeConfig());
 
