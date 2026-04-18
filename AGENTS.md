@@ -105,6 +105,11 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 ## PR Review Workflow
 
 - For PR review triage and agent-assisted fixes, follow `docs/dev/pr-review-agent-workflow.md`.
+- Before opening, marking ready, or recommending merge for a PR, run a PR preflight check even if no Copilot review exists yet:
+  - If the PR is a medium/large implementation slice, OpenSpec implementation, backup/migration change, parser/diagnostics/local-path-sensitive change, or shell/navigation change, perform or delegate an independent pre-review before marking ready.
+  - If the PR changes UI/runtime behavior, record browser QA evidence or explicitly state why browser QA is not required; keep the PR draft until that evidence exists or is explicitly waived.
+  - If the PR is spec-only or docs-only, skip browser QA unless the docs change tooling behavior; still run OpenSpec validation for OpenSpec artifacts.
+  - Fetch unresolved review threads before recommending ready or merge, even when CI is green.
 - Treat Copilot review comments as advisory input, not merge-blocking approval or requested changes.
 - Classify review feedback before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 - Batch review comments from the same review round; do not push one fix per comment unless the issue is urgent or blocking.
