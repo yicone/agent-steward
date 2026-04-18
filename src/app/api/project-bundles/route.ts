@@ -1,8 +1,10 @@
 import os from "node:os";
+import path from "node:path";
 
 import { NextResponse } from "next/server";
 
 import {
+  PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES,
   createDefaultProjectBundleSelection,
   type BackupMigrationHandoff,
   type BackupSessionSelection,
@@ -34,10 +36,28 @@ function normalizeConfiguration(input?: ProjectBundleConfiguration | null): Proj
   };
 }
 
-function redactDisplayPath(filePath: string): string {
-  return filePath
-    .replace(os.homedir(), "~")
-    .replace(/\\/g, "/");
+function toDisplaySafeBundlePath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/");
+  const normalizedHome = os.homedir().replace(/\\/g, "/");
+  const homeRelative = normalized === normalizedHome || normalized.startsWith(`${normalizedHome}/`)
+    ? normalized.replace(normalizedHome, "~")
+    : normalized;
+
+  if (!homeRelative.startsWith("~")) {
+    return `project-bundles/${path.basename(normalized)}`;
+  }
+
+  return homeRelative;
+}
+
+function hasExplicitComposition(selection: ProjectBundleRequestBody["selection"]): boolean {
+  if (!selection?.includedCategories) {
+    return false;
+  }
+
+  return PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.some((category) =>
+    Object.prototype.hasOwnProperty.call(selection.includedCategories, category)
+  );
 }
 
 export async function POST(req: Request) {
@@ -56,10 +76,10 @@ export async function POST(req: Request) {
     );
   }
 
-  if (body.mode !== undefined && body.mode !== "validate" && body.mode !== "generate") {
+  if (body.mode !== "validate" && body.mode !== "generate") {
     return NextResponse.json(
       {
-        error: `Unsupported mode: ${String(body.mode)}`,
+        error: "Unsupported project bundle mode.",
         code: "INVALID_MODE",
         title: "Invalid request",
         hint: "Use mode validate or generate.",
@@ -68,7 +88,7 @@ export async function POST(req: Request) {
     );
   }
 
-  if (body.mode === "generate" && (!body.selection || !body.configuration)) {
+  if (body.mode === "generate" && (!body.selection || !body.configuration || !hasExplicitComposition(body.selection))) {
     return NextResponse.json(
       {
         error: "Generate mode requires explicit selection and configuration.",
@@ -96,8 +116,13 @@ export async function POST(req: Request) {
     if (body.mode === "generate") {
       const generated = await generateProjectBundle(selection, configuration);
       return NextResponse.json({
-        ...generated,
-        filePath: redactDisplayPath(generated.filePath),
+        validation: generated.validation,
+        summary: generated.summary,
+        memberInventory: generated.memberInventory,
+        memberReferences: generated.memberReferences,
+        packageId: generated.packageId,
+        createdAt: generated.createdAt,
+        filePath: toDisplaySafeBundlePath(generated.filePath),
       });
     }
 

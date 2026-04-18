@@ -433,7 +433,7 @@ describe("BackupMigrationFoundation panels", () => {
           timestamp: "2026-04-16T13:00:00Z",
           summary: "Project bundle project-bundle-1 generated with 3 member references.",
           packageId: "project-bundle-1",
-          filePath: "/tmp/project-bundle-1.bundle.json",
+          filePath: "project-bundles/project-bundle-1.bundle.json",
           memberCount: 3,
           projectBundleValidationSummary: {
             warningCount: 1,
@@ -464,10 +464,35 @@ describe("BackupMigrationFoundation panels", () => {
     );
 
     expect(html).toContain("project-bundle-1");
-    expect(html).toContain("/tmp/project-bundle-1.bundle.json");
+    expect(html).toContain("project-bundles/project-bundle-1.bundle.json");
+    expect(html).not.toContain("/tmp/");
     expect(html).toContain("Bundle member inventory");
     expect(html).toContain("missing-package");
     expect(html).toContain("No restore or apply in foundation v1.");
+  });
+
+  it("renders project bundle global blockers without assigning them to member inventory", () => {
+    const html = renderToStaticMarkup(
+      <ValidationPanel
+        result={{
+          status: "invalid",
+          items: [
+            {
+              id: "bundle-output-root-unwritable",
+              label: "Project bundle output destination",
+              severity: "block",
+              detail: "Project bundle output root is unavailable or not writable. Choose a writable local output location and retry.",
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(html).toContain("Project bundle output destination");
+    expect(html).toContain("block");
+    expect(html).toContain("Choose a writable local output location");
+    expect(html).not.toContain("/Users/");
+    expect(html).not.toContain("/tmp/");
   });
 
   it("renders validate-package terminal vocabulary instead of generic success wording", () => {

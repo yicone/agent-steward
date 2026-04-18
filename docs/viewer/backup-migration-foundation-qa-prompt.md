@@ -158,11 +158,14 @@ Project bundle workflow checks:
 7. Confirm warnings remain visible through confirmation and do not silently remove the selected session.
 8. Execute generation and confirm the result shows:
    - package identity
-   - local file path
+   - display-safe file location
    - member count
    - validation summary
    - member inventory / references
-9. Confirm result copy does not promise:
+9. Confirm result display does not expose raw absolute local paths, usernames, temporary directories, or exception text.
+10. Confirm unresolved or `missing-package` session references remain visible in result metadata instead of being silently omitted.
+11. If an output-root failure can be simulated, confirm it appears as a global blocking validation item and not as a member-category inventory failure.
+12. Confirm result copy does not promise:
    - restore/apply
    - vendor-runtime reopen
    - cloud sync

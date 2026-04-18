@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-18` — Project bundle hardening
+  - Hardened `/api/project-bundles` so generation requires explicit selection/configuration, invalid modes return structured errors, and generate responses expose summary-shaped display data only
+  - Strengthened project bundle validation for global output-root blockers, structural blockers, missing-package warnings, safe diagnostics, and deterministic newest matching session backup reuse
+  - Updated result rendering and QA coverage so unresolved references and display-safe bundle locations remain visible without raw local path leakage
+
 - `2026-04-18` — Project Overview governance foundation
   - Replaced the static `Project Overview` cards with a project-scoped governance module spine for context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions
   - Added a local Overview summary model that derives compact cues from existing Sessions, Assets, Analysis, and Backup / Migration foundation data without fabricating missing provider evidence

@@ -45,6 +45,17 @@ type ComposeProjectBundleResult = ProjectBundleValidationResponse & {
   projectMetadata: ProjectBundleProjectMetadata;
 };
 
+function isPreferredSessionBackupMatch(
+  candidate: Pick<SessionBackupReferenceMatch, "backupId" | "createdAt">,
+  existing?: Pick<SessionBackupReferenceMatch, "backupId" | "createdAt">
+): boolean {
+  if (!existing) return true;
+  if (candidate.createdAt !== existing.createdAt) {
+    return candidate.createdAt > existing.createdAt;
+  }
+  return candidate.backupId > existing.backupId;
+}
+
 function createPackageId(): string {
   return `project-bundle-${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
 }
@@ -77,8 +88,14 @@ async function listSessionBackupMatches(
   const index = new Map<string, SessionBackupReferenceMatch>();
   const root = getSessionBackupsRoot();
   const requestedKeys = new Set(sessionSelections.map((selection) => formatSessionSelectionLabel(selection)));
-  const remainingKeys = new Set(requestedKeys);
   const requestedSessionIds = new Set(sessionSelections.map((selection) => selection.sessionId));
+  const requestedKeysBySessionId = new Map<string, string[]>();
+
+  for (const selection of sessionSelections) {
+    const keys = requestedKeysBySessionId.get(selection.sessionId) ?? [];
+    keys.push(formatSessionSelectionLabel(selection));
+    requestedKeysBySessionId.set(selection.sessionId, keys);
+  }
 
   if (requestedKeys.size === 0) {
     return index;
@@ -87,14 +104,19 @@ async function listSessionBackupMatches(
   try {
     const entries = await fs.readdir(root, { withFileTypes: true });
     for (const entry of entries) {
-      if (remainingKeys.size === 0) break;
       if (!entry.isDirectory()) continue;
 
       try {
         const manifest = parseSessionBackupManifest(await readBackupManifestFile(entry.name));
         for (const recordEntry of manifest.records) {
-          if (remainingKeys.size === 0) break;
           if (!requestedSessionIds.has(recordEntry.sessionId)) continue;
+          const possibleKeys = requestedKeysBySessionId.get(recordEntry.sessionId) ?? [];
+          if (possibleKeys.length > 0 && possibleKeys.every((key) => {
+            const existing = index.get(key);
+            return existing ? !isPreferredSessionBackupMatch(manifest, existing) : false;
+          })) {
+            continue;
+          }
           const record = parseSessionRecord((await readBackupFile(entry.name, recordEntry.path)).toString("utf8"));
           const key = formatSessionSelectionLabel({
             sessionId: record.session.id,
@@ -103,7 +125,7 @@ async function listSessionBackupMatches(
           });
           if (!requestedKeys.has(key)) continue;
           const existing = index.get(key);
-          if (existing && existing.createdAt >= manifest.createdAt) continue;
+          if (!isPreferredSessionBackupMatch(manifest, existing)) continue;
           index.set(key, {
             backupId: manifest.backupId,
             createdAt: manifest.createdAt,
@@ -111,7 +133,6 @@ async function listSessionBackupMatches(
             sessionId: record.session.id,
             rootId: record.session.rootId,
           });
-          remainingKeys.delete(key);
         }
       } catch {
         continue;
@@ -124,33 +145,46 @@ async function listSessionBackupMatches(
   return index;
 }
 
-async function canPrepareBundleOutputRoot(): Promise<boolean> {
+function createOutputRootBlocker(): BackupValidationItem {
+  return {
+    id: "bundle-output-root-unwritable",
+    label: "Project bundle output destination",
+    severity: "block",
+    detail: "Project bundle output root is unavailable or not writable. Choose a writable local output location and retry.",
+  };
+}
+
+async function validateBundleOutputRoot(): Promise<BackupValidationItem | null> {
   try {
     const root = getProjectBundlesRoot();
     try {
       const stat = await fs.stat(root);
       if (stat.isDirectory()) {
         await fs.access(root, fsConstants.W_OK);
-        return true;
+        return null;
       }
-      return false;
+      return createOutputRootBlocker();
     } catch {
       // Root does not exist yet; fall back to nearest existing writable ancestor.
     }
     let current = path.dirname(root);
     while (true) {
       try {
+        const stat = await fs.stat(current);
+        if (!stat.isDirectory()) {
+          return createOutputRootBlocker();
+        }
         await fs.access(current, fsConstants.W_OK);
-        return true;
+        return null;
       } catch {
         const parent = path.dirname(current);
         if (parent === current) break;
         current = parent;
       }
     }
-    return false;
+    return createOutputRootBlocker();
   } catch {
-    return false;
+    return createOutputRootBlocker();
   }
 }
 
@@ -306,14 +340,9 @@ async function composeProjectBundle(
     });
   }
 
-  const outputRootWritable = await canPrepareBundleOutputRoot();
-  if (!outputRootWritable) {
-    validationItems.push({
-      id: "bundle-output-root-unwritable",
-      label: "Bundle output",
-      severity: "block",
-      detail: "Bundle output root cannot be prepared from the current environment.",
-    });
+  const outputRootBlocker = await validateBundleOutputRoot();
+  if (outputRootBlocker) {
+    validationItems.push(outputRootBlocker);
   }
 
   const sessionSelections = dedupeSessionSelections(selection.sessionSelections);
@@ -400,15 +429,15 @@ async function composeProjectBundle(
       category: "project-metadata",
       label: packageInfo.projectName,
       referenceType: "project-metadata",
-      referenceId: packageInfo.workspacePath,
+      referenceId: packageInfo.projectName,
       status: "resolved",
       detail: "Include project-level metadata snapshot for the current workspace.",
       snapshot: createSnapshot({
-        id: packageInfo.workspacePath,
+        id: packageInfo.projectName,
         label: packageInfo.projectName,
         category: "project-metadata",
         scope: "project",
-        provenanceSummary: packageInfo.workspacePath,
+        provenanceSummary: "Current workspace metadata.",
         status: "active",
       }),
     });
@@ -569,6 +598,7 @@ export async function generateProjectBundle(
     memberInventory: composed.memberInventory,
     memberReferences: composed.memberReferences,
     packageId: composed.packageMetadata.packageId,
+    createdAt: composed.packageMetadata.createdAt,
     filePath,
   };
 }

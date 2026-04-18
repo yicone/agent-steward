@@ -131,6 +131,32 @@ async function writeBackupPackage(input: {
   );
 }
 
+async function writeMalformedUnrelatedBackupPackage(input: {
+  backupId: string;
+  sessionId: string;
+}) {
+  const backupDir = path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, input.backupId);
+  await fs.mkdir(backupDir, { recursive: true });
+  await fs.writeFile(
+    path.join(backupDir, "manifest.json"),
+    JSON.stringify({
+      schemaVersion: "session-backup/v1",
+      backupId: input.backupId,
+      createdAt: "2026-04-16T08:00:00.000Z",
+      createdBy: "agent-storage-manager",
+      sessionCount: 1,
+      records: [
+        {
+          sessionId: input.sessionId,
+          path: "sessions/missing.record.json",
+          includesSourceCopy: false,
+        },
+      ],
+    }),
+    "utf8"
+  );
+}
+
 describe("project bundle service", () => {
   it("returns a warning and unresolved reference when a selected session has no existing backup", async () => {
     const result = await validateProjectBundle(makeSelection(), makeConfig());
@@ -156,6 +182,7 @@ describe("project bundle service", () => {
     const document = JSON.parse(raw) as Record<string, unknown>;
 
     expect(generated.validation.status).toBe("valid");
+    expect(generated.createdAt).toMatch(/^20/);
     expect(document.manifest).toBeTruthy();
     expect(document.packageMetadata).toBeTruthy();
     expect(document.projectMetadata).toBeTruthy();
@@ -186,6 +213,95 @@ describe("project bundle service", () => {
 
     expect(sessionReference?.backupId).toBe("backup-new");
     expect(sessionReference?.detail).toContain("backup-new");
+  });
+
+  it("keeps newest-match selection stable when traversal sees an older match first", async () => {
+    await writeBackupPackage({
+      backupId: "aaa-old",
+      createdAt: "2026-04-16T09:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+    await writeBackupPackage({
+      backupId: "zzz-new",
+      createdAt: "2026-04-16T11:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+    const sessionReference = result.memberReferences.find((item) => item.category === "sessions");
+
+    expect(sessionReference?.backupId).toBe("zzz-new");
+    expect(result.summary.resolvedReferenceCount).toBeGreaterThan(0);
+  });
+
+  it("uses backup id as a deterministic tie-breaker when matching timestamps are equal", async () => {
+    await writeBackupPackage({
+      backupId: "aaa-same-time",
+      createdAt: "2026-04-16T11:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+    await writeBackupPackage({
+      backupId: "zzz-same-time",
+      createdAt: "2026-04-16T11:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+    const sessionReference = result.memberReferences.find((item) => item.category === "sessions");
+
+    expect(sessionReference?.backupId).toBe("zzz-same-time");
+  });
+
+  it("does not expose the raw workspace path in validation member references", async () => {
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+    const serialized = JSON.stringify(result);
+
+    expect(serialized).not.toContain(process.cwd());
+    const projectReference = result.memberReferences.find((item) => item.category === "project-metadata");
+    expect(projectReference?.referenceId).toBe(path.basename(process.cwd()));
+    expect(projectReference?.snapshot?.provenanceSummary).toBe("Current workspace metadata.");
+  });
+
+  it("matches backup packages by source and root identity, not session id alone", async () => {
+    await writeBackupPackage({
+      backupId: "backup-wrong-root",
+      createdAt: "2026-04-16T12:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "other-root",
+    });
+    await writeBackupPackage({
+      backupId: "backup-right-root",
+      createdAt: "2026-04-16T10:00:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+    const sessionReference = result.memberReferences.find((item) => item.category === "sessions");
+
+    expect(sessionReference?.backupId).toBe("backup-right-root");
+  });
+
+  it("ignores malformed unrelated backup packages instead of failing validation", async () => {
+    await writeMalformedUnrelatedBackupPackage({
+      backupId: "backup-unrelated",
+      sessionId: "other-session",
+    });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+
+    expect(result.validation.status).toBe("valid-with-warnings");
+    expect(result.validation.items.some((item) => item.id.startsWith("bundle-session-missing-package-"))).toBe(true);
   });
 
   it("blocks generation when bundle identity is structurally invalid", async () => {
@@ -222,10 +338,42 @@ describe("project bundle service", () => {
 
     try {
       const result = await validateProjectBundle(makeSelection(), makeConfig());
-      expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+      const outputBlocker = result.validation.items.find((item) => item.id === "bundle-output-root-unwritable");
+      expect(outputBlocker).toBeTruthy();
+      expect(outputBlocker?.label).toBe("Project bundle output destination");
+      expect(outputBlocker?.detail).not.toContain(tmpDir);
       expect(result.validation.status).toBe("invalid");
+      expect(result.memberInventory.find((item) => item.category === "package-metadata")?.status).not.toBe("blocked");
     } finally {
       await fs.rm(bundleRoot, { force: true });
     }
+  });
+
+  it("blocks validation when a missing output root has a non-directory ancestor", async () => {
+    const blockedAncestor = path.join(tmpDir, "not-a-directory");
+    await fs.writeFile(blockedAncestor, "not a directory", "utf8");
+    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(blockedAncestor, "project-bundles");
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+
+    expect(result.validation.status).toBe("invalid");
+    expect(result.validation.items.some((item) => item.id === "bundle-output-root-unwritable")).toBe(true);
+  });
+
+  it("blocks validation when no selectable project bundle category is selected", async () => {
+    const selection = makeSelection();
+    selection.includedCategories = {
+      sessions: false,
+      rules: false,
+      memory: false,
+      skills: false,
+      commands: false,
+    };
+
+    const result = await validateProjectBundle(selection, makeConfig());
+
+    expect(result.validation.status).toBe("invalid");
+    expect(result.validation.items.some((item) => item.id === "bundle-no-categories")).toBe(true);
+    expect(result.summary.blockerCount).toBeGreaterThan(0);
   });
 });
