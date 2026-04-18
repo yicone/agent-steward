@@ -90,7 +90,7 @@ The system SHALL consume routed handoff context into the Assets surface through 
 - **AND** it does not carry the full transcript, trajectory state, or session-local reading mode
 
 #### Scenario: Overview handoff preselects subtype or scope
-- **WHEN** the user enters `Assets` from `Project Overview` with an in-effect asset or asset-class attention item
+- **WHEN** the user enters `Assets` from `Project Overview` with an in-effect asset or asset class attention item
 - **THEN** the Assets page applies the relevant subtype or scope filter
 - **AND** it preselects the asset when an object reference is available
 - **AND** it shows a compact origin cue referencing the overview context
