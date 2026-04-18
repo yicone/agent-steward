@@ -1,10 +1,10 @@
 # Feature Follow-Up Priority
 
-Updated: 2026-04-17
+Updated: 2026-04-18
 
 This document is the control-thread view of follow-up sequencing after the
-`Backup / Migration` expansion line (`bulk session backup` → `migration preview`
-→ `project bundle foundation`) has shipped and been archived.
+`Backup / Migration` expansion and hardening line has shipped and been
+archived.
 
 It is not a roadmap or implementation spec. It exists to:
 
@@ -16,65 +16,76 @@ Execution tracking still belongs in GitHub Issues.
 
 ## 1. Current Status
 
-The recent `Backup / Migration` follow-up line is complete:
+The recent `Backup / Migration` follow-up line is complete and archived:
 
 - `bulk-session-backup`: shipped and archived
 - `migration-preview`: shipped and archived
 - `project-bundle-foundation`: shipped and archived
+- `project-bundle-hardening`: shipped and archived
 
-The active OpenSpec line is now:
+The `Project Overview` governance line is also complete and archived:
 
-- `backup-migration-validation-result-hardening`: draft PR / validation in progress
+- `project-overview-governance-foundation`: shipped and archived
+
+The broad `cross-agent-management / context-governance` exploration issue has
+been closed after converging into the Project Overview governance slice. There
+is no active OpenSpec change at the time of this update.
 
 ## 2. Candidate Feature-Line Priority
 
 The recommended next priority order is now:
 
-1. `backup-migration-hardening`
-2. `cross-agent-management / context-governance` research and proposal
+1. `context-assets-governance-hardening` proposal line
+2. `session / search / viewer hardening` proposal line
 3. `privacy-redaction`
 
 Reasoning:
 
-- `backup-migration-hardening` is the most execution-ready follow-up. It can
-  tighten validation, routed continuity, result inspection, QA coverage, and
-  workflow stability without re-opening product scope.
-- `cross-agent-management / context-governance` remains strategically valuable,
-  but it is still a research/proposal line rather than a ready implementation
-  slice.
+- `context-assets-governance-hardening` is the most natural next proposal line
+  because Project Overview now routes attention into Assets, and the product
+  direction depends on rules/memory/skills/commands becoming a stronger
+  governance surface without turning into sync or editing infrastructure.
+- `session / search / viewer hardening` remains valuable because Sessions is
+  still the evidence backbone, but it should not become the product's primary
+  identity again.
 - `privacy-redaction` is a legitimate long-term risk area, but current use is
   personal and local-only, so it is not the highest-value next slice.
 
 ## 3. Candidate Lines
 
-### P1: Backup / Migration Hardening
+### P1: Context Assets Governance Hardening
 
-- Status: next execution-ready line
+- Status: recommended next proposal line
 - Focus:
-  - tighten workflow consistency after the recent expansion sequence
-  - improve validation/result inspection where needed
-  - improve routed handoff degradation and post-result continuity
-  - raise QA confidence on edge cases and failure handling
+  - make `Assets` a stronger governance surface for rules, memory, skills, and
+    commands
+  - tighten asset health, in-effect explanation, stale/conflict/orphan
+    semantics, and Analysis/Overview routing continuity
+  - improve asset detail and inspection without building full editing,
+    cross-agent sync, or deployment controls
 
 Why this is next:
 
-- it consolidates recently shipped behavior instead of creating a new product
-  area
-- it can produce a coherent, bounded slice with relatively low discovery cost
+- it continues the project-first governance direction already shipped in
+  `Project Overview`
+- it deepens an existing top-level surface instead of adding another workflow
+- it can remain local-first and bounded if it focuses on explanation,
+  classification, and routing rather than sync
 
-### P2: Cross-Agent Management / Context Governance
+### P2: Session / Search / Viewer Hardening
 
-- Status: research/proposal line
+- Status: candidate proposal line
 - Focus:
-  - clarify whether the next differentiated surface should be management of
-    shared rules/memory/skills/commands across tools and projects
-  - identify whether the right next slice is governance, distribution, health,
-    or diagnostics
+  - improve evidence navigation and search affordances for sessions
+  - tighten links from sessions into assets, analysis, and preservation
+  - keep Sessions strong as a supporting page without reverting the whole
+    product to session-first positioning
 
 Why this is not immediately next:
 
-- current material is still research-heavy
-- it needs a sharper product boundary before implementation starts
+- Sessions already has substantial shipped functionality
+- the immediate product differentiation now depends more on context asset
+  governance than on becoming a stronger session browser
 
 ### P3: Privacy Redaction
 
@@ -92,17 +103,17 @@ Why this is lower priority right now:
 
 ## 4. Recommended Decision Rule
 
-Choose `backup-migration-hardening` next if:
+Choose `context-assets-governance-hardening` next if:
 
-- the immediate goal is to stabilize the newly shipped workflow stack
-- the team wants a bounded implementation slice with low discovery cost
+- the immediate goal is to deepen the project-first governance surface
+- the team wants Assets to better explain what is in effect, stale, conflicted,
+  orphaned, or actionable
 
-Choose `cross-agent-management / context-governance` next if:
+Choose `session / search / viewer hardening` next if:
 
-- the product conversation is ready to define a new project-level management
-  surface beyond `Backup / Migration`
-- the next goal is to sharpen long-term differentiation rather than harden
-  existing workflow surfaces
+- the immediate pain is evidence navigation, search, or session-to-asset
+  continuity
+- the team wants to improve core inspection confidence before deepening Assets
 
 Keep `privacy-redaction` deferred unless:
 
