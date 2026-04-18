@@ -124,7 +124,7 @@ filters, object selection when available, and bounded continuity cues.
 
 #### Scenario: Overview handoff preselects subtype or scope
 - **WHEN** the user enters `Assets` from `Project Overview` with an in-effect
-  asset or asset-class attention item
+  asset or asset class attention item
 - **THEN** the Assets page applies the relevant subtype or scope filter
 - **AND** it preselects the asset when an object reference is available
 - **AND** it shows a compact origin cue referencing the overview context
