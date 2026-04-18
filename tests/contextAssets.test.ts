@@ -153,6 +153,27 @@ describe("context asset governance health", () => {
     });
     expect(health.explanation).toContain("will not classify");
   });
+
+  it("routes source-backed references with session evidence to Sessions", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "source-backed",
+        title: "Source backed asset",
+        status: "stale",
+        sourceReference: {
+          label: "Source file evidence",
+          target: "source",
+          sessionId: "session-source-1",
+          source: "codex",
+        },
+      })
+    );
+
+    expect(health.recommendedRoute).toMatchObject({
+      owner: "Sessions",
+      target: "session",
+    });
+  });
 });
 
 describe("assets handoff state derivation", () => {

@@ -40,6 +40,7 @@ export type AssetsFoundationProps = {
   onOpenSession(selection: { sessionId: string; source: Source; rootId?: string }): void;
   onOpenAnalysis(context: { issueLabel: string; assetId?: string; subtype?: ContextAssetSubtype; status?: ContextAssetStatus }): void;
   onOpenBackup(context: { assetId?: string; subtype?: ContextAssetSubtype; workflowType?: "migration-preview" | "project-bundle" }): void;
+  onOpenOverview?(): void;
   loadingDelayMs?: number;
 };
 
@@ -111,7 +112,7 @@ function renderSeverityBadge(severity: ContextAssetGovernanceSeverity) {
   return <Badge variant="default">informational</Badge>;
 }
 
-export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpenBackup, loadingDelayMs = LOADING_DELAY_MS }: AssetsFoundationProps) {
+export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpenBackup, onOpenOverview, loadingDelayMs = LOADING_DELAY_MS }: AssetsFoundationProps) {
   const assets = useMemo(() => createContextAssetSeeds(), []);
   const initialFilters = buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters());
   const initialFilteredAssets = applyContextAssetFilters(assets, initialFilters);
@@ -451,7 +452,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                   <div className="text-xs uppercase tracking-[0.18em] text-muted">Provenance</div>
                   <div className="leading-6 text-muted">{selectedAssetHealth?.provenanceExplanation}</div>
                   <div className="flex flex-wrap gap-2">
-                    {selectedAsset.sourceReference?.target === "session" && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
+                    {(selectedAsset.sourceReference?.target === "session" || selectedAsset.sourceReference?.target === "source") && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
                       <Button
                         size="sm"
                         variant="outline"
@@ -480,6 +481,11 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                         }
                       >
                         Route to Analysis: {selectedAsset.sourceReference.label}
+                      </Button>
+                    ) : null}
+                    {selectedAssetHealth?.recommendedRoute.target === "overview" && onOpenOverview ? (
+                      <Button size="sm" variant="outline" onClick={onOpenOverview}>
+                        Route to Project Overview: review governance context
                       </Button>
                     ) : null}
                   </div>
@@ -516,7 +522,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
                 {selectedAssetHealth?.inEffectExplanation}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                {selectedAsset.sourceReference?.target === "session" && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
+                {(selectedAsset.sourceReference?.target === "session" || selectedAsset.sourceReference?.target === "source") && selectedAsset.sourceReference.sessionId && selectedAsset.sourceReference.source ? (
                   <Button
                     size="sm"
                     variant="outline"

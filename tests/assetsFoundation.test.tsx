@@ -12,6 +12,7 @@ function renderAssetsFoundation(handoff: AssetsHandoff | null) {
       loadingDelayMs={0}
       onOpenAnalysis={vi.fn()}
       onOpenBackup={vi.fn()}
+      onOpenOverview={vi.fn()}
       onOpenSession={vi.fn()}
     />
   );
@@ -112,5 +113,19 @@ describe("AssetsFoundation", () => {
     expect(html).toContain("The original object could not be selected.");
     expect(html).toContain("stale memory");
     expect(html).not.toContain('aria-pressed="true"');
+  });
+
+  it("renders a Project Overview route for selected unknown assets", () => {
+    const html = renderAssetsFoundation({
+      origin: "overview",
+      subtitle: "Review unknown imported fragment.",
+      subtype: "unknown",
+      status: "unknown",
+      assetId: "asset-unknown-imported-1",
+      issueLabel: "unknown metadata",
+    });
+
+    expect(html).toContain("route owner: Project Overview");
+    expect(html).toContain("Route to Project Overview: review governance context");
   });
 });

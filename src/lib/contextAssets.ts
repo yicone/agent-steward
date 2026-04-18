@@ -311,7 +311,11 @@ function buildRouteDescriptor(asset: ContextAsset, issueClass: ContextAssetGover
     };
   }
 
-  if (asset.sourceReference?.target === "session" && asset.sourceReference.sessionId && asset.sourceReference.source) {
+  if (
+    (asset.sourceReference?.target === "session" || asset.sourceReference?.target === "source")
+    && asset.sourceReference.sessionId
+    && asset.sourceReference.source
+  ) {
     return {
       owner: "Sessions",
       target: "session",
