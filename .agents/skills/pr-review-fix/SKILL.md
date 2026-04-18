@@ -18,11 +18,18 @@ Use this repository-specific workflow together with `docs/dev/pr-review-agent-wo
 2. Fetch PR metadata plus review comments. Prefer thread-aware `gh api graphql` when resolution state matters; use the GitHub connector for flat PR/comment context when sufficient.
 3. Classify each comment before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 4. Ask the user before changing product names, product scope, placeholder commitments, security/privacy behavior, backup/migration semantics, or any ambiguous `should-fix`.
-5. Implement confirmed `must-fix` and in-scope `should-fix` items only. Batch all actionable comments from the same review round into one fix pass instead of pushing one commit per comment. If the fix is large, runtime-dependent, or benefits from independent verification, delegate it to an authorized subagent and fold the result back into this workflow.
+5. Implement confirmed `must-fix` and in-scope `should-fix` items only. Batch all actionable comments from the same review round into one fix pass instead of pushing one commit per comment. If the fix is large, runtime-dependent, or benefits from independent verification, delegate it to an authorized subagent and fold the result back into this workflow. If the user has granted standing subagent authorization for the control-thread workflow, treat that as sufficient authorization for bounded review-fix delegation; see `AGENTS.md` for the standing authorization definition and limits.
 6. Run targeted tests, `pnpm build`, and `openspec validate <change-id> --strict` when an OpenSpec change is active.
 7. Commit review fixes separately from workflow/process documentation.
 8. Check unresolved review threads before recommending ready/merge. Resolve only with explicit user authorization, or move non-blocking leftovers to follow-up issues.
 9. Push the PR branch and request Copilot re-review with `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when available.
+
+## Pre-Review Acceleration
+
+- Before marking OpenSpec or medium/large implementation PRs ready, prefer a bounded pre-review with an OpenSpec reviewer subagent, code-review subagent, or local Copilot CLI dry run.
+- Use local Copilot CLI for draft review, testability checks, wording ambiguity, and suggested patch drafts; do not let it resolve conversations, merge PRs, or change product scope without control-thread triage.
+- Treat Copilot CLI output as advisory review feedback and classify it with the same `must-fix` / `should-fix` / `product-decision` / `ignore` categories.
+- Skip pre-review for tiny mechanical changes unless the change touches process rules, OpenSpec semantics, security/privacy, backup/migration integrity, or local path handling.
 
 ## Review Loop Budget
 
