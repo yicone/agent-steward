@@ -143,7 +143,7 @@ and Analysis into Assets without transferring full source page state or
 executing asset operations.
 
 #### Scenario: Overview routes an asset governance issue
-- **WHEN** Project Overview opens Assets for an in-effect asset or asset-class
+- **WHEN** Project Overview opens Assets for an in-effect asset or asset class
   attention item
 - **THEN** the shell handoff includes only compact routing context such as
   origin, issue label, subtype, scope, status, asset id, and continue label
