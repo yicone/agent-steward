@@ -574,7 +574,7 @@ export function deriveProjectOverviewSummary(input: ProjectOverviewSummaryInput 
     ? buildAttentionItems({ assets, findings, limit: limits.attentionItems })
     : [];
   const quickActions = buildQuickActions(backupWorkflows, limits.quickActions);
-  const hasProjectContext = assets.length > 0 || sessions.length > 0;
+  const hasProjectContext = assets.length > 0 || sessions.length > 0 || findings.length > 0;
   const hasHighPriorityIssue = attentionItems.some((item) => item.severity === "high");
   const state: ProjectOverviewPageState = input.isLoading
     ? "loading"

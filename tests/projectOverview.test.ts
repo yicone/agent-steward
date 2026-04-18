@@ -159,6 +159,32 @@ describe("deriveProjectOverviewSummary", () => {
     expect(summary.attentionItems.map((item) => item.status)).toEqual(["open", "watching", "open"]);
   });
 
+  it("treats finding-only evidence as project context", () => {
+    const summary = deriveProjectOverviewSummary({
+      assets: [],
+      sessions: [],
+      findings: [
+        normalizeAnalysisFinding({
+          id: "finding-only-high",
+          title: "Finding-only preservation issue",
+          issueClass: "preservation",
+          severity: "high",
+          status: "open",
+          affectedObjectType: "project",
+          affectedObjectLabel: "Project",
+          whyItMatters: "A high-priority finding is still project context.",
+        }),
+      ],
+    });
+
+    expect(summary.state).toBe("issue");
+    expect(summary.identity.evidenceLabel).toContain("Derived from local project evidence");
+    expect(summary.attentionItems[0]).toMatchObject({
+      id: "finding:finding-only-high",
+      severity: "high",
+    });
+  });
+
   it("does not let resolved findings suppress current asset issue cues", () => {
     const summary = deriveProjectOverviewSummary({
       sessions: [],
