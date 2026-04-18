@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-18` — Project Overview governance foundation
+  - Replaced the static `Project Overview` cards with a project-scoped governance module spine for context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions
+  - Added a local Overview summary model that derives compact cues from existing Sessions, Assets, Analysis, and Backup / Migration foundation data without fabricating missing provider evidence
+  - Preserved routed handoffs into `Sessions`, `Assets`, `Analysis`, and accepted `Backup / Migration` workflows while keeping transcripts, full inventories, findings tables, and workflow internals off Overview
+
 - `2026-04-16` — Project bundle foundation
   - Added a bounded `project bundle` workflow to `Backup / Migration` with explicit `selection -> configuration -> validation -> confirmation -> execution -> result` flow
   - Added local `project-bundle/v1` generation with bundle manifest, package/project metadata, member inventory, member references, validation summary, and lightweight member snapshots

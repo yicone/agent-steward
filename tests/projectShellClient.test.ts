@@ -450,6 +450,22 @@ describe("backup handoff builders", () => {
     expect(handoff.subtitle).toContain("import workflow");
   });
 
+  it("builds an overview handoff that preserves routed issue context", () => {
+    const handoff = buildBackupHandoffFromOverview("session-backup", {
+      findingId: "finding-preserve-before-migration",
+      issueLabel: "Preserve session evidence before migration cleanup",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "overview",
+      workflowType: "session-backup",
+      findingId: "finding-preserve-before-migration",
+      issueLabel: "Preserve session evidence before migration cleanup",
+    });
+    expect(handoff.subtitle).toContain("Preserve session evidence before migration cleanup");
+    expect(handoff.continueLabel).toContain("routed issue cue");
+  });
+
   it("builds an overview handoff for bulk session backup without invented sessions", () => {
     const handoff = buildBackupHandoffFromOverview("bulk-session-backup");
 
@@ -488,6 +504,21 @@ describe("backup handoff builders", () => {
     expect(handoff).not.toHaveProperty("sessions");
     expect(handoff).not.toHaveProperty("projectBundleObjectRefs");
     expect(handoff.subtitle).toContain("project bundle workflow");
+  });
+
+  it("builds an overview project-bundle handoff with explicit finding refs only when routed", () => {
+    const handoff = buildBackupHandoffFromOverview("project-bundle", {
+      findingId: "finding-conflicted-skill",
+      issueLabel: "Conflicted OpenSpec helper skill",
+    });
+
+    expect(handoff).toMatchObject({
+      origin: "overview",
+      workflowType: "project-bundle",
+      findingId: "finding-conflicted-skill",
+      issueLabel: "Conflicted OpenSpec helper skill",
+      projectBundleObjectRefs: ["finding-conflicted-skill"],
+    });
   });
 
   it("keeps overview-routed migration preview on selection when only partial source context is provided", () => {

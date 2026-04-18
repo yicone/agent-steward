@@ -18,10 +18,18 @@ Use this repository-specific workflow together with `docs/dev/pr-review-agent-wo
 2. Fetch PR metadata plus review comments. Prefer thread-aware `gh api graphql` when resolution state matters; use the GitHub connector for flat PR/comment context when sufficient.
 3. Classify each comment before editing: `must-fix`, `should-fix`, `product-decision`, or `ignore`.
 4. Ask the user before changing product names, product scope, placeholder commitments, security/privacy behavior, backup/migration semantics, or any ambiguous `should-fix`.
-5. Implement confirmed `must-fix` and `should-fix` items only.
+5. Implement confirmed `must-fix` and in-scope `should-fix` items only. Batch all actionable comments from the same review round into one fix pass instead of pushing one commit per comment. If the fix is large, runtime-dependent, or benefits from independent verification, delegate it to an authorized subagent and fold the result back into this workflow.
 6. Run targeted tests, `pnpm build`, and `openspec validate <change-id> --strict` when an OpenSpec change is active.
 7. Commit review fixes separately from workflow/process documentation.
-8. Push the PR branch and request Copilot re-review with `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when available.
+8. Check unresolved review threads before recommending ready/merge. Resolve only with explicit user authorization, or move non-blocking leftovers to follow-up issues.
+9. Push the PR branch and request Copilot re-review with `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when available.
+
+## Review Loop Budget
+
+- First Copilot pass: fix all confirmed `must-fix` and in-scope `should-fix` comments.
+- Second Copilot pass: fix new correctness, spec, security/privacy, data-loss, accessibility, or low-risk maintainability issues.
+- Third and later passes: continue only for `must-fix`, regressions introduced by review fixes, or explicitly accepted `should-fix` comments. Otherwise recommend stopping the loop and moving remaining non-blocking work to follow-up issues.
+- Do not chase zero Copilot comments when CI, local validation, and required QA are green and remaining comments are stale, duplicate, cosmetic, low-confidence, or already tracked elsewhere.
 
 ## Do Not
 
@@ -29,3 +37,4 @@ Use this repository-specific workflow together with `docs/dev/pr-review-agent-wo
 - Do not resolve GitHub conversations unless the user explicitly authorizes it.
 - Do not treat Copilot comments as merge-blocking approvals or requested changes.
 - Do not mix follow-up feature work into the review-fix commit.
+- Do not request repeated Copilot re-reviews after the review loop budget is exhausted unless a `must-fix` or explicitly accepted `should-fix` remains.

@@ -60,6 +60,7 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
 
 - Project shell:
   - top-level surfaces for `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration`
+  - `Project Overview` provides a project-scoped agent context governance foundation with compact context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions
   - `Sessions` contains the existing viewer, source diagnostics, URL deep links, search selection, and direct session backup behavior
   - `Assets` provides a bounded reusable context assets foundation for rules, memory, skills, commands, and unknown asset fragments
   - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
