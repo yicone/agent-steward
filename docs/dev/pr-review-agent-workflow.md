@@ -36,6 +36,7 @@ Good delegation targets:
 - Browser QA / Playwright runtime verification.
 - Broad codebase audits or parallel research.
 - Retests that should be independent from the implementation thread.
+- Pre-review dry runs that can catch spec structure, testability, path/privacy, or scope-drift issues before GitHub Copilot review.
 
 Keep local to the control thread:
 
@@ -61,6 +62,26 @@ Not recommended:
 - Do not use Git hooks to call GitHub review APIs. Hooks run at the wrong layer, can block local commits/pushes on network failures, and cannot reliably understand PR state.
 - Do not require Copilot review as a branch protection approval.
 - Do not auto-apply Copilot suggestions without triage.
+
+## Pre-Review Acceleration
+
+Use local or delegated review before opening or marking a PR ready when it is likely to reduce GitHub Copilot/CI loops.
+
+Good pre-review targets:
+
+- OpenSpec artifacts: use an OpenSpec reviewer subagent to check delta structure, `ADDED` vs `MODIFIED` requirements, testability, and scope boundaries before implementation.
+- Backup, migration, parser, diagnostics, or local-path-sensitive work: use a bounded code-review subagent or local Copilot CLI dry run to look for data-loss, privacy/path leakage, and integrity issues before the first GitHub review.
+- UI/runtime flows: use a QA agent only when browser behavior matters; do not run browser QA for spec-only or docs-only PRs.
+- Process/docs changes: use lightweight self-review or local Copilot CLI for wording ambiguity, but skip full runtime validation unless instructions or tooling behavior changes.
+
+Local Copilot CLI can be used as an assistant, not as the owner of review state:
+
+- Good uses: independent PR pre-review, OpenSpec wording review, testability checks, suggested patch drafts, and QA checklist drafts.
+- Bad uses: automatic merge, automatic conversation resolution, untriaged product-scope changes, or replacing browser QA/CI.
+- Prefer non-interactive prompts for bounded checks, for example `copilot -p "<review prompt>" --allow-tool='shell(git:*)' --deny-tool='shell(git push)'`.
+- If Copilot CLI produces recommendations, fold them back into the control thread and classify them like any other review feedback.
+
+Pre-review is optional for tiny mechanical changes, but recommended before PR readiness for OpenSpec changes and medium/large implementation slices.
 
 ## Standard Flow
 

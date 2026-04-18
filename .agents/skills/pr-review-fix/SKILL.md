@@ -24,6 +24,13 @@ Use this repository-specific workflow together with `docs/dev/pr-review-agent-wo
 8. Check unresolved review threads before recommending ready/merge. Resolve only with explicit user authorization, or move non-blocking leftovers to follow-up issues.
 9. Push the PR branch and request Copilot re-review with `gh pr edit <number> --add-reviewer copilot-pull-request-reviewer` when available.
 
+## Pre-Review Acceleration
+
+- Before marking OpenSpec or medium/large implementation PRs ready, prefer a bounded pre-review with an OpenSpec reviewer subagent, code-review subagent, or local Copilot CLI dry run.
+- Use local Copilot CLI for draft review, testability checks, wording ambiguity, and suggested patch drafts; do not let it resolve conversations, merge PRs, or change product scope without control-thread triage.
+- Treat Copilot CLI output as advisory review feedback and classify it with the same `must-fix` / `should-fix` / `product-decision` / `ignore` categories.
+- Skip pre-review for tiny mechanical changes unless the change touches process rules, OpenSpec semantics, security/privacy, backup/migration integrity, or local path handling.
+
 ## Review Loop Budget
 
 - First Copilot pass: fix all confirmed `must-fix` and in-scope `should-fix` comments.
