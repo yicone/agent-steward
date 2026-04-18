@@ -5,10 +5,12 @@ const AGENT_STORAGE_IGNORED_GLOB = "**/{.next,node_modules,.agent,.agents,.codex
 
 function globLikePatternToRegExpSource(pattern) {
   const normalizedPattern = pattern.replace(/\\/g, "/");
+  const globStarPlaceholder = "__GLOBSTAR__";
   const escapedPattern = normalizedPattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*/g, ".*")
-    .replace(/\*/g, "[^/]*");
+    .replace(/\*\*/g, globStarPlaceholder)
+    .replace(/\*/g, "[^/]*")
+    .replaceAll(globStarPlaceholder, ".*");
 
   return `(?:${escapedPattern})`;
 }
