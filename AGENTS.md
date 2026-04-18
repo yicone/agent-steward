@@ -64,7 +64,7 @@ Do not duplicate the same fact across these files unless each copy serves a diff
 
 - When the user designates a conversation as the control thread, use it to coordinate scope, PR state, validation status, and next-step prompts.
 - Suggest a new conversation when an execution line becomes large, requires a separate context window, or can proceed independently with a focused prompt.
-- Use subagents only when explicitly authorized by the user. Authorization may be one-off or standing for the current project/control-thread workflow; when standing authorization is granted, Codex may delegate within this framework without asking again unless the user revokes or narrows it.
+- Use subagents only when explicitly authorized by the user. Authorization may be one-off or standing for the current project/control-thread workflow; when standing authorization is granted, the active agent may delegate within this framework without asking again unless the user revokes or narrows it.
 - Prefer reusing an existing suitable subagent; when spawning a new one, do not fork the full conversation context unless the task requires it.
 - In a control-thread workflow, keep the control thread focused on orchestration: scope convergence, artifact acceptance, PR state, validation synthesis, and final decisions. Delegate bounded execution to suitable authorized subagents instead of absorbing every task locally.
 - Prefer subagents for: OpenSpec artifact review, large OpenSpec implementation, browser QA / Playwright runtime verification, broad codebase audits, and parallel research that can report back as evidence.
