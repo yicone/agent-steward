@@ -18,7 +18,8 @@ describe("ProjectOverviewSurface", () => {
   it("renders the governance module spine", () => {
     const html = renderOverview();
 
-    expect(html).toContain("Project-scoped agent context governance");
+    expect(html).toContain("Project Overview is showing foundation sample data");
+    expect(html).toContain("sample data");
     expect(html).toContain("Context Snapshot");
     expect(html).toContain("In-Effect Assets");
     expect(html).toContain("Recent Sessions");
@@ -81,9 +82,14 @@ describe("ProjectOverviewSurface", () => {
   });
 
   it("frames the page as project-scoped agent context governance", () => {
-    const html = renderOverview();
+    const html = renderOverview(deriveProjectOverviewSummary({
+      assets: [],
+      findings: [],
+      sessions: [{ id: "session-1", source: "codex" }],
+    }));
 
     expect(html).toContain("Project-scoped agent context governance");
+    expect(html).not.toContain("sample data");
     expect(html).not.toContain("command center");
     expect(html).not.toContain("dashboard");
   });

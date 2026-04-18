@@ -9,7 +9,8 @@ describe("deriveProjectOverviewSummary", () => {
     const summary = deriveProjectOverviewSummary();
 
     expect(summary.state).toBe("issue");
-    expect(summary.identity.evidenceLabel).toContain("Derived from local project evidence");
+    expect(summary.identity.evidenceKind).toBe("foundation-seed");
+    expect(summary.identity.evidenceLabel).toContain("Sample foundation data");
     expect(summary.contextSnapshot.map((cue) => cue.id)).toEqual(["sessions", "assets", "analysis", "backup"]);
     expect(summary.inEffectAssets.length).toBeGreaterThan(0);
     expect(summary.recentSessions).toEqual([]);
@@ -44,6 +45,7 @@ describe("deriveProjectOverviewSummary", () => {
     });
 
     expect(summary.state).toBe("no-project-context");
+    expect(summary.identity.evidenceKind).toBe("none");
     expect(summary.contextSnapshot).toEqual([
       expect.objectContaining({ id: "sessions", value: "0 sessions", status: "empty" }),
       expect.objectContaining({ id: "assets", value: "0 assets", status: "empty" }),
@@ -178,7 +180,8 @@ describe("deriveProjectOverviewSummary", () => {
     });
 
     expect(summary.state).toBe("issue");
-    expect(summary.identity.evidenceLabel).toContain("Derived from local project evidence");
+    expect(summary.identity.evidenceKind).toBe("local-evidence");
+    expect(summary.identity.evidenceLabel).toContain("Derived from explicit local project evidence");
     expect(summary.attentionItems[0]).toMatchObject({
       id: "finding:finding-only-high",
       severity: "high",

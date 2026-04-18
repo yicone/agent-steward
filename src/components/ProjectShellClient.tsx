@@ -567,12 +567,14 @@ export function ProjectOverviewSurface(props: {
         <Badge variant={issueState ? "warn" : emptyState ? "default" : "ok"}>
           {issueState ? "attention state" : emptyState ? "no project context" : "governance foundation"}
         </Badge>
+        {summary.identity.evidenceKind === "foundation-seed" ? <Badge variant="warn">sample data</Badge> : null}
         <Badge variant="default">{summary.identity.scopeLabel}</Badge>
       </div>
       <h2 className="text-xl font-semibold">{summary.identity.title}</h2>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">
-        Project-scoped agent context governance derived from local evidence. Use this surface to see what context is
-        present, what is in effect, what changed recently, what needs attention, and where to continue.
+        {summary.identity.evidenceKind === "foundation-seed"
+          ? "Project Overview is showing foundation sample data until live project inventory is connected. Use it to inspect the intended governance shape, not the current project's real asset or finding counts."
+          : "Project-scoped agent context governance derived from local evidence. Use this surface to see what context is present, what is in effect, what changed recently, what needs attention, and where to continue."}
       </p>
       <div className="mt-3 text-xs uppercase tracking-[0.18em] text-muted">{summary.identity.evidenceLabel}</div>
     </Card>
