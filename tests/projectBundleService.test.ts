@@ -132,7 +132,7 @@ async function writeBackupPackage(input: {
   );
 }
 
-async function writeMalformedUnrelatedBackupPackage(input: {
+async function writeIncompleteUnrelatedBackupPackage(input: {
   backupId: string;
   sessionId: string;
 }) {
@@ -315,8 +315,8 @@ describe("project bundle service", () => {
     expect(sessionReference?.backupId).toBe("backup-right-root");
   });
 
-  it("ignores malformed unrelated backup packages instead of failing validation", async () => {
-    await writeMalformedUnrelatedBackupPackage({
+  it("ignores incomplete unrelated backup packages instead of failing validation", async () => {
+    await writeIncompleteUnrelatedBackupPackage({
       backupId: "backup-unrelated",
       sessionId: "other-session",
     });
