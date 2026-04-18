@@ -332,4 +332,49 @@ describe("project bundle route", () => {
     expect(json.filePath).toBe("project-bundles/project-bundle-2.bundle.json");
     expect(JSON.stringify(json)).not.toContain("/tmp/private-user");
   });
+
+  it("derives non-home display path prefixes from the actual bundle directory", async () => {
+    generateProjectBundleMock.mockResolvedValue({
+      validation: { status: "valid", items: [] },
+      summary: {
+        warningCount: 0,
+        blockerCount: 0,
+        selectedCategoryCount: 1,
+        selectedSessionCount: 0,
+        resolvedReferenceCount: 1,
+        unresolvedReferenceCount: 0,
+      },
+      memberInventory: [],
+      memberReferences: [],
+      packageId: "project-bundle-3",
+      createdAt: "2026-04-18T06:02:00.000Z",
+      filePath: "/tmp/private-user/custom-bundles/project-bundle-3.bundle.json",
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          selection: {
+            includedCategories: {
+              sessions: false,
+              rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
+            },
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const json = await response.json();
+    expect(json.filePath).toBe("custom-bundles/project-bundle-3.bundle.json");
+    expect(JSON.stringify(json)).not.toContain("/tmp/private-user");
+  });
 });

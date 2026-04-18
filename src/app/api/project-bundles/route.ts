@@ -44,7 +44,14 @@ function toDisplaySafeBundlePath(filePath: string): string {
     : normalized;
 
   if (!homeRelative.startsWith("~")) {
-    return `project-bundles/${path.basename(normalized)}`;
+    const fileName = path.posix.basename(normalized);
+    const parentName = path.posix.basename(path.posix.dirname(normalized));
+
+    if (parentName && parentName !== ".") {
+      return `${parentName}/${fileName}`;
+    }
+
+    return fileName;
   }
 
   return homeRelative;
