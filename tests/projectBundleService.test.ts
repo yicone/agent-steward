@@ -260,6 +260,28 @@ describe("project bundle service", () => {
     expect(sessionReference?.backupId).toBe("zzz-same-time");
   });
 
+  it("compares backup timestamps numerically before using backup id tie-breaker", async () => {
+    await writeBackupPackage({
+      backupId: "zzz-offset-time",
+      createdAt: "2026-04-16T12:00:00+02:00",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+    await writeBackupPackage({
+      backupId: "aaa-utc-later",
+      createdAt: "2026-04-16T10:30:00.000Z",
+      sessionId: "session-1",
+      source: "codex",
+      rootId: "root-1",
+    });
+
+    const result = await validateProjectBundle(makeSelection(), makeConfig());
+    const sessionReference = result.memberReferences.find((item) => item.category === "sessions");
+
+    expect(sessionReference?.backupId).toBe("aaa-utc-later");
+  });
+
   it("does not expose the raw workspace path in validation member references", async () => {
     const result = await validateProjectBundle(makeSelection(), makeConfig());
     const serialized = JSON.stringify(result);

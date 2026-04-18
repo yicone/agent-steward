@@ -260,6 +260,34 @@ describe("project bundle route", () => {
     expect((await response.json()).code).toBe("MISSING_GENERATE_INPUT");
   });
 
+  it("rejects generate mode when explicit category composition values are not booleans", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/project-bundles", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "generate",
+          selection: {
+            includedCategories: {
+              sessions: "false",
+              rules: true,
+              memory: false,
+              skills: false,
+              commands: false,
+              __proto__: { polluted: true },
+            },
+          },
+          configuration: {
+            bundleName: "Generated bundle",
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+    expect(generateProjectBundleMock).not.toHaveBeenCalled();
+    expect((await response.json()).code).toBe("MISSING_GENERATE_INPUT");
+  });
+
   it("converts non-home bundle file locations to display-safe paths", async () => {
     generateProjectBundleMock.mockResolvedValue({
       validation: { status: "valid", items: [] },

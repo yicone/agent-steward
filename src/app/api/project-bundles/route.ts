@@ -57,6 +57,7 @@ function hasExplicitComposition(selection: ProjectBundleRequestBody["selection"]
 
   return PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES.every((category) =>
     Object.prototype.hasOwnProperty.call(selection.includedCategories, category)
+      && typeof selection.includedCategories?.[category] === "boolean"
   );
 }
 
@@ -103,10 +104,12 @@ export async function POST(req: Request) {
   const configuration = normalizeConfiguration(body.configuration);
   const selection = createDefaultProjectBundleSelection(body.handoff ?? null, body.selection?.sessionSelections ?? []);
 
-  selection.includedCategories = {
-    ...selection.includedCategories,
-    ...(body.selection?.includedCategories ?? {}),
-  };
+  for (const category of PROJECT_BUNDLE_SELECTABLE_MEMBER_CATEGORIES) {
+    const explicitValue = body.selection?.includedCategories?.[category];
+    if (typeof explicitValue === "boolean") {
+      selection.includedCategories[category] = explicitValue;
+    }
+  }
   selection.objectRefs = Array.from(new Set((body.selection?.objectRefs ?? selection.objectRefs).map((item) => item.trim()).filter(Boolean)));
   selection.originCue = body.selection?.originCue?.trim() || selection.originCue;
   selection.scopeHint = body.selection?.scopeHint?.trim() || selection.scopeHint;

@@ -45,14 +45,32 @@ type ComposeProjectBundleResult = ProjectBundleValidationResponse & {
   projectMetadata: ProjectBundleProjectMetadata;
 };
 
+function parseComparableTimestamp(value: string): number | undefined {
+  const timestamp = Date.parse(value);
+  return Number.isNaN(timestamp) ? undefined : timestamp;
+}
+
 function isPreferredSessionBackupMatch(
   candidate: Pick<SessionBackupReferenceMatch, "backupId" | "createdAt">,
   existing?: Pick<SessionBackupReferenceMatch, "backupId" | "createdAt">
 ): boolean {
   if (!existing) return true;
-  if (candidate.createdAt !== existing.createdAt) {
-    return candidate.createdAt > existing.createdAt;
+
+  const candidateTimestamp = parseComparableTimestamp(candidate.createdAt);
+  const existingTimestamp = parseComparableTimestamp(existing.createdAt);
+
+  if (
+    candidateTimestamp !== undefined &&
+    existingTimestamp !== undefined &&
+    candidateTimestamp !== existingTimestamp
+  ) {
+    return candidateTimestamp > existingTimestamp;
   }
+
+  if (candidateTimestamp !== existingTimestamp) {
+    return candidateTimestamp !== undefined;
+  }
+
   return candidate.backupId > existing.backupId;
 }
 
