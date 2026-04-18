@@ -4,6 +4,7 @@ import {
   applyContextAssetFilters,
   buildFiltersFromAssetsHandoff,
   createContextAssetSeeds,
+  deriveContextAssetGovernanceHealth,
   deriveAssetsSurfaceState,
   normalizeContextAsset,
   resolveContextAssetSelection,
@@ -71,6 +72,129 @@ describe("context asset seeds and filters", () => {
     expect(summary.total).toBe(assets.length);
     expect(summary.inEffect).toBeGreaterThan(0);
     expect(summary.issueCount).toBeGreaterThan(0);
+    expect(summary.governanceIssueCounts.freshness).toBe(1);
+    expect(summary.governanceIssueCounts.conflict).toBe(1);
+    expect(summary.governanceIssueCounts.orphaned).toBe(1);
+    expect(summary.governanceIssueCounts.unknown).toBe(1);
+  });
+});
+
+describe("context asset governance health", () => {
+  it("maps active in-effect assets to healthy", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "active-in-effect",
+        title: "Active rule",
+        status: "active",
+        usage: {
+          state: "in_effect",
+          summary: "Applied by project instructions.",
+        },
+      })
+    );
+
+    expect(health).toMatchObject({
+      severity: "healthy",
+      issueClass: "none",
+    });
+    expect(health.explanation).toContain("currently in effect");
+  });
+
+  it("maps active assets without usage proof to informational", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "active-unknown",
+        title: "Active memory",
+        status: "active",
+        usage: {
+          state: "unknown",
+          summary: "Usage provider unavailable.",
+        },
+      })
+    );
+
+    expect(health.severity).toBe("informational");
+    expect(health.issueClass).toBe("none");
+    expect(health.inEffectExplanation).toContain("will not infer");
+  });
+
+  it("keeps active not-in-effect assets informational without claiming usage is unproven", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "active-not-in-effect",
+        title: "Active archived rule",
+        status: "active",
+        usage: {
+          state: "not_in_effect",
+          summary: "A newer project rule takes precedence.",
+        },
+      })
+    );
+
+    expect(health).toMatchObject({
+      severity: "informational",
+      issueClass: "none",
+    });
+    expect(health.explanation).toContain("not currently in effect");
+    expect(health.explanation).not.toContain("not proven");
+  });
+
+
+  it("maps stale, conflicted, and orphaned assets to warning issue classes", () => {
+    expect(deriveContextAssetGovernanceHealth(normalizeContextAsset({ id: "stale", title: "Stale", status: "stale" }))).toMatchObject({
+      severity: "warning",
+      issueClass: "freshness",
+    });
+    expect(deriveContextAssetGovernanceHealth(normalizeContextAsset({ id: "conflict", title: "Conflict", status: "conflicted" }))).toMatchObject({
+      severity: "warning",
+      issueClass: "conflict",
+      recommendedRoute: {
+        owner: "Analysis",
+      },
+    });
+    expect(deriveContextAssetGovernanceHealth(normalizeContextAsset({ id: "orphan", title: "Orphan", status: "orphaned" }))).toMatchObject({
+      severity: "warning",
+      issueClass: "orphaned",
+    });
+  });
+
+  it("keeps unknown health explicit and non-blocking", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "unknown",
+        title: "Unknown",
+      })
+    );
+
+    expect(health).toMatchObject({
+      severity: "unknown",
+      issueClass: "unknown",
+      recommendedRoute: {
+        owner: "Project Overview",
+      },
+    });
+    expect(health.explanation).toContain("will not classify");
+  });
+
+  it("routes source-backed references with session evidence to Sessions", () => {
+    const health = deriveContextAssetGovernanceHealth(
+      normalizeContextAsset({
+        id: "source-backed",
+        title: "Source backed asset",
+        status: "stale",
+        sourceReference: {
+          label: "Source file evidence",
+          target: "source",
+          sessionId: "session-source-1",
+          source: "codex",
+        },
+      })
+    );
+
+    expect(health.recommendedRoute).toMatchObject({
+      owner: "Sessions",
+      target: "session",
+    });
   });
 });
 

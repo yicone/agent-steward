@@ -12,6 +12,7 @@ function renderAssetsFoundation(handoff: AssetsHandoff | null) {
       loadingDelayMs={0}
       onOpenAnalysis={vi.fn()}
       onOpenBackup={vi.fn()}
+      onOpenOverview={vi.fn()}
       onOpenSession={vi.fn()}
     />
   );
@@ -32,6 +33,9 @@ describe("AssetsFoundation", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).toContain("Selected asset: Project coding rules");
     expect(html).toContain("In-Effect / Usage");
+    expect(html).toContain("Governance Health");
+    expect(html).toContain("healthy");
+    expect(html).toContain("route owner: Sessions");
   });
 
   it("renders routed-in empty state without fake inventory rows", () => {
@@ -60,8 +64,15 @@ describe("AssetsFoundation", () => {
 
     expect(html).toContain("issue state");
     expect(html).toContain("OpenSpec apply helper skill");
-    expect(html).toContain("Open Analysis");
-    expect(html).toContain("Review in Analysis");
+    expect(html).toContain("Route to Analysis");
+    expect(html).toContain("Route to Analysis: review usage context");
+    expect(html).toContain("issue class: conflict");
+    expect(html).toContain("multiple local copies or interpretations disagree");
+    expect(html).toContain("Route to Backup / Migration: preview scope");
+    expect(html).not.toContain("Repair");
+    expect(html).not.toContain("Sync");
+    expect(html).not.toContain("Deploy");
+    expect(html).not.toContain("Restore");
   });
 
   it("keeps session handoff as origin context rather than stale object selection", () => {
@@ -74,5 +85,47 @@ describe("AssetsFoundation", () => {
 
     expect(html).toContain("routed context");
     expect(html).not.toContain("The original object could not be selected.");
+  });
+
+  it("renders governance issue counts and foundation data cue", () => {
+    const html = renderAssetsFoundation(null);
+
+    expect(html).toContain("Foundation data cue");
+    expect(html).toContain("not a complete live project scan");
+    expect(html).toContain("Warning issues");
+    expect(html).toContain("Freshness");
+    expect(html).toContain("Conflict");
+    expect(html).toContain("Orphaned");
+    expect(html).toContain("Unknown");
+    expect(html).toContain("does not prove every local runtime has been scanned");
+  });
+
+  it("renders stale routed object degradation without fabricating replacement selection", () => {
+    const html = renderAssetsFoundation({
+      origin: "overview",
+      subtitle: "Review stale project memory.",
+      subtype: "memory",
+      status: "stale",
+      assetId: "missing-memory",
+      issueLabel: "stale memory",
+    });
+
+    expect(html).toContain("The original object could not be selected.");
+    expect(html).toContain("stale memory");
+    expect(html).not.toContain('aria-pressed="true"');
+  });
+
+  it("renders a Project Overview route for selected unknown assets", () => {
+    const html = renderAssetsFoundation({
+      origin: "overview",
+      subtitle: "Review unknown imported fragment.",
+      subtype: "unknown",
+      status: "unknown",
+      assetId: "asset-unknown-imported-1",
+      issueLabel: "unknown metadata",
+    });
+
+    expect(html).toContain("route owner: Project Overview");
+    expect(html).toContain("Route to Project Overview: review governance context");
   });
 });

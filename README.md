@@ -66,9 +66,10 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
   - `Backup / Migration` provides bounded workflow-first backup and migration-preview surfaces without turning into a generic tools drawer or migration apply UI
 - Assets foundation:
-  - local-first reusable context asset model with subtype, scope, source, status, provenance, optional body summary, and in-effect/usage metadata
-  - subtype/scope/source/status filtering with asset summary, inventory, selected detail, provenance, and in-effect/usage regions
-  - routed handoff into `Assets` from Sessions, Project Overview, and Analysis without carrying full transcript or trajectory state
+  - local-first reusable context asset model with subtype, scope, source, status, provenance, optional body summary, in-effect/usage metadata, and derived governance health
+  - subtype/scope/source/status filtering with asset summary, governance issue class counts, inventory, selected detail, provenance, and in-effect/usage regions
+  - route-only governance inspection for Sessions, Analysis, Backup / Migration, or Project Overview without inline edit, repair, sync, deploy, restore, or workflow execution controls
+  - routed handoff into `Assets` from Sessions, Project Overview, and Analysis with compact issue context only, without carrying full transcript, overview summary state, findings tables, or trajectory state
 - Analysis foundation:
   - local-first analysis finding model with issue class, severity, status, affected object, evidence references, route targets, and preservation warnings
   - context health summary, findings inventory, selected finding detail, evidence context, and route-only recommended actions

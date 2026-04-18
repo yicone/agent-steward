@@ -1023,6 +1023,7 @@ export default function ProjectShellClient() {
               onOpenSession={handleOpenSessionFromContext}
               onOpenAnalysis={handleOpenAnalysisFromAssets}
               onOpenBackup={handleOpenBackupFromAssets}
+              onOpenOverview={() => handleNavigate("overview")}
             />
           ) : null}
           {activePage === "analysis" ? (

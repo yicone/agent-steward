@@ -13,6 +13,11 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-04-19` — Assets governance hardening
+  - Added derived governance health semantics for reusable context assets, including healthy, informational, warning, and unknown states
+  - Updated `Assets` summary and detail views with governance issue class counts, provenance/in-effect explanations, route ownership, and foundation data cues
+  - Preserved compact Overview/Analysis issue handoffs into `Assets` while keeping editing, repair, sync, deploy, restore, and workflow execution outside the Assets surface
+
 - `2026-04-18` — Project bundle hardening
   - Hardened `/api/project-bundles` so generation requires explicit selection/configuration, invalid modes return structured errors, and generate responses expose summary-shaped display data only
   - Strengthened project bundle validation for global output-root blockers, structural blockers, missing-package warnings, safe diagnostics, and deterministic newest matching session backup reuse
