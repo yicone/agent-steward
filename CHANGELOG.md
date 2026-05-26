@@ -13,6 +13,15 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-05-26` — Windsurf legacy session recoverability
+  - Added bounded recoverability contract for legacy Windsurf sessions (ls_readable, partial, unavailable)
+  - Distinguish attachment failures from data absence; trajectory not found is classified as data missing
+  - Sessions viewer shows recoverability-aware messaging for partial/unavailable legacy sessions
+  - Backup/Migration workflow validates unreadable Windsurf sessions and blocks canonical backup for unavailable
+  - Diagnostic JSON includes recoverability evidence (local .pb and brain sidecar)
+  - Added `src/lib/parse/windsurfRecoverability.ts` with `inferWindsurfRecoverability()` helper
+  - Archived OpenSpec change: `openspec/changes/archive/2026-05-26-windsurf-legacy-recoverability/`
+
 - `2026-05-26` — Cursor support: first-class session browser with unified Trajectory viewer
   - Added Cursor as a fourth first-class source (alongside Antigravity, Windsurf, Codex) with bounded local SQLite read, no runtime attach required
   - Added `src/lib/server/cursor.ts` adapter: `CursorBubble` type, `readCursorBubbles()` for bubble-by-bubble transcript recovery, `buildCursorEvents()` / `buildCursorSummary()`, and `extractSummaryText()` with XML conversation-context stripping
