@@ -5,6 +5,7 @@ import { readConfig } from "@/lib/server/config";
 import { getAntigravityStatus } from "@/lib/server/antigravity";
 import { getWindsurfStatus } from "@/lib/server/windsurf";
 import { getCodexStatus } from "@/lib/server/codex";
+import { getCursorStatus } from "@/lib/server/cursor";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +37,14 @@ export async function GET() {
     codex = { sessionsFound: false, error: message };
   }
 
-  const status: SourcesStatus = { antigravity, windsurf, codex };
+  let cursor: SourcesStatus["cursor"];
+  try {
+    cursor = await getCursorStatus(config);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    cursor = { sessionsFound: false, error: message, recommendedAction: message };
+  }
+
+  const status: SourcesStatus = { antigravity, windsurf, codex, cursor };
   return NextResponse.json(status);
 }

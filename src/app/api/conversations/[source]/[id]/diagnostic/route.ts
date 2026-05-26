@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isSource(value: string): value is Source {
-  return value === "antigravity" || value === "windsurf" || value === "codex";
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
 }
 
 function safeFilename(value: string): string {

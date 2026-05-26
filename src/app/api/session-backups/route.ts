@@ -8,6 +8,7 @@ import { toSessionRecord } from "@/lib/sessionRecordMapper";
 import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getCodexConversation, getCodexRawContent, validateRootId } from "@/lib/server/codex";
+import { getCursorConversation } from "@/lib/server/cursor";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 import { writeSessionBackupPackage } from "@/lib/server/sessionBackupService";
 import { getWindsurfTrajectory } from "@/lib/server/windsurf";
@@ -24,7 +25,7 @@ type CreateSessionBackupBody = {
 };
 
 function isSource(value: unknown): value is Source {
-  return value === "antigravity" || value === "windsurf" || value === "codex";
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
 }
 
 async function loadWindsurfTrajectoryContent(config: Awaited<ReturnType<typeof readConfig>>["config"], sessionId: string): Promise<TrajectoryContent> {
@@ -142,6 +143,26 @@ export async function POST(req: Request) {
         summary: conversation.summary
       };
       sourceLocator = raw.filePath;
+    } else if (body.source === "cursor") {
+      if (body.includeSourceCopy) {
+        return NextResponse.json(
+          {
+            error: `includeSourceCopy is not implemented for source: ${body.source}`,
+            code: "SOURCE_COPY_UNSUPPORTED",
+            title: "Source copy unavailable",
+            hint: "Cursor currently supports metadata-backed preservation only in v1."
+          },
+          { status: 501 }
+        );
+      }
+      const cursor = await getCursorConversation(body.sessionId, config);
+      content = {
+        kind: "trajectory",
+        source: "cursor",
+        events: cursor.events,
+        summary: cursor.summary
+      };
+      sourceLocator = cursor.locator;
     } else {
       if (body.includeSourceCopy) {
         return NextResponse.json(
@@ -162,7 +183,7 @@ export async function POST(req: Request) {
       sessionId: body.sessionId,
       source: body.source,
       sourceRef: {
-        kind: body.source === "codex" ? "file" : "runtime_rpc",
+        kind: body.source === "codex" ? "file" : body.source === "cursor" ? "sqlite" : "runtime_rpc",
         locator: sourceLocator
       },
       content,

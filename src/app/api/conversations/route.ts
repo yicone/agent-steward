@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import type { ConversationListItem, Source } from "@/lib/types";
+import type { ConversationListItem, ConversationMeta, Source } from "@/lib/types";
 import { readConfig } from "@/lib/server/config";
 import { detectDuplicates, listConversationFiles } from "@/lib/server/conversations";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
@@ -20,14 +20,14 @@ const duplicatesCache = new Map<
 const MAX_DUPLICATES_CACHE_ENTRIES = 100;
 
 function isSource(value: string | null): value is Source {
-  return value === "antigravity" || value === "windsurf" || value === "codex";
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
 }
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const sourceParam = url.searchParams.get("source");
   if (!isSource(sourceParam)) {
-    return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf|codex" }, { status: 400 });
+    return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf|codex|cursor" }, { status: 400 });
   }
 
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "200"), 1), 1000);
@@ -79,7 +79,7 @@ export async function GET(req: Request) {
       ? allItems.slice(offset, offset + limit)
       : await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
-  let metaMap: Record<string, { title?: string; cwd?: string }> = {};
+  let metaMap: Record<string, ConversationMeta> = {};
   try {
     metaMap = await getTrajectoryMetaMapCached({ source: sourceParam, config });
   } catch {
@@ -90,12 +90,23 @@ export async function GET(req: Request) {
     const meta = metaMap[it.id] ?? {};
     const dupRoots = duplicates[it.id];
     const duplicateRootIds = dupRoots ? dupRoots.filter((rid) => rid !== it.rootId) : undefined;
+    
+    // For Windsurf sessions, use trajectory timestamp instead of file modification time
+    // This ensures sessions are ordered by actual session date, not file modification date
+    const effectiveMtimeMs = (sourceParam === "windsurf" && typeof meta.timestampMs === "number") 
+      ? meta.timestampMs 
+      : it.mtimeMs;
+    
     return {
       ...it,
       ...meta,
+      mtimeMs: effectiveMtimeMs,
       ...(duplicateRootIds && duplicateRootIds.length > 0 ? { duplicateRootIds } : {})
     };
   });
+
+  // Re-sort by the effective mtimeMs to ensure proper ordering
+  withMeta.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   return NextResponse.json({ items: withMeta, limit, offset });
 }
