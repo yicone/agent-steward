@@ -1,8 +1,13 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { NextResponse } from "next/server";
 
 import type { ConversationListItem, ConversationMeta, Source } from "@/lib/types";
+import { expandHome } from "@/lib/server/paths";
 import { readConfig } from "@/lib/server/config";
 import { detectDuplicates, listConversationFiles } from "@/lib/server/conversations";
+import { inferWindsurfRecoverability } from "@/lib/parse/windsurfRecoverability";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 
 export const runtime = "nodejs";
@@ -86,10 +91,28 @@ export async function GET(req: Request) {
     metaMap = {};
   }
 
-  const withMeta: ConversationListItem[] = items.map((it) => {
+  const withMeta: ConversationListItem[] = await Promise.all(items.map(async (it) => {
     const meta = metaMap[it.id] ?? {};
     const dupRoots = duplicates[it.id];
     const duplicateRootIds = dupRoots ? dupRoots.filter((rid) => rid !== it.rootId) : undefined;
+    const normalizedDir = it.path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
+    const isLegacyWindsurfRoot = sourceParam === "windsurf" && /\/\.codeium\/cascade$/i.test(normalizedDir);
+    const brainDir = expandHome(`~/.codeium/brain/${it.id}`);
+    const hasRecoveryEvidence = sourceParam === "windsurf"
+      ? Boolean(await fs.stat(path.join(brainDir, "plan.md")).catch(() => null) || await fs.stat(path.join(brainDir, "plan_metadata.pbtxt")).catch(() => null))
+      : false;
+    const recoverability = sourceParam === "windsurf"
+      ? inferWindsurfRecoverability({
+          trajectoryReadable: typeof meta.timestampMs === "number",
+          trajectoryMissing: isLegacyWindsurfRoot && typeof meta.timestampMs !== "number",
+          hasSidecarEvidence: hasRecoveryEvidence,
+        })
+      : undefined;
+    const recoverabilityNote = recoverability === "unavailable"
+      ? "Local Windsurf session file found, but the running LS may no longer have this trajectory."
+      : recoverability === "partial"
+        ? "Legacy Windsurf session has bounded brain-sidecar evidence even though the running LS may no longer read it."
+        : undefined;
     
     // For Windsurf sessions, use trajectory timestamp instead of file modification time
     // This ensures sessions are ordered by actual session date, not file modification date
@@ -101,9 +124,12 @@ export async function GET(req: Request) {
       ...it,
       ...meta,
       mtimeMs: effectiveMtimeMs,
+      ...(recoverability ? { recoverability } : {}),
+      ...(hasRecoveryEvidence ? { hasRecoveryEvidence } : {}),
+      ...(recoverabilityNote ? { recoverabilityNote } : {}),
       ...(duplicateRootIds && duplicateRootIds.length > 0 ? { duplicateRootIds } : {})
     };
-  });
+  }));
 
   // Re-sort by the effective mtimeMs to ensure proper ordering
   withMeta.sort((a, b) => b.mtimeMs - a.mtimeMs);

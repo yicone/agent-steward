@@ -27,6 +27,8 @@
   - 版本指纹：Commit `73ca2d6aa880de1bc504ad960c1ab79c9248d476`；VS Code OSS `1.108.2`；Electron `39.2.7`；Chromium `142.0.7444.235`；Node.js `22.21.1`；V8 `14.2.231.21-electron.0`；构建时间 `2026-03-09T19:00:54.154Z`；OS `Darwin arm64 24.6.0`
   - 对应实现方案：`pid/port` 从 `Windsurf.log` 读取；live CSRF token 从 LS 子进程环境变量 `WINDSURF_CSRF_TOKEN` 读取；`state.vscdb` 中的 `codeium.windsurf-windsurf_auth-` 不是可用 fallback
   - 回归时先验证：`ps eww -o command= -ww -p <pid>` 是否仍能看到 `WINDSURF_CSRF_TOKEN=`；`Heartbeat` 对 `state.vscdb` UUID 是否仍返回 `401 invalid CSRF token`
+  - recoverability 事实：legacy `~/.codeium/cascade/*.pb` 会话可被本地扫描列出，但若 live LS 返回 `trajectory not found`，则只能标记为 `partial` 或 `unavailable`，不能声称 canonical readable content 仍存在
+  - bounded evidence：本机只发现一个 legacy `cascadeId` 在 `~/.codeium/brain/<cascadeId>/` 下有 sidecar（`plan.md` 与 `plan_metadata.pbtxt`），因此 brain 证据应被视为可选的 bounded evidence，而非 transcript source
 - `Antigravity 1.19.5`
   - 版本指纹：Commit `6adfc1a7e4a1a9af62bc45e8f2d7e6a97b7a9756`；VS Code OSS `1.107.0`；Electron `39.2.3`；Chromium `142.0.7444.175`；构建时间 `2026-02-26T07:23:14.771Z`；OS `Darwin arm64 24.6.0`
   - 对应实现方案：LS 发现仍应优先走 `Antigravity.log` attach，并以 `Heartbeat` 成功作为准入；`daemon/ls_*.json` 可作为 legacy discovery；`title/cwd` 通过 `state.vscdb` 的 `*trajectorySummaries` enrichment
@@ -58,6 +60,32 @@
 - 当时真实来源：token 来自 `argv`、`env`、discovery 文件，还是根本不可读
 - 验证命令：`ps` / `curl` / `rg` / `sqlite3`
 - 结论：旧假设哪里失效、代码层做了什么修复
+
+### Windsurf legacy recoverability（2026-05-26 实测）
+
+- `~/.codeium/cascade` 中的 legacy `.pb` 文件可以通过 Settings root 正常发现并显示在 Sessions 列表中。
+- 这些 legacy session 在当前 live Windsurf LS 上可能全部返回 `trajectory not found`，这表示 **本地发现成功 ≠ LS 仍可读**。
+- `agent-storage-manager` 当前 contract：
+  - `ls_readable`：LS 仍可返回 trajectory / steps
+  - `partial`：LS 返回 `trajectory not found`，但存在 bounded sidecar evidence（例如 `~/.codeium/brain/<cascadeId>/plan.md`）
+  - `unavailable`：LS 返回 `trajectory not found`，且没有额外 bounded evidence
+- `partial` / `unavailable` 只用于 diagnostics、Sessions viewer 与 Backup / Migration handoff；**不表示可以离线重建 canonical transcript**。
+
+建议验证命令：
+
+```bash
+# 检查 legacy Windsurf pb roots
+find "$HOME/.codeium/cascade" -maxdepth 1 -name '*.pb' | head
+
+# 检查某个 legacy session 是否存在 bounded brain sidecar
+ls -la "$HOME/.codeium/brain/<cascadeId>"
+
+# 在已知 pid/port/token 下验证 trajectory 是否仍可读
+curl -sS -X POST "http://127.0.0.1:<port>/exa.language_server_pb.LanguageServerService/GetCascadeTrajectory" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: <live-token>" \
+  -d '{"cascadeId":"<cascadeId>"}'
+```
 
 ---
 

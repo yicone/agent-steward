@@ -235,6 +235,9 @@ export type BackupSessionSelection = {
   sessionId: string;
   source?: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
   includeSourceCopy?: boolean;
   unresolvedReason?: string;
 };
@@ -330,6 +333,9 @@ export type BackupMigrationHandoff = {
   sessions?: BackupSessionSelection[];
   source?: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
   assetId?: string;
   assetSubtype?: string;
   findingId?: string;

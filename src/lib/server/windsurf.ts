@@ -6,15 +6,17 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import type { AppConfig, ChatMessage, SourcesStatus, TrajectoryEvent, TrajectorySummary } from "@/lib/types";
-import { extractCsrfTokenFromCommand } from "@/lib/parse/commandLine";
+import { extractCsrfTokenFromCommand, extractCsrfTokenMatchFromCommand } from "@/lib/parse/commandLine";
 import { classifyCsrfTokenSource } from "@/lib/parse/tokenSource";
 import { getHeartbeatFailureSummary, getSessionRestartAction } from "@/lib/parse/connectionDiagnostics";
+import { inferWindsurfRecoverability } from "@/lib/parse/windsurfRecoverability";
 import { getWindsurfRecommendedAction, inferWindsurfTokenRequired } from "@/lib/parse/windsurfStatus";
 import { summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { extractLatestWindsurfStartInfoFromLog } from "@/lib/parse/windsurfLog";
 import { normalizeWindsurfStepsToMessages, normalizeWindsurfStepsToTrajectoryEvents } from "@/lib/parse/windsurfSteps";
 import { ConnectUnaryError, connectUnaryJson } from "@/lib/server/connect";
 import { platformPaths } from "@/lib/server/platform";
+import { expandHome } from "@/lib/server/paths";
 import { buildMetaMapFromTrajectorySummaries } from "@/lib/server/trajectoryMeta";
 
 const execFileAsync = promisify(execFile);
@@ -43,12 +45,73 @@ function extractErrCodeMessage(err: unknown): { code?: string; message?: string 
   return { ...(code ? { code } : {}), ...(message ? { message } : {}) };
 }
 
+function toWindsurfRpcError(err: unknown, cascadeId: string): Error {
+  if (!(err instanceof ConnectUnaryError)) {
+    return err instanceof Error ? err : new Error(String(err));
+  }
+
+  const bodyText = err.bodyText?.trim() ?? "";
+  if (/trajectory not found/i.test(bodyText)) {
+    return new Error(
+      `Windsurf LS returned "trajectory not found" for session ${cascadeId}. The local .pb file was discovered, but the running Windsurf LS database does not have this trajectory anymore.`
+    );
+  }
+
+  if (bodyText.length > 0) {
+    return new Error(`${err.message}: ${bodyText}`);
+  }
+
+  return new Error(err.message);
+}
+
 function isInvalidCsrfToken(res: HeartbeatProbeResult | null | undefined): boolean {
   return res?.httpStatus === 401 && /invalid csrf token/i.test(res.errorMessage ?? "");
 }
 
 function isMissingCsrfToken(res: HeartbeatProbeResult | null | undefined): boolean {
   return res?.httpStatus === 401 && /missing csrf token/i.test(res.errorMessage ?? "");
+}
+
+async function getLegacyWindsurfRecoveryEvidence(cascadeId: string) {
+  const pbPath = expandHome(`~/.codeium/cascade/${cascadeId}.pb`);
+  const brainDir = expandHome(`~/.codeium/brain/${cascadeId}`);
+
+  const pbStat = await fs.stat(pbPath).catch(() => null);
+  const planText = await fs.readFile(path.join(brainDir, "plan.md"), "utf-8").catch(() => null);
+  const planMetadataText = await fs.readFile(path.join(brainDir, "plan_metadata.pbtxt"), "utf-8").catch(() => null);
+
+  let recoveredTitle: string | undefined;
+  let recoveredCurrentGoal: string | undefined;
+  if (planText) {
+    const lines = planText.split(/\r?\n/);
+    const headingLine = lines.find((line) => line.startsWith("# "));
+    if (headingLine) recoveredTitle = headingLine.slice(2).trim() || undefined;
+
+    const goalIndex = lines.findIndex((line) => /^##\s+Current Goal\s*$/i.test(line.trim()));
+    if (goalIndex >= 0) {
+      const goalLine = lines.slice(goalIndex + 1).find((line) => line.trim().length > 0);
+      if (goalLine) recoveredCurrentGoal = goalLine.trim();
+    }
+  }
+
+  return {
+    localPb: pbStat
+      ? {
+          path: pbPath,
+          sizeBytes: Number(pbStat.size),
+          mtimeMs: Number(pbStat.mtimeMs)
+        }
+      : undefined,
+    brainSidecar: planText || planMetadataText
+      ? {
+          path: brainDir,
+          hasPlanMd: Boolean(planText),
+          hasPlanMetadata: Boolean(planMetadataText),
+          ...(recoveredTitle ? { recoveredTitle } : {}),
+          ...(recoveredCurrentGoal ? { recoveredCurrentGoal } : {})
+        }
+      : undefined
+  };
 }
 
 async function probeWindsurfHeartbeat(params: { baseUrl: string; csrfToken?: string }): Promise<HeartbeatProbeResult> {
@@ -184,9 +247,10 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
   }
 
   const cmd = await readProcessCommandLine(startInfo.pid);
-  const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
+  const psTokenMatch = cmd ? extractCsrfTokenMatchFromCommand(cmd) : { token: null, source: "none" as const };
+  const tokenFromPs = psTokenMatch.token;
   const overrideToken = config.windsurf.csrfTokenOverride?.trim() || null;
-  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, overrideToken });
+  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, tokenFromPsSource: psTokenMatch.source, overrideToken });
   const csrfToken = tokenInfo.token ?? "";
 
   const baseUrl = `http://127.0.0.1:${startInfo.port}`;
@@ -210,9 +274,9 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
     throw new Error("Windsurf heartbeat probe failed with the Settings override token. Refresh the override token, then retry.");
   }
   if (isInvalidCsrfToken(resWithToken)) {
-    throw new Error("Windsurf rejected the process-args CSRF token (401 invalid CSRF token). Restart a Cascade session, then refresh.");
+    throw new Error(`Windsurf rejected the ${tokenInfo.source === "ps_env" ? "running-process env" : "process-args"} CSRF token (401 invalid CSRF token). Restart a Cascade session, then refresh.`);
   }
-  throw new Error("Windsurf heartbeat probe failed with the process-args CSRF token. Restart a Cascade session, then refresh.");
+  throw new Error(`Windsurf heartbeat probe failed with the ${tokenInfo.source === "ps_env" ? "running-process env" : "process-args"} CSRF token. Restart a Cascade session, then refresh.`);
 
   // unreachable
 }
@@ -268,9 +332,10 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
   }
 
   const cmd = await readProcessCommandLine(startInfo.pid);
-  const tokenFromPs = cmd ? extractCsrfTokenFromCommand(cmd) : null;
+  const psTokenMatch = cmd ? extractCsrfTokenMatchFromCommand(cmd) : { token: null, source: "none" as const };
+  const tokenFromPs = psTokenMatch.token;
   const overrideToken = config.windsurf.csrfTokenOverride?.trim() || null;
-  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, overrideToken });
+  const tokenInfo = classifyCsrfTokenSource({ tokenFromPs, tokenFromPsSource: psTokenMatch.source, overrideToken });
   const csrfToken = tokenInfo.token;
   const csrfTokenSource = tokenInfo.source;
 
@@ -396,17 +461,25 @@ async function getWindsurfStepChunk(params: {
       body: { cascadeId }
     });
     if (typeof t?.numTotalSteps === "number") numTotalSteps = t.numTotalSteps;
-  } catch {
+  } catch (err) {
+    if (err instanceof ConnectUnaryError && /trajectory not found/i.test(err.bodyText ?? "")) {
+      throw toWindsurfRpcError(err, cascadeId);
+    }
     // Optional
   }
 
-  const stepsRes = await connectUnaryJson<any>({
-    baseUrl,
-    serviceTypeName: SERVICE,
-    methodName: "GetCascadeTrajectorySteps",
-    csrfToken,
-    body: { cascadeId, stepOffset, verbosity: "CLIENT_TRAJECTORY_VERBOSITY_PROD_UI" }
-  });
+  let stepsRes: any;
+  try {
+    stepsRes = await connectUnaryJson<any>({
+      baseUrl,
+      serviceTypeName: SERVICE,
+      methodName: "GetCascadeTrajectorySteps",
+      csrfToken,
+      body: { cascadeId, stepOffset, verbosity: "CLIENT_TRAJECTORY_VERBOSITY_PROD_UI" }
+    });
+  } catch (err) {
+    throw toWindsurfRpcError(err, cascadeId);
+  }
 
   const steps: unknown[] = Array.isArray(stepsRes?.steps) ? stepsRes.steps : [];
   return {
@@ -449,6 +522,19 @@ export async function getWindsurfDiagnosticBundle(params: {
   pid: number;
   port: number;
   csrfTokenPresent: boolean;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  localPb?: {
+    path: string;
+    sizeBytes: number;
+    mtimeMs: number;
+  };
+  brainSidecar?: {
+    path: string;
+    hasPlanMd: boolean;
+    hasPlanMetadata: boolean;
+    recoveredTitle?: string;
+    recoveredCurrentGoal?: string;
+  };
   getCascadeTrajectoryResponse: unknown;
   getCascadeTrajectoryStepsPages: Array<{ stepOffset: number; response: unknown }>;
   numTotalSteps?: number;
@@ -460,13 +546,50 @@ export async function getWindsurfDiagnosticBundle(params: {
   const conn = await resolveWindsurfConnection(config);
   const baseUrl = `http://127.0.0.1:${conn.port}`;
 
-  const getCascadeTrajectoryResponse = await connectUnaryJson<any>({
-    baseUrl,
-    serviceTypeName: SERVICE,
-    methodName: "GetCascadeTrajectory",
-    csrfToken: conn.csrfToken,
-    body: { cascadeId }
+  let getCascadeTrajectoryResponse: any;
+  let trajectoryMissing = false;
+  try {
+    getCascadeTrajectoryResponse = await connectUnaryJson<any>({
+      baseUrl,
+      serviceTypeName: SERVICE,
+      methodName: "GetCascadeTrajectory",
+      csrfToken: conn.csrfToken,
+      body: { cascadeId }
+    });
+  } catch (err) {
+    if (err instanceof ConnectUnaryError && /trajectory not found/i.test(err.bodyText ?? "")) {
+      trajectoryMissing = true;
+      getCascadeTrajectoryResponse = {
+        error: toWindsurfRpcError(err, cascadeId).message,
+        bodyText: err.bodyText,
+        status: err.status
+      };
+    } else {
+      throw err;
+    }
+  }
+
+  const recoveryEvidence = trajectoryMissing ? await getLegacyWindsurfRecoveryEvidence(cascadeId) : { localPb: undefined, brainSidecar: undefined };
+  const recoverability = inferWindsurfRecoverability({
+    trajectoryReadable: !trajectoryMissing,
+    trajectoryMissing,
+    hasSidecarEvidence: Boolean(recoveryEvidence.brainSidecar)
   });
+
+  if (trajectoryMissing) {
+    return {
+      logPath: conn.logPath,
+      pid: conn.pid,
+      port: conn.port,
+      csrfTokenPresent: Boolean(conn.csrfToken),
+      ...(recoverability ? { recoverability } : {}),
+      ...(recoveryEvidence.localPb ? { localPb: recoveryEvidence.localPb } : {}),
+      ...(recoveryEvidence.brainSidecar ? { brainSidecar: recoveryEvidence.brainSidecar } : {}),
+      getCascadeTrajectoryResponse,
+      getCascadeTrajectoryStepsPages: [],
+      truncated: false
+    };
+  }
 
   const numTotalSteps = typeof getCascadeTrajectoryResponse?.numTotalSteps === "number" ? getCascadeTrajectoryResponse.numTotalSteps : undefined;
 
@@ -524,6 +647,7 @@ export async function getWindsurfDiagnosticBundle(params: {
     pid: conn.pid,
     port: conn.port,
     csrfTokenPresent: Boolean(conn.csrfToken),
+    ...(recoverability ? { recoverability } : {}),
     getCascadeTrajectoryResponse,
     getCascadeTrajectoryStepsPages,
     ...(typeof numTotalSteps === "number" ? { numTotalSteps } : {}),

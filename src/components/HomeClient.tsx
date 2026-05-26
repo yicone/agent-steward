@@ -72,6 +72,9 @@ export type HomeClientSessionHandoff = {
   sessionId: string;
   source: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
 };
 
 export type HomeClientProps = {
@@ -1547,6 +1550,25 @@ export default function HomeClient({
     return items.find((it) => it.id === parsed.id && it.rootId === parsed.rootId) ?? null;
   }, [items, selectedKey]);
 
+  const windsurfRecoverabilityMessage = useMemo(() => {
+    if (!selectedItem || source !== "windsurf") return null;
+    if (selectedItem.recoverability === "unavailable") {
+      return {
+        tone: "danger" as const,
+        title: "Legacy Windsurf session is not readable from the running LS.",
+        message: selectedItem.recoverabilityNote ?? "The local session file was discovered, but the running Windsurf LS no longer has this trajectory.",
+      };
+    }
+    if (selectedItem.recoverability === "partial") {
+      return {
+        tone: "warning" as const,
+        title: "Legacy Windsurf session has bounded recovery evidence.",
+        message: selectedItem.recoverabilityNote ?? "Some recoverability evidence may exist even though the full session is not guaranteed to be readable from the running Windsurf LS.",
+      };
+    }
+    return null;
+  }, [selectedItem, source]);
+
   const sourceCopySupported = useMemo(() => supportsSessionSourceCopy(source), [source]);
 
   const filteredItems = useMemo(() => {
@@ -2745,6 +2767,9 @@ export default function HomeClient({
                         sessionId: selectedId,
                         source,
                         ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                        ...(selectedItem?.recoverability ? { recoverability: selectedItem.recoverability } : {}),
+                        ...(selectedItem?.hasRecoveryEvidence != null ? { hasRecoveryEvidence: selectedItem.hasRecoveryEvidence } : {}),
+                        ...(selectedItem?.recoverabilityNote ? { recoverabilityNote: selectedItem.recoverabilityNote } : {}),
                       })
                     }
                     title="Route to Backup / Migration with bounded session backup context"
@@ -2773,6 +2798,23 @@ export default function HomeClient({
                     Diagnostic JSON
                   </a>
                 </Button>
+              </div>
+            </div>
+          ) : null}
+
+          {selectedId && source === "windsurf" && windsurfRecoverabilityMessage ? (
+            <div
+              className={cn(
+                "mb-3 rounded-2xl border px-3 py-2 text-sm",
+                windsurfRecoverabilityMessage.tone === "danger"
+                  ? "border-danger/55 bg-danger/10 text-danger"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+              )}
+            >
+              <div className="font-medium">{windsurfRecoverabilityMessage.title}</div>
+              <div className="mt-1 leading-6">{windsurfRecoverabilityMessage.message}</div>
+              <div className="mt-1 text-xs opacity-90">
+                Use Diagnostic JSON for detailed evidence, or open Backup / Migration to review bounded preservation context.
               </div>
             </div>
           ) : null}

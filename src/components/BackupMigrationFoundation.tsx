@@ -82,14 +82,55 @@ export type BackupMigrationFoundationProps = {
 
 // ── Validation seed helpers ─────────────────────────────────────────────────
 
-function buildSessionBackupValidation(sessionId: string | null): BackupValidationItem[] {
-  if (!sessionId) {
+function buildSessionBackupValidation(input: {
+  sessionId: string | null;
+  source: Source | null;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
+}): BackupValidationItem[] {
+  if (!input.sessionId) {
     return [{ id: "v-no-session", label: "No session selected", severity: "block", detail: "Select a session before proceeding." }];
   }
+
+  if (input.source === "windsurf" && input.recoverability === "unavailable") {
+    return [
+      {
+        id: "v-windsurf-unavailable",
+        label: "Canonical Windsurf content unavailable",
+        severity: "block",
+        detail: input.recoverabilityNote ?? "The running Windsurf LS no longer has this trajectory, so canonical session backup cannot be generated from readable content.",
+      },
+      {
+        id: "v-windsurf-local-evidence",
+        label: "Local source evidence",
+        severity: "warning",
+        detail: input.hasRecoveryEvidence
+          ? "Bounded recovery evidence exists and can be inspected, but it does not replace canonical readable session content."
+          : "A local Windsurf session file may still exist, but local discovery alone does not make the session canonically backup-ready.",
+      },
+    ];
+  }
+
+  const recoverabilityWarning =
+    input.source === "windsurf" && input.recoverability === "partial"
+      ? [
+          {
+            id: "v-windsurf-partial",
+            label: "Partial recovery evidence",
+            severity: "warning" as const,
+            detail:
+              input.recoverabilityNote ??
+              "Bounded recovery evidence exists for this Windsurf session, but it does not imply vendor-runtime restoration or transcript reconstruction.",
+          },
+        ]
+      : [];
+
   return [
     { id: "v-schema", label: "Schema version", severity: "ok", detail: "session-record/v1 is supported." },
     { id: "v-integrity", label: "Session integrity", severity: "ok", detail: "Session data passes integrity checks." },
     { id: "v-provenance", label: "Provenance", severity: "ok", detail: "Source reference is present and traceable." },
+    ...recoverabilityWarning,
   ];
 }
 
@@ -595,6 +636,9 @@ export function BackupMigrationFoundation({
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(handoff?.sessionId ?? null);
   const [selectedSource, setSelectedSource] = useState<Source | null>((handoff?.source as Source) ?? null);
   const [selectedRootId, setSelectedRootId] = useState<string | null>(handoff?.rootId ?? null);
+  const [selectedRecoverability, setSelectedRecoverability] = useState<BackupMigrationHandoff["recoverability"]>(handoff?.recoverability);
+  const [selectedHasRecoveryEvidence, setSelectedHasRecoveryEvidence] = useState<boolean>(handoff?.hasRecoveryEvidence === true);
+  const [selectedRecoverabilityNote, setSelectedRecoverabilityNote] = useState<string | null>(handoff?.recoverabilityNote ?? null);
   const [includeSourceCopy, setIncludeSourceCopy] = useState(false);
 
   // Bulk session backup state
@@ -668,6 +712,9 @@ export function BackupMigrationFoundation({
     setSelectedSessionId(null);
     setSelectedSource(null);
     setSelectedRootId(null);
+    setSelectedRecoverability(undefined);
+    setSelectedHasRecoveryEvidence(false);
+    setSelectedRecoverabilityNote(null);
     setIncludeSourceCopy(false);
     setBulkSelections([]);
     setBulkDraftSessionId("");
@@ -745,7 +792,13 @@ export function BackupMigrationFoundation({
   const runValidation = useCallback(async () => {
     if (!activeWorkflow) return;
     if (activeWorkflow === "session-backup") {
-      const result = deriveValidationResult(buildSessionBackupValidation(selectedSessionId));
+      const result = deriveValidationResult(buildSessionBackupValidation({
+        sessionId: selectedSessionId,
+        source: selectedSource,
+        recoverability: selectedRecoverability,
+        hasRecoveryEvidence: selectedHasRecoveryEvidence,
+        recoverabilityNote: selectedRecoverabilityNote ?? undefined,
+      }));
       setValidationResult(result);
       setWorkflowState("validation");
       return;
@@ -836,7 +889,11 @@ export function BackupMigrationFoundation({
     previewSourceContext,
     previewTargetContext,
     projectBundleSelection,
+    selectedHasRecoveryEvidence,
+    selectedRecoverability,
+    selectedRecoverabilityNote,
     selectedSessionId,
+    selectedSource,
   ]);
 
   const addBulkSelection = useCallback(() => {
@@ -1666,6 +1723,21 @@ export function BackupMigrationFoundation({
                   <div className="font-medium">Session: {selectedSessionId}</div>
                   <div className="text-xs text-muted">Source: {selectedSource}{selectedRootId ? ` / Root: ${selectedRootId}` : ""}</div>
                 </div>
+                {selectedSource === "windsurf" && selectedRecoverability && selectedRecoverability !== "ls_readable" ? (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-900 dark:text-amber-200">
+                    <div className="font-medium">
+                      {selectedRecoverability === "unavailable"
+                        ? "Canonical Windsurf content is unavailable"
+                        : "This Windsurf session carries bounded recovery evidence"}
+                    </div>
+                    <div className="mt-1 text-xs leading-5 opacity-90">
+                      {selectedRecoverabilityNote ??
+                        (selectedRecoverability === "unavailable"
+                          ? "The running Windsurf LS no longer has this trajectory, so this workflow should be used for evidence review rather than canonical transcript backup."
+                          : "Recovery evidence can be reviewed and preserved, but it does not imply transcript reconstruction or vendor-runtime restoration.")}
+                    </div>
+                  </div>
+                ) : null}
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

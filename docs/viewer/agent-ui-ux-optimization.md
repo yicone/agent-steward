@@ -59,7 +59,19 @@
   - 搜索命中词在 title / commandLine / text / output 字段内高亮（`HighlightedText` 零依赖组件）
   - 设计文档：`docs/viewer/search-design.md`；跨会话搜索选型：`docs/adr/ADR-003-cross-session-search.md`
 - Windsurf：默认使用 trajectory-backed（`view=trajectory`）分页加载；legacy chat 仍保留。
+- Windsurf legacy recoverability：当本地发现 legacy session，但运行中的 Windsurf LS 返回 `trajectory not found` 时，Sessions viewer 会保留选中态并展示 recoverability-aware 提示；提示区分 `partial`（存在 bounded evidence）与 `unavailable`（无额外 evidence），并引导用户使用 `Diagnostic JSON` 或 `Backup / Migration` 查看 bounded preservation context。
 - Cursor：使用统一 Trajectory 事件模型（`kind: "trajectory"`, `source: "cursor"`），从本地 SQLite bubble 读取完整对话。Viewer 提供 `Transcript`（默认）和 `Trajectory` 两种视图，与 Antigravity/Windsurf 保持一致。无 Compact 模式（Cursor 没有 vendor-side narrative 接口）。
+
+### Backup / Migration 与 recoverability 的当前语义
+
+- 从 `Sessions` 路由到 `Backup / Migration` 时，单个 session handoff 会携带 compact recoverability context：
+  - `recoverability`
+  - `hasRecoveryEvidence`
+  - `recoverabilityNote`
+- 对 Windsurf：
+  - `unavailable`：validation 明确 block canonical session backup
+  - `partial`：validation 明确 warning，允许继续做 bounded evidence review，但不暗示 transcript reconstruction
+- 这些提示的目标是让用户理解“证据保留”与“canonical transcript backup”是两回事，而不是在 workflow 中隐式承诺 vendor-runtime restoration。
 
 ### Next（建议按收益/成本排序）
 

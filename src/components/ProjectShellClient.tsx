@@ -327,6 +327,9 @@ export function buildBackupHandoffFromSessions(context: {
   sessionId?: string;
   source?: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
   sessions?: BackupSessionSelection[];
 }): BackupMigrationHandoff {
   if ((context.sessions?.length ?? 0) > 0) {
@@ -343,12 +346,18 @@ export function buildBackupHandoffFromSessions(context: {
   return {
     origin: "sessions",
     subtitle: `Back up session ${context.sessionId} from Sessions.`,
-    continueLabel: "Use the session backup workflow to preserve this session record.",
+    continueLabel:
+      context.recoverability && context.recoverability !== "ls_readable"
+        ? "Review recoverability evidence before attempting preservation for this Windsurf session."
+        : "Use the session backup workflow to preserve this session record.",
     returnLabel: "Return to the originating session for evidence review.",
     workflowType: "session-backup",
     sessionId: context.sessionId,
     source: context.source,
     rootId: context.rootId,
+    ...(context.recoverability ? { recoverability: context.recoverability } : {}),
+    ...(context.hasRecoveryEvidence != null ? { hasRecoveryEvidence: context.hasRecoveryEvidence } : {}),
+    ...(context.recoverabilityNote ? { recoverabilityNote: context.recoverabilityNote } : {}),
   };
 }
 

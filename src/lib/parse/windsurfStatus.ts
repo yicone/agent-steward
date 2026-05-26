@@ -18,7 +18,7 @@ export function getWindsurfRecommendedAction(params: {
   const { attached, tokenRequired } = params;
 
   if (attached) return "Connection healthy.";
-  if (tokenRequired === true) return "Set Windsurf CSRF token override in Settings if process args are unreadable.";
+  if (tokenRequired === true) return "Set Windsurf CSRF token override in Settings if the live LS token cannot be read from the running process.";
   if (tokenRequired === false) return "Keep Windsurf open and start/restart a Cascade session, then refresh.";
   return "CSRF token may be invalid or expired. First try refreshing the override token in Settings; if that fails, restart a Cascade session.";
 }

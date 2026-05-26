@@ -35,6 +35,12 @@ export type ConversationListItem = ConversationFile & {
   gitBranch?: string;
   /** Model used in the session, e.g. "gpt-5.4" (Codex only). */
   model?: string;
+  /** Bounded Windsurf recoverability state for locally discovered sessions. */
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  /** Whether bounded brain-sidecar evidence was discovered for this session. */
+  hasRecoveryEvidence?: boolean;
+  /** Compact recoverability note for viewer / workflow handoff surfaces. */
+  recoverabilityNote?: string;
   /** Root IDs that contain a session with the same id (excluding the item's own rootId). */
   duplicateRootIds?: string[];
 };
@@ -61,7 +67,7 @@ export type SourcesStatus = {
     httpPort?: number;
     httpsPort?: number;
     csrfTokenPresent?: boolean;
-    csrfTokenSource?: "ps_args" | "override" | "discovery_file" | "none";
+    csrfTokenSource?: "ps_args" | "ps_env" | "override" | "discovery_file" | "none";
     tokenRequired?: boolean;
     heartbeatOk?: boolean;
     lastError?: string;
@@ -77,7 +83,7 @@ export type SourcesStatus = {
     pidAlive?: boolean;
     port?: number;
     csrfTokenPresent?: boolean;
-    csrfTokenSource?: "ps_args" | "override" | "discovery_file" | "none";
+    csrfTokenSource?: "ps_args" | "ps_env" | "override" | "discovery_file" | "none";
     tokenRequired?: boolean;
     heartbeatOk?: boolean;
     lastError?: string;
