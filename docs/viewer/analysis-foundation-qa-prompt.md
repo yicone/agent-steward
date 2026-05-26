@@ -9,7 +9,7 @@ Repository: <repo-path>
 Branch under test: feat/analysis-foundation
 
 Goal:
-Verify that the new Analysis foundation behaves as a bounded interpretation-and-routing surface. It should show local context findings, explain why they matter, and route users to owning pages without claiming complete automated analysis, automatic fixes, asset editing, session mutation, or backup execution inside Analysis.
+Verify that the Analysis foundation behaves as a bounded interpretation-and-routing surface. It should show provider diagnostics as local findings when available, explain why they matter, and route users to owning pages without claiming complete automated analysis, automatic fixes, asset editing, session mutation, or backup execution inside Analysis.
 
 Setup:
 1. Use the QA agent's local checkout path for `<repo-path>`.
@@ -30,14 +30,18 @@ Primary smoke checks:
    - Finding Detail
    - Recommended Actions
 6. Confirm copy clearly says this is bounded foundation behavior and does not claim automatic remediation.
+7. Confirm provider-backed Analysis copy distinguishes repo-local provider diagnostics from seed/test fallback interpretations.
 
 Analysis state checks:
-1. In normal top-level Analysis browsing, confirm seeded findings appear.
-2. Select at least one finding and confirm the selected row is visibly active.
-3. Confirm the detail panel shows title, issue class, severity/status/object context, why it matters, evidence context when available, and route-only actions.
-4. Confirm high-severity or preservation-sensitive findings show a warning/issue-heavy cue.
-5. Change filters until no findings match. Confirm an empty state appears and no fake findings are shown.
-6. Confirm changing filters or object focus clears/downgrades routed context cues when applicable.
+1. In normal top-level Analysis browsing with provider-backed evidence, confirm provider diagnostics appear as findings only when warning diagnostics exist.
+2. If the provider has no warning diagnostics, confirm Analysis shows an explicit no-current-provider-findings / empty state instead of seed findings.
+3. If the provider is unavailable or a seed fixture is intentionally used, confirm seed findings are visibly labeled as fallback/non-live interpretations.
+4. Select at least one finding and confirm the selected row is visibly active.
+5. Confirm the detail panel shows title, issue class, severity/status/object context, why it matters, evidence context when available, and route-only actions.
+6. Confirm provider-derived findings limit claims to concrete provider diagnostics such as unreadable, ambiguous, duplicate, or unsupported evidence.
+7. Confirm high-severity or preservation-sensitive findings show a warning/issue-heavy cue only when such findings are present.
+8. Change filters until no findings match. Confirm an empty state appears and no fake findings are shown.
+9. Confirm changing filters or object focus clears/downgrades routed context cues when applicable.
 
 Routed handoff checks:
 1. From `Project Overview`, use a route into Analysis if present, such as `Review Analysis`.
@@ -67,5 +71,6 @@ Report format:
 - Blocking issues: list exact steps, expected result, actual result, screenshots if possible
 - Non-blocking concerns: wording, layout, confusing state transitions
 - Regression notes: anything broken in Sessions, Assets, or Backup / Migration
+- Provider evidence notes: whether findings were provider-backed, empty-provider, or seed-fallback, and whether project-relative paths remained display-safe
 - Suggested follow-up tests
 ```

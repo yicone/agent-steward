@@ -59,6 +59,7 @@
   - 搜索命中词在 title / commandLine / text / output 字段内高亮（`HighlightedText` 零依赖组件）
   - 设计文档：`docs/viewer/search-design.md`；跨会话搜索选型：`docs/adr/ADR-003-cross-session-search.md`
 - Windsurf：默认使用 trajectory-backed（`view=trajectory`）分页加载；legacy chat 仍保留。
+- Cursor：使用统一 Trajectory 事件模型（`kind: "trajectory"`, `source: "cursor"`），从本地 SQLite bubble 读取完整对话。Viewer 提供 `Transcript`（默认）和 `Trajectory` 两种视图，与 Antigravity/Windsurf 保持一致。无 Compact 模式（Cursor 没有 vendor-side narrative 接口）。
 
 ### Next（建议按收益/成本排序）
 
