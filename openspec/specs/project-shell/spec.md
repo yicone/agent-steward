@@ -41,7 +41,7 @@ foundation.
 
 #### Scenario: Source presence remains visible
 - **WHEN** source status has loaded
-- **THEN** the app exposes Antigravity, Windsurf, and Codex source presence or
+- **THEN** the app exposes Antigravity, Windsurf, Codex, and Cursor source presence or
   attachment state from either the shell or the `Sessions` source area
 
 #### Scenario: Diagnostics remain accessible
