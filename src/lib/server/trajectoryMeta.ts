@@ -67,7 +67,7 @@ export function extractMetaFromTrajectorySummary(summary: any): ConversationMeta
   return { 
     ...(title ? { title } : {}), 
     ...(cwd ? { cwd } : {}),
-    ...(timestampMs ? { timestampMs } : {})
+    ...(typeof timestampMs === "number" ? { timestampMs } : {})
   };
 }
 

@@ -53,7 +53,7 @@ function toWindsurfRpcError(err: unknown, cascadeId: string): Error {
   const bodyText = err.bodyText?.trim() ?? "";
   if (/trajectory not found/i.test(bodyText)) {
     return new Error(
-      `Windsurf LS returned "trajectory not found" for session ${cascadeId}. The local .pb file was discovered, but the running Windsurf LS database does not have this trajectory anymore.`
+      `Windsurf LS returned "trajectory not found" for session ${cascadeId}. The trajectory may not exist in the running Windsurf LS database (session could be legacy or from a different Windsurf installation).`
     );
   }
 
