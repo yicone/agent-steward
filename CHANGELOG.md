@@ -13,6 +13,16 @@ This file records shipped, merged changes for Agent Storage Manager.
 
 ### Added
 
+- `2026-05-26` — Cursor support: first-class session browser with unified Trajectory viewer
+  - Added Cursor as a fourth first-class source (alongside Antigravity, Windsurf, Codex) with bounded local SQLite read, no runtime attach required
+  - Added `src/lib/server/cursor.ts` adapter: `CursorBubble` type, `readCursorBubbles()` for bubble-by-bubble transcript recovery, `buildCursorEvents()` / `buildCursorSummary()`, and `extractSummaryText()` with XML conversation-context stripping
+  - API route now returns `kind: "trajectory", source: "cursor"` (unified model) instead of bare `kind: "markdown"`; search indexing uses `getTrajectoryMetaMapCached` for metadata consistency
+  - `HomeClient.tsx`: added `cursorView` state, Transcript (default) / Trajectory view switcher, cursor trajectory render block with turns/user/assistant badges, filter controls, and jump-to-event cross-view navigation
+  - Added `src/lib/projectEvidenceProvider.ts` for repo-local Cursor asset classification (`.cursor/rules/*.mdc` → `rule`; `.cursorrules` → `rule`; `.cursor/mcp.json` → `command`)
+  - Updated `docs/storage/local-storage-notes.md` with version compatibility risk table, graceful degradation principles, upgrade detection commands, and break-fix upgrade path
+  - Updated `docs/viewer/trajectory-view.md` with Cursor adapter section and API surface; updated `docs/viewer/agent-ui-ux-optimization.md` Shipped list
+  - Closed all four open questions in `openspec/changes/add-cursor-support/design.md`
+
 - `2026-04-19` — Assets governance hardening
   - Added derived governance health semantics for reusable context assets, including healthy, informational, warning, and unknown states
   - Updated `Assets` summary and detail views with governance issue class counts, provenance/in-effect explanations, route ownership, and foundation data cues
