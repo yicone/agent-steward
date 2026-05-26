@@ -36,6 +36,12 @@ function defaultRoots(): RootConfig[] {
       source: "codex",
       path: "~/.codex/sessions",
       enabled: true
+    },
+    {
+      id: "cursor-default",
+      source: "cursor",
+      path: "~/Library/Application Support/Cursor/User",
+      enabled: true
     }
   ];
 }
@@ -53,7 +59,7 @@ export function defaultConfig(): AppConfig {
 }
 
 function isSource(value: unknown): value is Source {
-  return value === "antigravity" || value === "windsurf" || value === "codex";
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
 }
 
 function sanitizeRoots(roots: unknown): RootConfig[] {

@@ -28,11 +28,12 @@ describe("readConfig / sanitizeRoots backfill", () => {
     const { config } = await readConfig();
     const sources = config.roots.map((r: RootConfig) => r.source);
     expect(sources).toContain("codex");
+    expect(sources).toContain("cursor");
     expect(sources).toContain("antigravity");
     expect(sources).toContain("windsurf");
   });
 
-  it("backfills default codex root when saved config has no codex entry", async () => {
+  it("backfills default codex and cursor roots when saved config is missing newer sources", async () => {
     const savedConfig = {
       schemaVersion: 1,
       roots: [
@@ -53,6 +54,10 @@ describe("readConfig / sanitizeRoots backfill", () => {
     expect(codexRoots.length).toBeGreaterThan(0);
     expect(codexRoots[0]!.path).toBe("~/.codex/sessions");
     expect(codexRoots[0]!.enabled).toBe(true);
+    const cursorRoots = config.roots.filter((r: RootConfig) => r.source === "cursor");
+    expect(cursorRoots.length).toBeGreaterThan(0);
+    expect(cursorRoots[0]!.path).toBe("~/Library/Application Support/Cursor/User");
+    expect(cursorRoots[0]!.enabled).toBe(true);
     // Existing roots are preserved
     expect(config.roots.filter((r: RootConfig) => r.source === "antigravity").length).toBeGreaterThan(0);
     expect(config.roots.filter((r: RootConfig) => r.source === "windsurf").length).toBeGreaterThan(0);

@@ -1,4 +1,4 @@
-export type Source = "antigravity" | "windsurf" | "codex";
+export type Source = "antigravity" | "windsurf" | "codex" | "cursor";
 
 export type RootConfig = {
   id: string;
@@ -93,6 +93,16 @@ export type SourcesStatus = {
      */
     sessionsDir?: string;
     error?: string;
+  };
+  cursor: {
+    /** True if at least one Cursor composer session was found in the validated local state. */
+    sessionsFound: boolean;
+    /** Resolved Cursor SQLite/app-storage path used for the current status probe. */
+    storagePath?: string;
+    /** Number of composer sessions found in the probed local store, when available. */
+    sessionCount?: number;
+    error?: string;
+    recommendedAction?: string;
   };
 };
 
@@ -216,6 +226,8 @@ export type ConversationMeta = {
   gitBranch?: string;
   /** Model used in the session, e.g. "gpt-5.4" (Codex only). */
   model?: string;
+  /** Timestamp from trajectory data for accurate session ordering (Windsurf only). */
+  timestampMs?: number;
 };
 
 export type SearchResult = {
