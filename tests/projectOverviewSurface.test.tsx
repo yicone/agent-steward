@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProjectOverviewSurface } from "@/components/ProjectShellClient";
+import { normalizeContextAsset } from "@/lib/contextAssets";
 import { deriveProjectOverviewSummary } from "@/lib/projectOverview";
 
 function renderOverview(summary = deriveProjectOverviewSummary()) {
@@ -92,5 +93,29 @@ describe("ProjectOverviewSurface", () => {
     expect(html).not.toContain("sample data");
     expect(html).not.toContain("command center");
     expect(html).not.toContain("dashboard");
+  });
+
+  it("renders provider-backed counts without sample-data badge", () => {
+    const html = renderOverview(deriveProjectOverviewSummary({
+      assets: [
+        normalizeContextAsset({
+          id: "asset-project-evidence-agents-md",
+          title: "Agents",
+          subtype: "rule",
+          scope: "project",
+          source: "codex",
+          status: "active",
+          provenance: "AGENTS.md (repo-local)",
+          usage: { state: "in_effect", summary: "Repo-local project rule." },
+        }),
+      ],
+      findings: [],
+      sessions: [],
+    }));
+
+    expect(html).toContain("Derived from explicit local project evidence");
+    expect(html).toContain("1 asset");
+    expect(html).toContain("Agents");
+    expect(html).not.toContain("sample data");
   });
 });

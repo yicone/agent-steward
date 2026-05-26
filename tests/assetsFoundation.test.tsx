@@ -3,12 +3,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { AssetsFoundation } from "@/components/AssetsFoundation";
-import type { AssetsHandoff } from "@/lib/contextAssets";
+import { normalizeContextAsset, type AssetsHandoff } from "@/lib/contextAssets";
+import type { ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 
-function renderAssetsFoundation(handoff: AssetsHandoff | null) {
+function renderAssetsFoundation(handoff: AssetsHandoff | null, projectEvidence?: ProjectEvidenceProviderResult | null) {
   return renderToStaticMarkup(
     <AssetsFoundation
       handoff={handoff}
+      projectEvidence={projectEvidence}
       loadingDelayMs={0}
       onOpenAnalysis={vi.fn()}
       onOpenBackup={vi.fn()}
@@ -16,6 +18,19 @@ function renderAssetsFoundation(handoff: AssetsHandoff | null) {
       onOpenSession={vi.fn()}
     />
   );
+}
+
+function createProviderResult(input: Partial<ProjectEvidenceProviderResult>): ProjectEvidenceProviderResult {
+  return {
+    provider: "project-evidence-provider-v1",
+    status: "available",
+    rootLabel: "repository root",
+    evidenceSource: "repo-local",
+    items: [],
+    assets: [],
+    diagnostics: [],
+    ...input,
+  };
 }
 
 describe("AssetsFoundation", () => {
@@ -127,5 +142,57 @@ describe("AssetsFoundation", () => {
 
     expect(html).toContain("route owner: Project Overview");
     expect(html).toContain("Route to Project Overview: review governance context");
+  });
+
+  it("renders provider-backed inventory instead of seed rows", () => {
+    const html = renderAssetsFoundation(null, createProviderResult({
+      assets: [
+        normalizeContextAsset({
+          id: "asset-project-evidence-agents-md",
+          title: "Agents",
+          subtype: "rule",
+          scope: "project",
+          source: "codex",
+          status: "active",
+          provenance: "AGENTS.md (repo-local)",
+          usage: { state: "in_effect", summary: "Repo-local rule evidence." },
+        }),
+      ],
+    }));
+
+    expect(html).toContain("Repo-local evidence");
+    expect(html).toContain("Agents");
+    expect(html).toContain("AGENTS.md (repo-local)");
+    expect(html).not.toContain("Project coding rules");
+    expect(html).not.toContain("Foundation data cue");
+  });
+
+  it("renders empty provider state without seed fallback rows", () => {
+    const html = renderAssetsFoundation(null, createProviderResult({ status: "empty" }));
+
+    expect(html).toContain("Repo-local evidence zero state");
+    expect(html).toContain("0");
+    expect(html).toContain("No reusable assets match the current subtype and filter context.");
+    expect(html).not.toContain("Project coding rules");
+  });
+
+  it("keeps unavailable provider fallback labeled and diagnostics visible", () => {
+    const html = renderAssetsFoundation(null, createProviderResult({
+      status: "unavailable",
+      diagnostics: [
+        {
+          id: "project-evidence-diagnostic-unreadable-agents-md",
+          kind: "unreadable",
+          severity: "warning",
+          path: "AGENTS.md",
+          message: "Provider could not read this repo-local allowlisted evidence file.",
+        },
+      ],
+    }));
+
+    expect(html).toContain("Provider unavailable fallback");
+    expect(html).toContain("Project coding rules");
+    expect(html).toContain("Provider diagnostics");
+    expect(html).toContain("unreadable: AGENTS.md");
   });
 });

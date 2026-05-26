@@ -233,6 +233,43 @@ describe("deriveProjectOverviewSummary", () => {
     ]);
   });
 
+  it("labels provider-backed local evidence without sample data", () => {
+    const summary = deriveProjectOverviewSummary({
+      assets: [
+        normalizeContextAsset({
+          id: "asset-project-evidence-agents-md",
+          title: "Agents",
+          subtype: "rule",
+          scope: "project",
+          source: "codex",
+          status: "active",
+          provenance: "AGENTS.md (repo-local)",
+          usage: { state: "in_effect", summary: "Repo-local project rule." },
+        }),
+      ],
+      findings: [],
+      sessions: [],
+    });
+
+    expect(summary.identity.evidenceKind).toBe("local-evidence");
+    expect(summary.identity.evidenceLabel).toBe("Derived from explicit local project evidence");
+    expect(summary.contextSnapshot).toContainEqual(expect.objectContaining({
+      id: "assets",
+      value: "1 asset",
+    }));
+  });
+
+  it("keeps empty and unavailable provider evidence from fabricating counts", () => {
+    const empty = deriveProjectOverviewSummary({ assets: [], findings: [], sessions: [] });
+    expect(empty.identity.evidenceKind).toBe("none");
+    expect(empty.contextSnapshot).toContainEqual(expect.objectContaining({ id: "assets", value: "0 assets" }));
+    expect(empty.contextSnapshot).toContainEqual(expect.objectContaining({ id: "analysis", value: "0 findings" }));
+
+    const unavailable = deriveProjectOverviewSummary({ assets: null, findings: null, sessions: [] });
+    expect(unavailable.contextSnapshot).toContainEqual(expect.objectContaining({ id: "assets", value: "Unknown" }));
+    expect(unavailable.contextSnapshot).toContainEqual(expect.objectContaining({ id: "analysis", value: "Unknown" }));
+  });
+
   it("keeps module route descriptors compact and scoped to owning pages", () => {
     const summary = deriveProjectOverviewSummary({
       sessions: [
