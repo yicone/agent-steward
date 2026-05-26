@@ -1,6 +1,6 @@
 # Codex 本地存储结构（持续记录）
 
-本文档记录 **Codex CLI / Codex App (macOS)** 在本地磁盘上的会话存储布局、标题存储机制，以及 `agent-storage-manager` 在集成过程中验证过的"可用事实"。
+本文档记录 **Codex CLI / Codex App (macOS)** 在本地磁盘上的会话存储布局、标题存储机制，以及 `agent-switch` 在集成过程中验证过的"可用事实"。
 
 > 约定：路径均以 macOS 为准；`~` 表示用户主目录。  
 > 这些目录可能包含会话内容、仓库路径、API key 等敏感信息；调试/截图时注意脱敏。
@@ -73,7 +73,7 @@ Codex CLI/App 在**每个新会话的开头**自动注入若干上下文行（`r
 | `# AGENTS.md instructions for <path>` | 项目 AGENTS.md 内容 |
 | `<system_instruction>` / `<system-instruction>` | 第三方编排工具（如 Conductor）注入的系统提示 |
 
-`agent-storage-manager` 的处理：`isInjectedContextMessage()` + `extractCodexTitle()` in `src/lib/parse/codexLog.ts`。
+`agent-switch` 的处理：`isInjectedContextMessage()` + `extractCodexTitle()` in `src/lib/parse/codexLog.ts`。
 
 ### `session_meta` 行的体积问题
 
@@ -225,7 +225,7 @@ Your work should take place in the /Users/tr/conductor/workspaces/clipvibe/saraj
 
 ---
 
-## 六、`agent-storage-manager` 实现入口
+## 六、`agent-switch` 实现入口
 
 | 功能 | 文件 | 函数 |
 | --- | --- | --- |

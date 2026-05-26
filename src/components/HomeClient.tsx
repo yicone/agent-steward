@@ -2534,7 +2534,7 @@ export default function HomeClient({
     <div className="mx-auto max-w-[1200px] p-4">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold">{chrome === "full" ? "Agent Storage Manager" : "Sessions"}</div>
+          <div className="text-lg font-semibold">{chrome === "full" ? "Agent Switch" : "Sessions"}</div>
           {antigravityPill}
           {windsurfPill}
           {codexPill}

@@ -8,7 +8,7 @@ import type { SessionRecord } from "../src/lib/sessionRecord";
 
 let tmpDir: string;
 let sourceRoot: string;
-const originalBackupRoot = process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT;
+const originalBackupRoot = process.env.AGENT_SWITCH_BACKUP_ROOT;
 
 function makeRecord(): SessionRecord {
   return {
@@ -47,16 +47,16 @@ function makeRecord(): SessionRecord {
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "asm-backup-service-"));
   sourceRoot = path.join(tmpDir, "source");
-  process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT = path.join(tmpDir, "managed-backups");
+  process.env.AGENT_SWITCH_BACKUP_ROOT = path.join(tmpDir, "managed-backups");
   await fs.mkdir(sourceRoot, { recursive: true });
   await fs.writeFile(path.join(sourceRoot, "rollout-123.jsonl"), '{"type":"session_meta"}\n', "utf8");
 });
 
 afterEach(async () => {
   if (originalBackupRoot === undefined) {
-    delete process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT;
+    delete process.env.AGENT_SWITCH_BACKUP_ROOT;
   } else {
-    process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT = originalBackupRoot;
+    process.env.AGENT_SWITCH_BACKUP_ROOT = originalBackupRoot;
   }
   await fs.rm(tmpDir, { recursive: true, force: true });
 });

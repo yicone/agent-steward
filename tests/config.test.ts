@@ -7,18 +7,18 @@ import { readConfig } from "../src/lib/server/config";
 import type { RootConfig } from "../src/lib/types";
 
 let tmpDir: string;
-const origEnv = process.env.AGENT_STORAGE_MANAGER_CONFIG_PATH;
+const origEnv = process.env.AGENT_SWITCH_CONFIG_PATH;
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "asm-config-test-"));
-  process.env.AGENT_STORAGE_MANAGER_CONFIG_PATH = path.join(tmpDir, "config.json");
+  process.env.AGENT_SWITCH_CONFIG_PATH = path.join(tmpDir, "config.json");
 });
 
 afterEach(async () => {
   if (origEnv === undefined) {
-    delete process.env.AGENT_STORAGE_MANAGER_CONFIG_PATH;
+    delete process.env.AGENT_SWITCH_CONFIG_PATH;
   } else {
-    process.env.AGENT_STORAGE_MANAGER_CONFIG_PATH = origEnv;
+    process.env.AGENT_SWITCH_CONFIG_PATH = origEnv;
   }
   await fs.rm(tmpDir, { recursive: true, force: true });
 });

@@ -2,7 +2,7 @@
 
 Date: 2026-03-04
 
-This document is a comprehensive review of the current `agent-storage-manager` architecture, the key evolutions that have already shipped, and the highest-value directions to go deeper next.
+This document is a comprehensive review of the current `agent-switch` architecture, the key evolutions that have already shipped, and the highest-value directions to go deeper next.
 
 Primary references:
 
@@ -64,8 +64,8 @@ Session files are discovered by scanning configured root directories for `*.pb` 
 - Default roots:
   - Antigravity: `~/.gemini/antigravity/conversations`
   - Windsurf: `~/.codeium/windsurf/cascade`
-- Config file: `~/.agent-storage-manager/config.json`
-- Override config path for local debugging: `AGENT_STORAGE_MANAGER_CONFIG_PATH`
+- Config file: `~/.agent-switch/config.json`
+- Override config path for local debugging: `AGENT_SWITCH_CONFIG_PATH`
 
 Implementation:
 

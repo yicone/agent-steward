@@ -8,7 +8,7 @@ metadata:
   version: "1.0"
 ---
 
-Execute a version bump and release for Agent Storage Manager.
+Execute a version bump and release for Agent Switch.
 
 **Input**: Version bump type (patch/minor/major). Optional: specific version notes.
 

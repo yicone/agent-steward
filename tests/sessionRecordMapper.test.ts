@@ -104,7 +104,7 @@ describe("toSessionRecord", () => {
       locator: "/tmp/rollout-123.jsonl"
     });
     expect(record.provenance).toEqual({
-      capturedBy: "agent-storage-manager",
+      capturedBy: "agent-switch",
       capturedAt: "2026-04-10T10:01:00.000Z",
       importedFromBackup: false,
       normalizerVersion: "test-normalizer"

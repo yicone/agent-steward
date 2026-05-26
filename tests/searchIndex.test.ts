@@ -6,11 +6,11 @@ import fs from "node:fs";
 // We create a fresh DB path per test by updating the env var and calling closeDb().
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "asm-search-test-"));
 let testDbPath = path.join(tmpDir, "test-0.db");
-process.env.AGENT_STORAGE_MANAGER_SEARCH_DB_PATH = testDbPath;
+process.env.AGENT_SWITCH_SEARCH_DB_PATH = testDbPath;
 
 // Note: static `import` statements are hoisted by the module system and are
 // evaluated before any top-level code in this file. This is fine because
-// `searchIndex` reads `process.env.AGENT_STORAGE_MANAGER_SEARCH_DB_PATH`
+// `searchIndex` reads `process.env.AGENT_SWITCH_SEARCH_DB_PATH`
 // lazily inside `dbPath()` — which is only called when the database is first
 // opened (on the initial `getDb()` call). As long as `resetDb()` sets the
 // env var before any search function is invoked, the correct path is used.
@@ -30,7 +30,7 @@ function resetDb() {
   closeDb();
   testCounter += 1;
   testDbPath = path.join(tmpDir, `test-${testCounter}.db`);
-  process.env.AGENT_STORAGE_MANAGER_SEARCH_DB_PATH = testDbPath;
+  process.env.AGENT_SWITCH_SEARCH_DB_PATH = testDbPath;
 }
 
 function makeEvent(overrides: Partial<TrajectoryEvent> = {}): TrajectoryEvent {

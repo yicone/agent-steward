@@ -1,6 +1,6 @@
 # 搜索功能技术方案设计
 
-> 本文档对应 issue [#21](https://github.com/yicone/agent-storage-manager/issues/21) 的设计要求，同时也是 issue [#5](https://github.com/yicone/agent-storage-manager/issues/5)（Architecture Review v1: Search + structured filters）的实现说明文档。
+> 本文档对应 issue [#21](https://github.com/yicone/agent-switch/issues/21) 的设计要求，同时也是 issue [#5](https://github.com/yicone/agent-switch/issues/5)（Architecture Review v1: Search + structured filters）的实现说明文档。
 
 ## 文档分类说明
 
@@ -158,7 +158,7 @@ Trajectory 视图支持以下结构化过滤（`trajectoryFilters` 状态）：
 | `src/components/HomeClient.tsx` | 挂载 `GlobalSearch`，`onSelect` 回调切换 source 标签并加载选中会话 |
 
 **索引策略**：
-- 索引文件：`~/.agent-storage-manager/search.db`（可通过 `AGENT_STORAGE_MANAGER_SEARCH_DB_PATH` 覆盖）
+- 索引文件：`~/.agent-switch/search.db`（可通过 `AGENT_SWITCH_SEARCH_DB_PATH` 覆盖）
 - 触发时机：用户首次打开某条会话时，在服务端异步将该会话内容写入 FTS5 索引。无需手动触发，无需额外 daemon。
 - 搜索字段：`title`（会话标题）、`cwd`（工作目录）、事件 `text`（对话内容）、`commandLine`（命令行）、`output`（命令输出前 200 字符）。
 - Snippet：通过 SQLite `snippet()` 函数生成带 `<mark>` 标签的高亮片段。

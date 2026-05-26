@@ -1,16 +1,16 @@
 {
-  "name": "agent-storage-manager",
+  "name": "agent-switch",
   "private": true,
   "version": "0.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yicone/agent-storage-manager.git"
+    "url": "git+https://github.com/yicone/agent-switch.git"
   },
   "bugs": {
-    "url": "https://github.com/yicone/agent-storage-manager/issues"
+    "url": "https://github.com/yicone/agent-switch/issues"
   },
-  "homepage": "https://github.com/yicone/agent-storage-manager#readme",
+  "homepage": "https://github.com/yicone/agent-switch#readme",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "next dev",

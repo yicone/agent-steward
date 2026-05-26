@@ -24,27 +24,27 @@ import { buildSessionBackupManifest, serializeSessionBackupManifest, serializeSe
 import { generateProjectBundle, validateProjectBundle } from "@/lib/server/projectBundleService";
 
 let tmpDir: string;
-const originalBundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT;
-const originalBackupRoot = process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT;
+const originalBundleRoot = process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT;
+const originalBackupRoot = process.env.AGENT_SWITCH_BACKUP_ROOT;
 
 beforeEach(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "asm-project-bundle-"));
-  process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(tmpDir, "project-bundles");
-  process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT = path.join(tmpDir, "backups");
-  await fs.mkdir(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT, { recursive: true });
+  process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT = path.join(tmpDir, "project-bundles");
+  process.env.AGENT_SWITCH_BACKUP_ROOT = path.join(tmpDir, "backups");
+  await fs.mkdir(process.env.AGENT_SWITCH_BACKUP_ROOT, { recursive: true });
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
   if (originalBundleRoot === undefined) {
-    delete process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT;
+    delete process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT;
   } else {
-    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = originalBundleRoot;
+    process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT = originalBundleRoot;
   }
   if (originalBackupRoot === undefined) {
-    delete process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT;
+    delete process.env.AGENT_SWITCH_BACKUP_ROOT;
   } else {
-    process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT = originalBackupRoot;
+    process.env.AGENT_SWITCH_BACKUP_ROOT = originalBackupRoot;
   }
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
@@ -82,7 +82,7 @@ async function writeBackupPackage(input: {
   source: "codex" | "windsurf" | "antigravity";
   rootId?: string;
 }) {
-  const backupDir = path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, input.backupId);
+  const backupDir = path.join(process.env.AGENT_SWITCH_BACKUP_ROOT!, input.backupId);
   await fs.mkdir(path.join(backupDir, "sessions"), { recursive: true });
   const manifest = buildSessionBackupManifest([
     {
@@ -136,7 +136,7 @@ async function writeIncompleteUnrelatedBackupPackage(input: {
   backupId: string;
   sessionId: string;
 }) {
-  const backupDir = path.join(process.env.AGENT_STORAGE_MANAGER_BACKUP_ROOT!, input.backupId);
+  const backupDir = path.join(process.env.AGENT_SWITCH_BACKUP_ROOT!, input.backupId);
   await fs.mkdir(backupDir, { recursive: true });
   await fs.writeFile(
     path.join(backupDir, "manifest.json"),
@@ -356,7 +356,7 @@ describe("project bundle service", () => {
   });
 
   it("blocks validation when the bundle root path is not a writable directory", async () => {
-    const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
+    const bundleRoot = process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT!;
     await fs.writeFile(bundleRoot, "not-a-directory", "utf8");
 
     try {
@@ -375,7 +375,7 @@ describe("project bundle service", () => {
   it("blocks validation when a missing output root has a non-directory ancestor", async () => {
     const blockedAncestor = path.join(tmpDir, "not-a-directory");
     await fs.writeFile(blockedAncestor, "not a directory", "utf8");
-    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(blockedAncestor, "project-bundles");
+    process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT = path.join(blockedAncestor, "project-bundles");
 
     const result = await validateProjectBundle(makeSelection(), makeConfig());
 
@@ -384,7 +384,7 @@ describe("project bundle service", () => {
   });
 
   it("blocks validation when output root lstat fails with a permission error", async () => {
-    const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
+    const bundleRoot = process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT!;
     const originalLstat = fs.lstat.bind(fs);
     vi.spyOn(fs, "lstat").mockImplementation(async (target, options) => {
       if (String(target) === bundleRoot) {
@@ -402,7 +402,7 @@ describe("project bundle service", () => {
   });
 
   it("blocks validation when the configured output root is a broken symlink", async () => {
-    const bundleRoot = process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT!;
+    const bundleRoot = process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT!;
     await fs.symlink(path.join(tmpDir, "missing-target"), bundleRoot, "dir");
 
     const result = await validateProjectBundle(makeSelection(), makeConfig());
@@ -414,7 +414,7 @@ describe("project bundle service", () => {
   it("blocks validation when a missing output root has a broken symlink ancestor", async () => {
     const brokenAncestor = path.join(tmpDir, "broken-ancestor");
     await fs.symlink(path.join(tmpDir, "missing-target"), brokenAncestor, "dir");
-    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(brokenAncestor, "project-bundles");
+    process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT = path.join(brokenAncestor, "project-bundles");
 
     const result = await validateProjectBundle(makeSelection(), makeConfig());
 
@@ -425,7 +425,7 @@ describe("project bundle service", () => {
   it("blocks validation when an existing output root ancestor is not accessible", async () => {
     const inaccessibleAncestor = path.join(tmpDir, "inaccessible");
     await fs.mkdir(inaccessibleAncestor, { recursive: true });
-    process.env.AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT = path.join(inaccessibleAncestor, "project-bundles");
+    process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT = path.join(inaccessibleAncestor, "project-bundles");
     const originalAccess = fs.access.bind(fs);
     vi.spyOn(fs, "access").mockImplementation(async (target, mode) => {
       if (String(target) === inaccessibleAncestor) {

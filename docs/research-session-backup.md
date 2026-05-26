@@ -285,8 +285,8 @@ session 的原始来源载体。
 - canonical record schema: `session-record/v1`
 - backup package schema: `session-backup/v1`
 - managed backup root:
-  - 默认位于 `~/.agent-storage-manager/backups`
-  - 可通过 `AGENT_STORAGE_MANAGER_BACKUP_ROOT` 覆盖
+  - 默认位于 `~/.agent-switch/backups`
+  - 可通过 `AGENT_SWITCH_BACKUP_ROOT` 覆盖
 - 当前已实现的 create / import / verify API：
   - `POST /api/session-backups`
   - `POST /api/session-backups/import`

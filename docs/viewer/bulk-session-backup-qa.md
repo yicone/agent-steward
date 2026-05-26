@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-15
 **Branch:** `feat/bulk-session-backup`
-**Repository:** `agent-storage-manager`
+**Repository:** `agent-switch`
 
 ---
 

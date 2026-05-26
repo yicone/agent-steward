@@ -168,7 +168,7 @@ function createOutputRootBlocker(): BackupValidationItem {
     id: "bundle-output-root-unwritable",
     label: "Project bundle output destination",
     severity: "block",
-    detail: "Project bundle output root is unavailable or not writable. Fix permissions for the configured output root, or set AGENT_STORAGE_MANAGER_PROJECT_BUNDLE_ROOT to a writable local directory, then retry.",
+    detail: "Project bundle output root is unavailable or not writable. Fix permissions for the configured output root, or set AGENT_SWITCH_PROJECT_BUNDLE_ROOT to a writable local directory, then retry.",
   };
 }
 
@@ -573,7 +573,7 @@ async function composeProjectBundle(
     packageId,
     schemaVersion: "project-bundle/v1",
     createdAt: now,
-    createdBy: "agent-storage-manager",
+    createdBy: "agent-switch",
     bundleName: configuration.bundleName.trim(),
     notes: configuration.notes?.trim() || undefined,
   };
