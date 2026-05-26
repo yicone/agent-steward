@@ -1360,6 +1360,7 @@ export function BackupMigrationFoundation({
                     <option value="antigravity">Antigravity</option>
                     <option value="windsurf">Windsurf</option>
                     <option value="codex">Codex</option>
+                    <option value="cursor">Cursor</option>
                   </select>
                 </label>
                 <label className="grid gap-1 text-sm">
@@ -1400,6 +1401,7 @@ export function BackupMigrationFoundation({
                     <option value="antigravity">Antigravity</option>
                     <option value="windsurf">Windsurf</option>
                     <option value="codex">Codex</option>
+                    <option value="cursor">Cursor</option>
                     <option value="imported">Imported</option>
                     <option value="generated">Generated</option>
                   </select>
@@ -1464,6 +1466,7 @@ export function BackupMigrationFoundation({
                       <option value="antigravity">Antigravity</option>
                       <option value="windsurf">Windsurf</option>
                       <option value="codex">Codex</option>
+                      <option value="cursor">Cursor</option>
                     </select>
                   </label>
                   <label className="grid gap-1 text-sm">
@@ -1568,6 +1571,7 @@ export function BackupMigrationFoundation({
                         <option value="antigravity">Antigravity</option>
                         <option value="windsurf">Windsurf</option>
                         <option value="codex">Codex</option>
+                        <option value="cursor">Cursor</option>
                       </select>
                     </label>
                     <label className="grid gap-1 text-sm">

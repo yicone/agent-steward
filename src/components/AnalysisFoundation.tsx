@@ -34,10 +34,12 @@ import {
   type AnalysisSeverity,
 } from "@/lib/analysisFindings";
 import type { AssetsHandoff } from "@/lib/contextAssets";
+import { createProjectEvidenceDiagnosticsFindings, type ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 import type { Source } from "@/lib/types";
 
 export type AnalysisFoundationProps = {
   handoff: AnalysisHandoff | null;
+  projectEvidence?: ProjectEvidenceProviderResult | null;
   onOpenAssets(handoff: AssetsHandoff): void;
   onOpenBackup(context: { findingId: string; title: string; preservationWarning?: string; routeLabel?: string; backupWorkflowType?: AnalysisRoute["backupWorkflowType"] }): void;
   onOpenOverview(): void;
@@ -46,6 +48,37 @@ export type AnalysisFoundationProps = {
 };
 
 const LOADING_DELAY_MS = 120;
+
+function resolveAnalysisInventory(projectEvidence: ProjectEvidenceProviderResult | null | undefined): {
+  findings: AnalysisFinding[];
+  label: string;
+  body: string;
+} {
+  if (!projectEvidence) {
+    return {
+      findings: createAnalysisFindingSeeds(),
+      label: "seed fallback",
+      body: "Findings are local seed interpretations for routing validation, not complete automated analysis.",
+    };
+  }
+
+  if (projectEvidence.status === "unavailable") {
+    return {
+      findings: createAnalysisFindingSeeds(),
+      label: "provider unavailable fallback",
+      body: "Repo-local provider diagnostics are unavailable, so these findings are labeled seed fallback interpretations.",
+    };
+  }
+
+  const findings = createProjectEvidenceDiagnosticsFindings(projectEvidence);
+  return {
+    findings,
+    label: findings.length > 0 ? "provider diagnostics" : "no current provider findings",
+    body: findings.length > 0
+      ? "Findings are bounded provider diagnostics from explicit repo-local evidence. They do not imply deep semantic repository analysis."
+      : "The repo-local project evidence provider reported no warning diagnostics, so Analysis will not fabricate seed findings for the current project.",
+  };
+}
 
 export function resolveAnalysisNavigationHandoff(handoff: AnalysisHandoff | null): AnalysisHandoff | null {
   return handoff?.sessionId && handoff.source ? handoff : null;
@@ -194,13 +227,15 @@ function RouteButton(props: {
 
 export function AnalysisFoundation({
   handoff,
+  projectEvidence,
   onOpenAssets,
   onOpenBackup,
   onOpenOverview,
   onOpenSession,
   loadingDelayMs = LOADING_DELAY_MS,
 }: AnalysisFoundationProps) {
-  const findings = useMemo(() => createAnalysisFindingSeeds(), []);
+  const inventory = useMemo(() => resolveAnalysisInventory(projectEvidence), [projectEvidence]);
+  const findings = inventory.findings;
   const initialFilters = buildFiltersFromAnalysisHandoff(handoff, createDefaultAnalysisFilters());
   const initialFilteredFindings = applyAnalysisFilters(findings, initialFilters);
   const initialSelectedFinding = resolveAnalysisFindingSelection(initialFilteredFindings, handoff);
@@ -301,6 +336,9 @@ export function AnalysisFoundation({
             <p className="max-w-3xl text-sm leading-6 text-muted">
               Interpret local context issues, preserve evidence boundaries, and route each finding to the owning surface. This foundation does not claim automatic fixes, asset editing, session mutation, or backup execution.
             </p>
+            <div className="rounded-xl border border-amber-400/30 bg-amber-400/8 px-3 py-2 text-xs leading-5 text-muted">
+              <span className="font-medium text-foreground">{inventory.label}:</span> {inventory.body}
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <FilterSelect
@@ -373,7 +411,7 @@ export function AnalysisFoundation({
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <div className="text-xs uppercase tracking-[0.18em] text-muted">Findings Inventory</div>
-                <div className="text-sm text-muted">Findings are local seed interpretations for routing validation, not complete automated analysis.</div>
+                <div className="text-sm text-muted">{inventory.body}</div>
               </div>
               {selectedFinding ? <Badge variant="default">selected finding active</Badge> : null}
             </div>

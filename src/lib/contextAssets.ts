@@ -2,7 +2,7 @@ import type { Source } from "@/lib/types";
 
 export const CONTEXT_ASSET_SUBTYPES = ["rule", "memory", "skill", "command", "unknown"] as const;
 export const CONTEXT_ASSET_SCOPES = ["global", "user", "project", "unknown"] as const;
-export const CONTEXT_ASSET_SOURCES = ["antigravity", "windsurf", "codex", "imported", "generated", "unknown"] as const;
+export const CONTEXT_ASSET_SOURCES = ["antigravity", "windsurf", "codex", "cursor", "imported", "generated", "unknown"] as const;
 export const CONTEXT_ASSET_STATUSES = ["active", "stale", "conflicted", "orphaned", "archived", "unknown"] as const;
 
 export type ContextAssetSubtype = (typeof CONTEXT_ASSET_SUBTYPES)[number];
@@ -494,6 +494,7 @@ export function formatContextAssetSourceLabel(source: ContextAssetSource): strin
   if (source === "antigravity") return "Antigravity";
   if (source === "windsurf") return "Windsurf";
   if (source === "codex") return "Codex";
+  if (source === "cursor") return "Cursor";
   if (source === "unknown") return "Unknown";
   return source.charAt(0).toUpperCase() + source.slice(1);
 }

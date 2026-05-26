@@ -38,7 +38,37 @@ export function extractMetaFromTrajectorySummary(summary: any): ConversationMeta
   const p = uri ? fileUriToPath(uri) : null;
   const cwd = p ? abbreviateHome(p) : undefined;
 
-  return { ...(title ? { title } : {}), ...(cwd ? { cwd } : {}) };
+  // Extract timestamp from trajectory summary for proper session ordering
+  // Try multiple possible timestamp field names
+  let timestampMs: number | undefined;
+  
+  if (typeof summary?.startTimestampMs === "number") {
+    timestampMs = summary.startTimestampMs;
+  } else if (typeof summary?.start_timestamp_ms === "number") {
+    timestampMs = summary.start_timestamp_ms;
+  } else if (typeof summary?.createdMs === "number") {
+    timestampMs = summary.createdMs;
+  } else if (typeof summary?.created_ms === "number") {
+    timestampMs = summary.created_ms;
+  } else if (typeof summary?.timestampMs === "number") {
+    timestampMs = summary.timestampMs;
+  } else if (typeof summary?.timestamp_ms === "number") {
+    timestampMs = summary.timestamp_ms;
+  } else if (typeof summary?.startTimeMs === "number") {
+    timestampMs = summary.startTimeMs;
+  } else if (typeof summary?.start_time_ms === "number") {
+    timestampMs = summary.start_time_ms;
+  } else if (typeof summary?.creationTimeMs === "number") {
+    timestampMs = summary.creationTimeMs;
+  } else if (typeof summary?.creation_time_ms === "number") {
+    timestampMs = summary.creation_time_ms;
+  }
+
+  return { 
+    ...(title ? { title } : {}), 
+    ...(cwd ? { cwd } : {}),
+    ...(timestampMs ? { timestampMs } : {})
+  };
 }
 
 export function buildMetaMapFromTrajectorySummaries(

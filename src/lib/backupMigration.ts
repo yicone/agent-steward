@@ -24,7 +24,7 @@ export const BACKUP_WORKFLOW_STATES = [
 ] as const;
 export type BackupWorkflowState = (typeof BACKUP_WORKFLOW_STATES)[number];
 
-export const MIGRATION_PREVIEW_SOURCE_PRODUCTS = ["antigravity", "windsurf", "codex", "imported", "generated"] as const;
+export const MIGRATION_PREVIEW_SOURCE_PRODUCTS = ["antigravity", "windsurf", "codex", "cursor", "imported", "generated"] as const;
 export type MigrationPreviewSourceProduct = (typeof MIGRATION_PREVIEW_SOURCE_PRODUCTS)[number];
 
 export const MIGRATION_PREVIEW_SOURCE_KINDS = ["session-evidence", "context-asset", "analysis-context", "project-overview"] as const;
@@ -523,6 +523,7 @@ export function formatMigrationPreviewSourceProductLabel(product: MigrationPrevi
   if (product === "antigravity") return "Antigravity";
   if (product === "windsurf") return "Windsurf";
   if (product === "codex") return "Codex";
+  if (product === "cursor") return "Cursor";
   return product.charAt(0).toUpperCase() + product.slice(1);
 }
 

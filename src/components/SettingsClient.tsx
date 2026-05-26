@@ -27,7 +27,7 @@ const healthColors: Record<string, string> = {
 function HealthBadge({ health, source }: { health: RootHealth | undefined; source: Source }) {
   if (!health) return null;
   const color = healthColors[health.status] ?? "";
-  const fileUnit = source === "codex" ? "jsonl" : "pb";
+  const fileUnit = source === "codex" ? "jsonl" : source === "cursor" ? "sessions" : "pb";
   const label =
     health.status === "healthy"
       ? `${health.fileCount} ${fileUnit} · ${health.scanMs}ms`
@@ -103,7 +103,8 @@ export default function SettingsClient() {
     return {
       antigravity: roots.filter((r) => r.source === "antigravity"),
       windsurf: roots.filter((r) => r.source === "windsurf"),
-      codex: roots.filter((r) => r.source === "codex")
+      codex: roots.filter((r) => r.source === "codex"),
+      cursor: roots.filter((r) => r.source === "cursor")
     };
   }, [config]);
 
@@ -240,6 +241,7 @@ export default function SettingsClient() {
             <option value="antigravity">antigravity</option>
             <option value="windsurf">windsurf</option>
             <option value="codex">codex</option>
+            <option value="cursor">cursor</option>
           </Select>
           <Input
             className="font-mono"
@@ -349,6 +351,33 @@ export default function SettingsClient() {
               />
             ))}
             {rootsBySource.codex.length === 0 ? <div className="text-sm text-muted">No roots.</div> : null}
+          </div>
+        </div>
+
+        <div className="min-w-0">
+          <div className="mb-2 text-sm font-semibold">Cursor roots</div>
+          <div className="flex flex-col gap-2">
+            {rootsBySource.cursor.map((r) => (
+              <RootRow
+                key={r.id}
+                root={r}
+                health={rootHealthMap[r.id]}
+                onToggle={() => {
+                  if (!config) return;
+                  const next = cloneConfig(config);
+                  const idx = next.roots.findIndex((x) => x.id === r.id);
+                  if (idx >= 0) next.roots[idx].enabled = !next.roots[idx].enabled;
+                  save(next).catch(() => {});
+                }}
+                onRemove={() => {
+                  if (!config) return;
+                  const next = cloneConfig(config);
+                  next.roots = next.roots.filter((x) => x.id !== r.id);
+                  save(next).catch(() => {});
+                }}
+              />
+            ))}
+            {rootsBySource.cursor.length === 0 ? <div className="text-sm text-muted">No roots.</div> : null}
           </div>
         </div>
       </div>
