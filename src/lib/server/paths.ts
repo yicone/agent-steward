@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 
 export function getAgentStorageManagerDir(): string {
-  return path.join(os.homedir(), ".agent-switch");
+  return path.join(os.homedir(), ".agent-steward");
 }
 
 export function expandHome(p: string): string {
@@ -14,13 +14,13 @@ export function expandHome(p: string): string {
 }
 
 export function getSessionBackupsRoot(): string {
-  const override = process.env.AGENT_SWITCH_BACKUP_ROOT;
+  const override = process.env.AGENT_STEWARD_BACKUP_ROOT;
   if (override && override.trim().length) return expandHome(override.trim());
   return path.join(getAgentStorageManagerDir(), "backups");
 }
 
 export function getProjectBundlesRoot(): string {
-  const override = process.env.AGENT_SWITCH_PROJECT_BUNDLE_ROOT;
+  const override = process.env.AGENT_STEWARD_PROJECT_BUNDLE_ROOT;
   if (override && override.trim().length) return expandHome(override.trim());
   return path.join(getAgentStorageManagerDir(), "project-bundles");
 }

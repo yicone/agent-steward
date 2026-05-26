@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Repository guidance for coding agents working in `agent-switch`.
+Repository guidance for coding agents working in `agent-steward`.
 
 ## Scope
 

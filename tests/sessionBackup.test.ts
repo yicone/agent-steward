@@ -52,7 +52,7 @@ describe("session backup manifest", () => {
     ]);
 
     expect(manifest.schemaVersion).toBe("session-backup/v1");
-    expect(manifest.createdBy).toBe("agent-switch");
+    expect(manifest.createdBy).toBe("agent-steward");
     expect(manifest.sessionCount).toBe(1);
     expect(manifest.records).toEqual([
       { sessionId: "abc", path: "sessions/abc.record.json", includesSourceCopy: false }

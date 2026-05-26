@@ -2,7 +2,7 @@
 
 Updated: 2026-04-11
 
-This document records the current product-positioning and information-architecture decisions for the next phase of `agent-switch`.
+This document records the current product-positioning and information-architecture decisions for the next phase of `agent-steward`.
 
 It is intentionally about UX architecture and product scope, not high-fidelity UI or visual design.
 

@@ -8,11 +8,11 @@ import path from "node:path";
 import type { AppConfig, RootConfig, Source } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
 
-const DEFAULT_CONFIG_DIR = path.join(os.homedir(), ".agent-switch");
+const DEFAULT_CONFIG_DIR = path.join(os.homedir(), ".agent-steward");
 const DEFAULT_CONFIG_PATH = path.join(DEFAULT_CONFIG_DIR, "config.json");
 
 function getConfigPath(): string {
-  const override = process.env.AGENT_SWITCH_CONFIG_PATH;
+  const override = process.env.AGENT_STEWARD_CONFIG_PATH;
   if (override && override.trim().length) return expandHome(override.trim());
   return DEFAULT_CONFIG_PATH;
 }

@@ -3,7 +3,7 @@
 Updated: 2026-04-11
 
 This document defines the lightweight design-system baseline for the next phase
-of `agent-switch`.
+of `agent-steward`.
 
 It turns the approved visual direction into reusable design rules. It is not a
 complete component library, CSS token spec, implementation plan, or final brand

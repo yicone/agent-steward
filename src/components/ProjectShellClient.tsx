@@ -996,7 +996,7 @@ export default function ProjectShellClient({ projectEvidence }: ProjectShellClie
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold">Agent Context Insightor</h1>
+                <h1 className="text-xl font-semibold">AgentSteward</h1>
                 <Badge variant="ok">local-first</Badge>
                 <Badge variant="default">project shell</Badge>
               </div>

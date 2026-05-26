@@ -165,7 +165,7 @@ export type ProjectBundlePackageMetadata = {
   packageId: string;
   schemaVersion: "project-bundle/v1";
   createdAt: string;
-  createdBy: "agent-switch" | "agent-storage-manager";
+  createdBy: "agent-steward" | "agent-switch" | "agent-storage-manager";
   bundleName: string;
   notes?: string;
 };

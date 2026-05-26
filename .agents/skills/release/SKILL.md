@@ -8,7 +8,7 @@ metadata:
   version: "1.0"
 ---
 
-Execute a version bump and release for Agent Switch.
+Execute a version bump and release for AgentSteward.
 
 **Input**: Version bump type (patch/minor/major). Optional: specific version notes.
 

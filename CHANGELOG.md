@@ -1,6 +1,6 @@
 # Changelog
 
-This file records shipped, merged changes for Agent Switch.
+This file records shipped, merged changes for AgentSteward.
 
 **SSoT/DRY**
 
@@ -13,10 +13,10 @@ This file records shipped, merged changes for Agent Switch.
 
 ### Changed
 
-- `2026-05-27` — Project renamed from `agent-storage-manager` to `agent-switch`
-  - Package name, GitHub repo URL, display title, and all env var prefixes updated (`AGENT_STORAGE_MANAGER_*` → `AGENT_SWITCH_*`)
-  - Config dir default changed from `~/.agent-storage-manager` to `~/.agent-switch`
-  - Schema literals (`capturedBy`, `createdBy`) updated to `"agent-switch"`; backward-compatible import of old `"agent-storage-manager"` backups preserved
+- `2026-05-27` — Project renamed from `agent-storage-manager` to `agent-steward`
+  - Package name, GitHub repo URL, display title, and all env var prefixes updated (`AGENT_STORAGE_MANAGER_*` → `AGENT_STEWARD_*`)
+  - Config dir default changed from `~/.agent-storage-manager` to `~/.agent-steward`
+  - Schema literals (`capturedBy`, `createdBy`) updated to `"agent-steward"`; backward-compatible import of old `"agent-storage-manager"` backups preserved
   - Local directory name unchanged to avoid breaking agent runtime historical session loading
 
 ### Added

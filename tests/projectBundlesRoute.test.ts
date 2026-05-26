@@ -77,7 +77,7 @@ describe("project bundle route", () => {
       memberInventory: [],
       memberReferences: [],
       packageId: "project-bundle-1",
-      filePath: `${os.homedir()}/.agent-switch/project-bundle-1.bundle.json`,
+      filePath: `${os.homedir()}/.agent-steward/project-bundle-1.bundle.json`,
       createdAt: "2026-04-18T06:00:00.000Z",
       document: { shouldNotLeak: true },
     });
@@ -118,7 +118,7 @@ describe("project bundle route", () => {
     expect(response.status).toBe(200);
     expect(generateProjectBundleMock).toHaveBeenCalledTimes(1);
     const json = await response.json();
-    expect(json.filePath).toBe("~/.agent-switch/project-bundle-1.bundle.json");
+    expect(json.filePath).toBe("~/.agent-steward/project-bundle-1.bundle.json");
     expect(json.createdAt).toBe("2026-04-18T06:00:00.000Z");
     expect(json.document).toBeUndefined();
     const [selection, configuration] = generateProjectBundleMock.mock.calls[0]!;

@@ -1,6 +1,6 @@
 # Glossary
 
-This document defines the canonical terminology for `agent-switch` as the product evolves from a session-first browser into a project-first agent context cockpit.
+This document defines the canonical terminology for `agent-steward` as the product evolves from a session-first browser into a project-first agent context cockpit.
 
 Its goal is to reduce ambiguity across product discussions, design work, code, and docs.
 

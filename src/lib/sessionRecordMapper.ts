@@ -56,7 +56,7 @@ export function toSessionRecord(input: ToSessionRecordInput): SessionRecord {
     },
     sourceRef: input.sourceRef,
     provenance: {
-      capturedBy: "agent-switch",
+      capturedBy: "agent-steward",
       capturedAt,
       importedFromBackup: false,
       ...input.provenance

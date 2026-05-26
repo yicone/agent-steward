@@ -33,7 +33,7 @@ export function buildSessionBackupManifest(records: SessionBackupManifestRecord[
     schemaVersion: SESSION_BACKUP_SCHEMA_VERSION,
     backupId: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    createdBy: "agent-switch",
+    createdBy: "agent-steward",
     sessionCount: records.length,
     records
   };
@@ -43,7 +43,7 @@ export function validateSessionBackupManifest(manifest: SessionBackupManifest): 
   if (manifest.schemaVersion !== SESSION_BACKUP_SCHEMA_VERSION) {
     throw new Error(`Unsupported session backup schema version: ${manifest.schemaVersion}`);
   }
-  if (manifest.createdBy !== "agent-switch" && manifest.createdBy !== "agent-storage-manager") {
+  if (manifest.createdBy !== "agent-steward" && manifest.createdBy !== "agent-switch" && manifest.createdBy !== "agent-storage-manager") {
     throw new Error(`Unsupported session backup creator: ${manifest.createdBy}`);
   }
   if (!Array.isArray(manifest.records)) {

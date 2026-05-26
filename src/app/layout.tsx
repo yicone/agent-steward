@@ -2,7 +2,7 @@ import "highlight.js/styles/github-dark.css";
 import "./globals.css";
 
 export const metadata = {
-  title: "Agent Switch",
+  title: "AgentSteward",
   description: "Local UI for Antigravity/Windsurf conversation history"
 };
 

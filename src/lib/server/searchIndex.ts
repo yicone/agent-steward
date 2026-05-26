@@ -13,14 +13,14 @@ import type { SearchResult, Source, TrajectoryEvent } from "@/lib/types";
 // ---------------------------------------------------------------------------
 
 function dbPath(): string {
-  const override = process.env.AGENT_SWITCH_SEARCH_DB_PATH;
+  const override = process.env.AGENT_STEWARD_SEARCH_DB_PATH;
   if (override && override.trim().length) {
     const p = override.trim();
     const dir = path.dirname(p);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return p;
   }
-  const dir = path.join(os.homedir(), ".agent-switch");
+  const dir = path.join(os.homedir(), ".agent-steward");
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, "search.db");
 }

@@ -3,14 +3,14 @@ SSoT/DRY note:
 - This README is the source of truth.
 -->
 
-# Agent Switch (v1)
+# AgentSteward (v1)
 
 A local Web UI for browsing conversation history generated/persisted by Antigravity, Windsurf, Codex CLI, and Cursor.
 It fetches Antigravity and Windsurf content via their local Language Server RPC, reads Codex sessions directly from `.jsonl` files (no running process required), and reads bounded Cursor composer state from local SQLite/app-storage files.
 
 ## Data Sources & Configuration
 
-- Config file: `~/.agent-switch/config.json`
+- Config file: `~/.agent-steward/config.json`
 - Default roots:
   - Antigravity: `~/.gemini/antigravity/conversations`
   - Windsurf: `~/.codeium/windsurf/cascade`
@@ -33,7 +33,7 @@ Open: `http://localhost:3000`
 Optional: override the config file path via env var (useful for local workspace debugging):
 
 ```bash
-export AGENT_SWITCH_CONFIG_PATH=./.local/config.json
+export AGENT_STEWARD_CONFIG_PATH=./.local/config.json
 ```
 
 ### Testing multi-root features
@@ -42,7 +42,7 @@ To exercise health indicators, duplicate detection, and multi-root listing witho
 
 ```bash
 node scripts/seed-multi-root.mjs                                        # create fixtures
-AGENT_SWITCH_CONFIG_PATH=.local/seed-config.json pnpm dev      # start with seeded data
+AGENT_STEWARD_CONFIG_PATH=.local/seed-config.json pnpm dev      # start with seeded data
 node scripts/seed-multi-root.mjs --clean                                # remove fixtures
 ```
 

@@ -1,16 +1,16 @@
 {
-  "name": "agent-switch",
+  "name": "agent-steward",
   "private": true,
   "version": "0.1.0",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yicone/agent-switch.git"
+    "url": "git+https://github.com/yicone/agent-steward.git"
   },
   "bugs": {
-    "url": "https://github.com/yicone/agent-switch/issues"
+    "url": "https://github.com/yicone/agent-steward/issues"
   },
-  "homepage": "https://github.com/yicone/agent-switch#readme",
+  "homepage": "https://github.com/yicone/agent-steward#readme",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "dev": "next dev",

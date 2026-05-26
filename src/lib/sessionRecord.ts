@@ -30,7 +30,7 @@ export type SessionRecordSourceRef = {
 };
 
 export type SessionRecordProvenance = {
-  capturedBy: "agent-switch" | "agent-storage-manager";
+  capturedBy: "agent-steward" | "agent-switch" | "agent-storage-manager";
   capturedAt: string;
   /**
    * Product normalizer/build identifier used to produce this record.
@@ -75,7 +75,7 @@ export type SessionBackupManifest = {
   schemaVersion: SessionBackupSchemaVersion;
   backupId: string;
   createdAt: string;
-  createdBy: "agent-switch" | "agent-storage-manager";
+  createdBy: "agent-steward" | "agent-switch" | "agent-storage-manager";
   sessionCount: number;
   records: SessionBackupManifestRecord[];
 };

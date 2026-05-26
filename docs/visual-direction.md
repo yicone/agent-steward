@@ -3,7 +3,7 @@
 Updated: 2026-04-11
 
 This document records the current visual-direction decision for the next phase of
-`agent-switch`.
+`agent-steward`.
 
 It is intentionally a direction baseline, not a final design system or
 implementation specification.

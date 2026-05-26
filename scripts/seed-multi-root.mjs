@@ -6,14 +6,14 @@
  * Creates synthetic multi-root test fixtures for local development.
  * Generates temporary directories with dummy .pb files, including
  * cross-root duplicates, and writes a config.json that the dev server
- * can use via AGENT_SWITCH_CONFIG_PATH.
+ * can use via AGENT_STEWARD_CONFIG_PATH.
  *
  * Usage:
  *   node scripts/seed-multi-root.mjs            # create fixtures + config
  *   node scripts/seed-multi-root.mjs --clean     # remove previously seeded data
  *
  * Then start the dev server pointing at the seeded config:
- *   AGENT_SWITCH_CONFIG_PATH=.local/seed-config.json pnpm dev
+ *   AGENT_STEWARD_CONFIG_PATH=.local/seed-config.json pnpm dev
  */
 
 import crypto from "node:crypto";
@@ -137,7 +137,7 @@ async function seed() {
   console.log(`Duplicate Windsurf session:     ${sharedWsId}`);
   console.log(`\nConfig written to: ${SEED_CONFIG}`);
   console.log(`\n── To use with dev server ──`);
-  console.log(`  AGENT_SWITCH_CONFIG_PATH=${path.relative(PROJECT_ROOT, SEED_CONFIG)} pnpm dev`);
+  console.log(`  AGENT_STEWARD_CONFIG_PATH=${path.relative(PROJECT_ROOT, SEED_CONFIG)} pnpm dev`);
   console.log(`\n── What to verify ──`);
   console.log(`  • Settings page: 5 roots with per-root health badges (pb counts)`);
   console.log(`  • Settings page: ag-empty shows "0 pb" (healthy but empty)`);

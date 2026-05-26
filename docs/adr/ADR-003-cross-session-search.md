@@ -109,7 +109,7 @@ Use **MiniSearch (Option C) as an optional enhancement** to the existing session
 ### Implementation roadmap
 
 1. **Phase 1 ✅**: Add `better-sqlite3` dependency. Search index module `src/lib/server/searchIndex.ts`:
-   - Opens/creates a SQLite database at `~/.agent-switch/search.db` (overridable via `AGENT_SWITCH_SEARCH_DB_PATH`).
+   - Opens/creates a SQLite database at `~/.agent-steward/search.db` (overridable via `AGENT_STEWARD_SEARCH_DB_PATH`).
    - Provides `indexSession(id, source, title, cwd, events)` called from the existing session-load API route.
    - Provides `searchSessions(query, limit)` returning `{ sessionId, source, title, cwd, snippet }[]`.
    - Provides `removeSession(id, source)` and `getIndexedSessionIds()`.
@@ -155,7 +155,7 @@ For Chinese text, this has important implications:
 
 - **New native dependency**: `better-sqlite3` requires native compilation (node-gyp). This is acceptable for a local-first Node.js app and is widely used in the ecosystem.
 - **Index drift**: Sessions deleted from the LS are not automatically removed from the FTS index. Implement a periodic prune or an "index health" check (Phase 3).
-- **Privacy**: The FTS index stores session content on disk at `~/.agent-switch/search.db`. Document this clearly.
+- **Privacy**: The FTS index stores session content on disk at `~/.agent-steward/search.db`. Document this clearly.
 - **Performance**: FTS5 with trigram tokenizer is fast for keyword search. Initial population is lazy (index-on-open) so there is no bulk indexing delay.
 - **Chinese 2-char query limitation**: Short (1–2 char) Chinese queries match only session titles/cwd via LIKE, not event body content. Acceptable for v1 (see Chinese Text Handling section above).
 

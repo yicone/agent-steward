@@ -262,7 +262,7 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
 
   if (resWithToken.errorCode === "EPERM" || resWithoutToken.errorCode === "EPERM") {
     throw new Error(
-      "Local network access is blocked (EPERM connect to 127.0.0.1). Run agent-switch outside the sandboxed environment, then refresh."
+      "Local network access is blocked (EPERM connect to 127.0.0.1). Run AgentSteward outside the sandboxed environment, then refresh."
     );
   }
 
@@ -380,7 +380,7 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
 
   const recommendedAction =
     heartbeatWithToken?.errorCode === "EPERM" || heartbeatWithoutToken?.errorCode === "EPERM"
-      ? "Run agent-switch outside the sandboxed environment (needs localhost network access), then refresh."
+      ? "Run AgentSteward outside the sandboxed environment (needs localhost network access), then refresh."
       : isInvalidCsrfToken(heartbeatWithToken)
         ? "The override/auth UUID is not the live LS CSRF token. Restart Windsurf/Cascade and use the token from the running process if available."
       : getWindsurfRecommendedAction({ attached, tokenRequired });
