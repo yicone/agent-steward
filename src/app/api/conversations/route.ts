@@ -1,8 +1,13 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { NextResponse } from "next/server";
 
-import type { ConversationListItem, Source } from "@/lib/types";
+import type { ConversationListItem, ConversationMeta, Source } from "@/lib/types";
+import { expandHome } from "@/lib/server/paths";
 import { readConfig } from "@/lib/server/config";
 import { detectDuplicates, listConversationFiles } from "@/lib/server/conversations";
+import { inferWindsurfRecoverability } from "@/lib/parse/windsurfRecoverability";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 
 export const runtime = "nodejs";
@@ -20,14 +25,14 @@ const duplicatesCache = new Map<
 const MAX_DUPLICATES_CACHE_ENTRIES = 100;
 
 function isSource(value: string | null): value is Source {
-  return value === "antigravity" || value === "windsurf" || value === "codex";
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
 }
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const sourceParam = url.searchParams.get("source");
   if (!isSource(sourceParam)) {
-    return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf|codex" }, { status: 400 });
+    return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf|codex|cursor" }, { status: 400 });
   }
 
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "200"), 1), 1000);
@@ -79,23 +84,55 @@ export async function GET(req: Request) {
       ? allItems.slice(offset, offset + limit)
       : await listConversationFiles({ roots: config.roots, source: sourceParam, limit, offset });
 
-  let metaMap: Record<string, { title?: string; cwd?: string }> = {};
+  let metaMap: Record<string, ConversationMeta> = {};
   try {
     metaMap = await getTrajectoryMetaMapCached({ source: sourceParam, config });
   } catch {
     metaMap = {};
   }
 
-  const withMeta: ConversationListItem[] = items.map((it) => {
+  const withMeta: ConversationListItem[] = await Promise.all(items.map(async (it) => {
     const meta = metaMap[it.id] ?? {};
     const dupRoots = duplicates[it.id];
     const duplicateRootIds = dupRoots ? dupRoots.filter((rid) => rid !== it.rootId) : undefined;
+    const normalizedDir = it.path.replace(/\\/g, "/").replace(/\/[^/]+$/, "");
+    const isLegacyWindsurfRoot = sourceParam === "windsurf" && /\/\.codeium\/cascade$/i.test(normalizedDir);
+    const brainDir = expandHome(`~/.codeium/brain/${it.id}`);
+    const hasRecoveryEvidence = sourceParam === "windsurf"
+      ? Boolean(await fs.stat(path.join(brainDir, "plan.md")).catch(() => null) || await fs.stat(path.join(brainDir, "plan_metadata.pbtxt")).catch(() => null))
+      : false;
+    const recoverability = sourceParam === "windsurf"
+      ? inferWindsurfRecoverability({
+          trajectoryReadable: typeof meta.timestampMs === "number",
+          trajectoryMissing: isLegacyWindsurfRoot && typeof meta.timestampMs !== "number",
+          hasSidecarEvidence: hasRecoveryEvidence,
+        })
+      : undefined;
+    const recoverabilityNote = recoverability === "unavailable"
+      ? "Local Windsurf session file found, but the running LS may no longer have this trajectory."
+      : recoverability === "partial"
+        ? "Legacy Windsurf session has bounded brain-sidecar evidence even though the running LS may no longer read it."
+        : undefined;
+    
+    // For Windsurf sessions, use trajectory timestamp instead of file modification time
+    // This ensures sessions are ordered by actual session date, not file modification date
+    const effectiveMtimeMs = (sourceParam === "windsurf" && typeof meta.timestampMs === "number") 
+      ? meta.timestampMs 
+      : it.mtimeMs;
+    
     return {
       ...it,
       ...meta,
+      mtimeMs: effectiveMtimeMs,
+      ...(recoverability ? { recoverability } : {}),
+      ...(hasRecoveryEvidence ? { hasRecoveryEvidence } : {}),
+      ...(recoverabilityNote ? { recoverabilityNote } : {}),
       ...(duplicateRootIds && duplicateRootIds.length > 0 ? { duplicateRootIds } : {})
     };
-  });
+  }));
+
+  // Re-sort by the effective mtimeMs to ensure proper ordering
+  withMeta.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   return NextResponse.json({ items: withMeta, limit, offset });
 }

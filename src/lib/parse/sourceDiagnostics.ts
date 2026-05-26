@@ -4,6 +4,7 @@ export function formatSourceDiagnostics(status: SourcesStatus): string {
   const ag = status.antigravity;
   const ws = status.windsurf;
   const cx = status.codex;
+  const cur = status.cursor ?? { sessionsFound: false };
   return [
     "Antigravity",
     `- discovered: ${ag.discovered}`,
@@ -30,6 +31,13 @@ export function formatSourceDiagnostics(status: SourcesStatus): string {
     "Codex",
     `- sessionsFound: ${cx.sessionsFound}`,
     `- sessionsDir: ${cx.sessionsDir ?? "n/a"}`,
-    `- error: ${cx.error ?? "none"}`
+    `- error: ${cx.error ?? "none"}`,
+    "",
+    "Cursor",
+    `- sessionsFound: ${cur.sessionsFound}`,
+    `- storagePath: ${cur.storagePath ?? "n/a"}`,
+    `- sessionCount: ${cur.sessionCount ?? "n/a"}`,
+    `- error: ${cur.error ?? "none"}`,
+    `- recommendedAction: ${cur.recommendedAction ?? "none"}`
   ].join("\n");
 }

@@ -72,6 +72,9 @@ export type HomeClientSessionHandoff = {
   sessionId: string;
   source: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
 };
 
 export type HomeClientProps = {
@@ -1462,6 +1465,7 @@ export default function HomeClient({
   const [backupFeedback, setBackupFeedback] = useState<SessionBackupFeedback | null>(null);
   const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("markdown");
   const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("chat");
+  const [cursorView, setCursorView] = useState<"transcript" | "trajectory">("transcript");
   const [windsurfIncludeCleared, setWindsurfIncludeCleared] = useState(false);
   const [trajectoryFilters, setTrajectoryFilters] = useState<TrajectoryFilters>({
     thought: true,
@@ -1545,6 +1549,25 @@ export default function HomeClient({
     if (!parsed) return null;
     return items.find((it) => it.id === parsed.id && it.rootId === parsed.rootId) ?? null;
   }, [items, selectedKey]);
+
+  const windsurfRecoverabilityMessage = useMemo(() => {
+    if (!selectedItem || source !== "windsurf") return null;
+    if (selectedItem.recoverability === "unavailable") {
+      return {
+        tone: "danger" as const,
+        title: "Legacy Windsurf session is not readable from the running LS.",
+        message: selectedItem.recoverabilityNote ?? "The local session file was discovered, but the running Windsurf LS no longer has this trajectory.",
+      };
+    }
+    if (selectedItem.recoverability === "partial") {
+      return {
+        tone: "warning" as const,
+        title: "Legacy Windsurf session has bounded recovery evidence.",
+        message: selectedItem.recoverabilityNote ?? "Some recoverability evidence may exist even though the full session is not guaranteed to be readable from the running Windsurf LS.",
+      };
+    }
+    return null;
+  }, [selectedItem, source]);
 
   const sourceCopySupported = useMemo(() => supportsSessionSourceCopy(source), [source]);
 
@@ -1969,6 +1992,7 @@ export default function HomeClient({
       setEventSearch("");
       setAntigravityView("markdown");
       setWindsurfView("chat");
+      setCursorView("transcript");
       setCollapsedExecutionGroups({});
       if (shouldDeferSearchSelectionLoad({ currentSource: source, nextSource: sessionSource, itemCount: items.length })) {
         pendingSearchSelectionRef.current = { sessionId, source: sessionSource, rootId };
@@ -2008,6 +2032,7 @@ export default function HomeClient({
 
     if (content.source === "antigravity" && antigravityView !== "trajectory") setAntigravityView("trajectory");
     if (content.source === "windsurf" && windsurfView !== "trajectory") setWindsurfView("trajectory");
+    if (content.source === "cursor" && cursorView !== "trajectory") setCursorView("trajectory");
 
     const groupId = event.executionId ?? "ungrouped";
     setCollapsedExecutionGroups((prev) => {
@@ -2050,7 +2075,7 @@ export default function HomeClient({
     setInspectorOpen(true);
     setScrollToRowId(rowId);
     setPendingTrajectoryJumpEventId(null);
-  }, [pendingTrajectoryJumpEventId, content, eventsById, trajectoryRows, antigravityView, windsurfView]);
+  }, [pendingTrajectoryJumpEventId, content, eventsById, trajectoryRows, antigravityView, windsurfView, cursorView]);
 
   useEffect(() => {
     setBackupFeedback(null);
@@ -2224,6 +2249,7 @@ export default function HomeClient({
     setEventSearch("");
     setAntigravityView("markdown");
     setWindsurfView("chat");
+    setCursorView("transcript");
     setCollapsedExecutionGroups({});
   }, [source]);
 
@@ -2464,6 +2490,12 @@ export default function HomeClient({
     return <StatusPill label="Codex: not found" tone="bad" title={status.codex.error} />;
   })();
 
+  const cursorPill = (() => {
+    if (!status) return <StatusPill label="Cursor: ..." tone="warn" />;
+    if (status.cursor.sessionsFound) return <StatusPill label={`Cursor: ${status.cursor.sessionCount ?? "?"} sessions`} tone="ok" title={status.cursor.storagePath} />;
+    return <StatusPill label="Cursor: not found" tone="bad" title={status.cursor.error ?? status.cursor.recommendedAction} />;
+  })();
+
   const toggleExecutionGroup = useCallback((groupId: string) => {
     setCollapsedExecutionGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }));
   }, []);
@@ -2506,6 +2538,7 @@ export default function HomeClient({
           {antigravityPill}
           {windsurfPill}
           {codexPill}
+          {cursorPill}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {chrome === "full" ? <GlobalSearch onSelect={handleGlobalSearchSelect} /> : null}
@@ -2542,6 +2575,13 @@ export default function HomeClient({
             onClick={() => setSource("codex")}
           >
             Codex
+          </Button>
+          <Button
+            variant={source === "cursor" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSource("cursor")}
+          >
+            Cursor
           </Button>
           <div className="flex-1" />
           <div className="w-full sm:w-[360px] sm:max-w-[360px]">
@@ -2585,6 +2625,7 @@ export default function HomeClient({
                     setEventSearch("");
                     setAntigravityView("markdown");
                     setWindsurfView("chat");
+                    setCursorView("transcript");
                     setCollapsedExecutionGroups({});
                     loadConversation(source, it.id, 0, source === "windsurf" ? "chat" : undefined, {
                       rootId: it.rootId
@@ -2726,6 +2767,9 @@ export default function HomeClient({
                         sessionId: selectedId,
                         source,
                         ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                        ...(selectedItem?.recoverability ? { recoverability: selectedItem.recoverability } : {}),
+                        ...(selectedItem?.hasRecoveryEvidence != null ? { hasRecoveryEvidence: selectedItem.hasRecoveryEvidence } : {}),
+                        ...(selectedItem?.recoverabilityNote ? { recoverabilityNote: selectedItem.recoverabilityNote } : {}),
                       })
                     }
                     title="Route to Backup / Migration with bounded session backup context"
@@ -2758,6 +2802,23 @@ export default function HomeClient({
             </div>
           ) : null}
 
+          {selectedId && source === "windsurf" && windsurfRecoverabilityMessage ? (
+            <div
+              className={cn(
+                "mb-3 rounded-2xl border px-3 py-2 text-sm",
+                windsurfRecoverabilityMessage.tone === "danger"
+                  ? "border-danger/55 bg-danger/10 text-danger"
+                  : "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+              )}
+            >
+              <div className="font-medium">{windsurfRecoverabilityMessage.title}</div>
+              <div className="mt-1 leading-6">{windsurfRecoverabilityMessage.message}</div>
+              <div className="mt-1 text-xs opacity-90">
+                Use Diagnostic JSON for detailed evidence, or open Backup / Migration to review bounded preservation context.
+              </div>
+            </div>
+          ) : null}
+
           {backupFeedback ? (
             <div
               className={cn(
@@ -2784,6 +2845,38 @@ export default function HomeClient({
           ) : null}
 
           {!selectedId ? <div className="text-sm text-muted">Select a conversation on the left.</div> : null}
+
+          {selectedId && source === "cursor" ? (
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={cursorView === "transcript" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setInspectorOpen(false);
+                    setSelectedRowId(null);
+                    setScrollToRowId(null);
+                    setCursorView("transcript");
+                  }}
+                >
+                  Transcript
+                </Button>
+                <Button
+                  variant={cursorView === "trajectory" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setInspectorOpen(false);
+                    setSelectedRowId(null);
+                    setScrollToRowId(null);
+                    setCursorView("trajectory");
+                  }}
+                >
+                  Trajectory
+                </Button>
+              </div>
+              <div className="text-xs text-muted">Cursor session (read from local SQLite)</div>
+            </div>
+          ) : null}
 
           {selectedId && source === "windsurf" ? (
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -3066,6 +3159,72 @@ export default function HomeClient({
                   Load more
                 </Button>
               </div>
+            </div>
+          ) : null}
+
+          {selectedId && content?.kind === "trajectory" && content.source === "cursor" ? (
+            <div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>turns {content.summary.userCount + content.summary.assistantCount}</Badge>
+                  <Badge>user {content.summary.userCount}</Badge>
+                  <Badge>assistant {content.summary.assistantCount}</Badge>
+                  {content.summary.errorCount > 0 ? (
+                    <Button variant="destructive" size="sm" onClick={() => openErrorCenter()}>
+                      errors {content.summary.errorCount}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+              {cursorView === "trajectory" ? (
+                <div>
+                  <TrajectoryFilterControls
+                    filters={trajectoryFilters}
+                    onFiltersChange={setTrajectoryFilters}
+                    groupCount={executionGroups.length}
+                    eventSearch={eventSearch}
+                    onEventSearchChange={setEventSearch}
+                    searchMatchCount={eventSearchMatchEvents.length}
+                    activeMatchIndex={activeSearchMatchIndex}
+                    onNavigateMatch={navigateSearchMatchByOffset}
+                  />
+                  {withInspector(
+                    <VirtualizedTrajectoryRows
+                      rows={trajectoryRows}
+                      onToggleGroup={toggleExecutionGroup}
+                      onSelectRow={onSelectRow}
+                      selectedRowId={selectedRowId}
+                      highlightedRowId={highlightedRowId}
+                      scrollToRowId={scrollToRowId}
+                      onScrolledToRowId={() => setScrollToRowId(null)}
+                      autoOpenDetailsRowId={autoOpenDetailsRowId}
+                      autoOpenDetailsToken={autoOpenDetailsToken}
+                      onAutoOpenedDetails={(rowId, token) => {
+                        if (rowId === autoOpenDetailsRowId && token === autoOpenDetailsToken) setAutoOpenDetailsRowId(null);
+                      }}
+                      searchQuery={eventSearch}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-2 text-xs text-muted">
+                    Transcript shows user/assistant turns. Switch to Trajectory for full event detail.
+                  </div>
+                  {withInspector(
+                    <VirtualizedTrajectoryRows
+                      rows={transcriptRows}
+                      onToggleGroup={toggleExecutionGroup}
+                      onSelectRow={onSelectRow}
+                      selectedRowId={selectedRowId}
+                      highlightedRowId={highlightedRowId}
+                      scrollToRowId={scrollToRowId}
+                      onScrolledToRowId={() => setScrollToRowId(null)}
+                      onJumpToTrajectoryEventId={requestJumpToTrajectoryEventId}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           ) : null}
 

@@ -5,6 +5,7 @@ import { readConfig } from "@/lib/server/config";
 import { getAntigravityConversation } from "@/lib/server/antigravity";
 import { getWindsurfChat, getWindsurfTrajectory } from "@/lib/server/windsurf";
 import { getCodexConversation, validateRootId } from "@/lib/server/codex";
+import { getCursorConversation } from "@/lib/server/cursor";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
 import { indexSession, isSessionIndexed } from "@/lib/server/searchIndex";
 
@@ -12,7 +13,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isSource(value: string): value is Source {
-  return value === "antigravity" || value === "windsurf" || value === "codex";
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
 }
 
 /** Extract cwd from the first event that has one. */
@@ -58,6 +59,35 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
         })().catch((err) => {
           // Catch any unexpected errors from the async IIFE
           console.error(`[search] Unexpected error in antigravity session indexing for ${id}:`, err);
+        });
+      });
+      return NextResponse.json(out);
+    }
+
+    if (source === "cursor") {
+      const { config } = await readConfig();
+      const cursor = await getCursorConversation(id, config);
+      const out: ConversationContent = {
+        kind: "trajectory",
+        source: "cursor",
+        events: cursor.events,
+        summary: cursor.summary,
+      };
+      const eventsSnap = cursor.events;
+      setImmediate(() => {
+        (async () => {
+          try {
+            const { config: cfg } = await readConfig();
+            const metaMap = await getTrajectoryMetaMapCached({ source: "cursor", config: cfg });
+            const meta = metaMap[id] ?? {};
+            const title = meta.title ?? id;
+            const cwd = meta.cwd ?? eventsSnap.find((event) => event.cwd)?.cwd ?? cursor.workspacePath ?? "";
+            await indexSession(id, "cursor", title, cwd, eventsSnap, { rootId: rootId ?? "" });
+          } catch (err) {
+            console.warn(`[search] Failed to index cursor session ${id}:`, err instanceof Error ? err.message : err);
+          }
+        })().catch((err) => {
+          console.error(`[search] Unexpected error in cursor session indexing for ${id}:`, err);
         });
       });
       return NextResponse.json(out);

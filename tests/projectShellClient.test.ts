@@ -14,10 +14,12 @@ import {
   buildBackupHandoffFromAssets,
   buildBackupHandoffFromOverview,
   buildBackupHandoffFromSessions,
+  deriveProjectEvidenceOverviewSummary,
   buildExternalSessionSelection,
   resolveInitialProjectShellPage,
   stripSessionViewerSearchParams,
 } from "@/components/ProjectShellClient";
+import type { ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 import { resolveRoutedWorkflowState } from "@/lib/backupMigration";
 
 describe("resolveInitialProjectShellPage", () => {
@@ -31,6 +33,58 @@ describe("resolveInitialProjectShellPage", () => {
 
   it("opens sessions when a source-scoped URL is present", () => {
     expect(resolveInitialProjectShellPage("?source=windsurf")).toBe("sessions");
+  });
+});
+
+describe("deriveProjectEvidenceOverviewSummary", () => {
+  it("uses provider-backed assets and diagnostics without seed counts", () => {
+    const providerResult: ProjectEvidenceProviderResult = {
+      provider: "project-evidence-provider-v1",
+      status: "available",
+      rootLabel: "repository root",
+      evidenceSource: "repo-local",
+      items: [],
+      assets: [
+        {
+          id: "asset-project-evidence-agents-md",
+          title: "Agents",
+          subtype: "rule",
+          scope: "project",
+          source: "codex",
+          status: "active",
+          provenance: "AGENTS.md (repo-local)",
+          usage: { state: "in_effect", summary: "Repo-local project rule." },
+        },
+      ],
+      diagnostics: [],
+    };
+
+    const summary = deriveProjectEvidenceOverviewSummary(providerResult);
+
+    expect(summary?.identity.evidenceKind).toBe("local-evidence");
+    expect(summary?.contextSnapshot).toContainEqual(expect.objectContaining({
+      id: "assets",
+      value: "1 asset",
+    }));
+    expect(summary?.contextSnapshot).toContainEqual(expect.objectContaining({
+      id: "analysis",
+      value: "0 findings",
+    }));
+  });
+
+  it("keeps unavailable provider state explicit", () => {
+    const summary = deriveProjectEvidenceOverviewSummary({
+      provider: "project-evidence-provider-v1",
+      status: "unavailable",
+      rootLabel: "repository root",
+      evidenceSource: "repo-local",
+      items: [],
+      assets: [],
+      diagnostics: [],
+    });
+
+    expect(summary?.contextSnapshot).toContainEqual(expect.objectContaining({ id: "assets", value: "Unknown" }));
+    expect(summary?.identity.evidenceKind).toBe("none");
   });
 });
 

@@ -32,10 +32,12 @@ import {
   type ContextAssetStatus,
   type ContextAssetSubtype,
 } from "@/lib/contextAssets";
+import type { ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 import type { Source } from "@/lib/types";
 
 export type AssetsFoundationProps = {
   handoff: AssetsHandoff | null;
+  projectEvidence?: ProjectEvidenceProviderResult | null;
   onOpenSession(selection: { sessionId: string; source: Source; rootId?: string }): void;
   onOpenAnalysis(context: { issueLabel: string; assetId?: string; subtype?: ContextAssetSubtype; status?: ContextAssetStatus }): void;
   onOpenBackup(context: { assetId?: string; subtype?: ContextAssetSubtype; workflowType?: "migration-preview" | "project-bundle" }): void;
@@ -44,6 +46,57 @@ export type AssetsFoundationProps = {
 };
 
 const LOADING_DELAY_MS = 120;
+
+function resolveAssetsInventory(projectEvidence: ProjectEvidenceProviderResult | null | undefined): {
+  assets: ContextAsset[];
+  cue: {
+    label: string;
+    body: string;
+  };
+  diagnostics: ProjectEvidenceProviderResult["diagnostics"];
+} {
+  if (!projectEvidence) {
+    return {
+      assets: createContextAssetSeeds(),
+      cue: {
+        label: "Foundation data cue",
+        body: "This Assets inventory is backed by local seed/provider-shaped data, not a complete live project scan. Unknown, unavailable, and unsupported evidence remains visible.",
+      },
+      diagnostics: [],
+    };
+  }
+
+  if (projectEvidence.status === "unavailable") {
+    return {
+      assets: createContextAssetSeeds(),
+      cue: {
+        label: "Provider unavailable fallback",
+        body: "Repo-local project evidence is unavailable, so this inventory is showing labeled foundation fallback data rather than current project assets.",
+      },
+      diagnostics: projectEvidence.diagnostics,
+    };
+  }
+
+  if (projectEvidence.status === "empty") {
+    return {
+      assets: [],
+      cue: {
+        label: "Repo-local evidence zero state",
+        body: "The project evidence provider completed and found no allowlisted repo-local agent evidence. Seed rows are intentionally not shown as current project assets.",
+      },
+      diagnostics: projectEvidence.diagnostics,
+    };
+  }
+
+  return {
+    assets: projectEvidence.assets,
+    cue: {
+      label: projectEvidence.status === "partial" ? "Repo-local evidence partial" : "Repo-local evidence",
+      body: "This Assets inventory is derived from explicit repo-local agent-facing files on the provider allowlist. It is not a broad source scan or session transcript extraction.",
+    },
+    diagnostics: projectEvidence.diagnostics,
+  };
+}
 
 function CueStrip(props: {
   handoff: AssetsHandoff | null;
@@ -111,8 +164,9 @@ function renderSeverityBadge(severity: ContextAssetGovernanceSeverity) {
   return <Badge variant="default">informational</Badge>;
 }
 
-export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpenBackup, onOpenOverview, loadingDelayMs = LOADING_DELAY_MS }: AssetsFoundationProps) {
-  const assets = useMemo(() => createContextAssetSeeds(), []);
+export function AssetsFoundation({ handoff, projectEvidence, onOpenSession, onOpenAnalysis, onOpenBackup, onOpenOverview, loadingDelayMs = LOADING_DELAY_MS }: AssetsFoundationProps) {
+  const inventory = useMemo(() => resolveAssetsInventory(projectEvidence), [projectEvidence]);
+  const assets = inventory.assets;
   const initialFilters = buildFiltersFromAssetsHandoff(handoff, createDefaultContextAssetFilters());
   const initialFilteredAssets = applyContextAssetFilters(assets, initialFilters);
   const initialSelectedAsset = resolveContextAssetSelection(initialFilteredAssets, handoff);
@@ -217,7 +271,7 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
               Inspect rules, memory, skills, and commands by subtype, scope, source, status, provenance, and in-effect relevance without turning this page into a generic editor or migration workflow.
             </p>
             <div className="rounded-xl border border-amber-400/30 bg-amber-400/8 px-3 py-2 text-xs leading-5 text-muted">
-              Foundation data cue: this Assets inventory is backed by local seed/provider-shaped data, not a complete live project scan. Unknown, unavailable, and unsupported evidence remains visible.
+              <span className="font-medium text-foreground">{inventory.cue.label}:</span> {inventory.cue.body}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -297,6 +351,18 @@ export function AssetsFoundation({ handoff, onOpenSession, onOpenAnalysis, onOpe
             <p className="mt-3 text-xs leading-5 text-muted">
               No known issue count means no stale, conflicted, orphaned, or unknown asset in the filtered seed/provider inventory; it does not prove every local runtime has been scanned.
             </p>
+            {inventory.diagnostics.length > 0 ? (
+              <div className="mt-4 rounded-xl border border-border/60 bg-background/10 px-3 py-3 text-xs leading-5 text-muted">
+                <div className="mb-2 font-medium text-foreground">Provider diagnostics</div>
+                <div className="flex flex-wrap gap-2">
+                  {inventory.diagnostics.map((item) => (
+                    <Badge key={item.id} variant={item.severity === "warning" ? "warn" : "default"}>
+                      {item.kind}: {item.path}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {surfaceState === "issue" ? (
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-400/8 px-3 py-3 text-sm text-muted">
                 <div>

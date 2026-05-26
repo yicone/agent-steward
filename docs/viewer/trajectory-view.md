@@ -18,6 +18,7 @@ Relevant implementation:
 - `src/lib/parse/windsurfSteps.ts`
 - `src/lib/server/antigravity.ts`
 - `src/lib/server/windsurf.ts`
+- `src/lib/server/cursor.ts`
 - `src/app/api/conversations/[source]/[id]/route.ts`
 - `src/components/HomeClient.tsx`
 
@@ -90,6 +91,24 @@ Current mapping highlights:
 - `systemMessage` -> `status`
 - unmatched payload -> `tool` with truncated raw JSON
 
+### Cursor
+
+Input:
+
+- `composerData:<composerId>` JSON from `cursorDiskKV` table in `state.vscdb`
+- `bubbleId:<composerId>:<bubbleId>` entries read in `fullConversationHeadersOnly` order
+
+Output:
+
+- `TrajectoryEvent[]` + `TrajectorySummary` via `buildCursorEvents` + `buildCursorSummary`
+
+Special normalization rules:
+
+1. Bubble types: `type=1` → `kind: "user"`; `type=2` → `kind: "assistant"`
+2. Tool-call infrastructure bubbles (empty assistant, `capabilityType` present, no text) are skipped
+3. Summary fallback: when no `fullConversationHeadersOnly` headers exist or bubble reads fail, `extractSummaryText` provides a single `assistant` summary event
+4. `extractSummaryText` strips Cursor AI conversation-context XML format (`Summary of the conversation so far:...`) and `<summary>` wrappers (including truncated forms)
+
 ## API Surface
 
 - Antigravity conversation API returns trajectory by default:
@@ -97,6 +116,9 @@ Current mapping highlights:
 - Windsurf conversation API has two modes:
   - default: `kind: "chat"`
   - `view=trajectory`: `kind: "trajectory"`, `source: "windsurf"`, `events`, `summary`
+- Cursor conversation API always returns trajectory:
+  - `kind: "trajectory"`, `source: "cursor"`, `events`, `summary`
+  - No paging required; full bubble content read synchronously from local SQLite
 
 Historical note:
 
@@ -105,12 +127,13 @@ Historical note:
 
 ## View-Type Semantics (Compact / Transcript / Trajectory)
 
-The view types are intentionally different projections with different goals. `Compact` is the unified name for source-specific readability modes (Windsurf chat + Antigravity markdown):
+The view types are intentionally different projections with different goals. `Compact` is the unified name for source-specific readability modes (Windsurf chat + Antigravity markdown). Cursor has no Compact mode and defaults directly to `Transcript`.
 
-- `Compact` (default, first tab):
+- `Compact` (default, first tab for Antigravity/Windsurf only):
   - unified UX label with source-specific backing
     - Windsurf: legacy `chat` payload/message list
     - Antigravity: vendor `markdown` from `ConvertTrajectoryToMarkdown`
+    - Cursor: **no Compact mode** — `Transcript` is the default entry point
   - optimized for quick reading with lower structural density
 - `Transcript`:
   - source-agnostic projection from normalized `TrajectoryEvent[]`
@@ -160,6 +183,7 @@ For compact-mode backing data:
 
 - Windsurf compact uses `kind: "chat"` (legacy message projection)
 - Antigravity compact uses `content.markdown` from `ConvertTrajectoryToMarkdown`
+- Cursor has no compact mode; `Transcript` is always backed by `kind: "trajectory"` events
 
 ## Inspector and Error Center (Implemented)
 

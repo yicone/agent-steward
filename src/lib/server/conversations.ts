@@ -7,6 +7,7 @@ import path from "node:path";
 import type { ConversationFile, RootConfig, RootHealth, RootHealthStatus, Source } from "@/lib/types";
 import { expandHome } from "@/lib/server/paths";
 import { collectJsonlFiles } from "@/lib/server/codex";
+import { listCursorConversationFiles } from "@/lib/server/cursor";
 
 /* ---------- helpers ---------- */
 
@@ -240,6 +241,21 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
     return scanCodexRoot(root, rootPath, rootMtimeMs);
   }
 
+  if (source === "cursor") {
+    const cached = _dirCache.get(root.id);
+    if (cached && cached.rootPath === rootPath && isCacheValid(cached, rootMtimeMs)) {
+      return cached.entries;
+    }
+    const entries = await listCursorConversationFiles(root);
+    _dirCache.set(root.id, {
+      rootPath,
+      dirMtimeMs: rootMtimeMs,
+      entries,
+      cachedAtMs: Date.now()
+    });
+    return entries;
+  }
+
   /* check cache */
   const cached = _dirCache.get(root.id);
   if (cached && cached.rootPath === rootPath && isCacheValid(cached, rootMtimeMs)) {
@@ -264,13 +280,20 @@ async function scanRoot(root: RootConfig, source: Source): Promise<ConversationF
       try {
         const st = await safeStat(fullPath);
         if (!st) return null;
+        
+        // For Windsurf sessions, use birth time (creation time) instead of modification time
+        // This ensures sessions are ordered by actual session start date, not file modification date
+        const effectiveTimeMs = (source === "windsurf" && typeof st.birthtimeMs === "number")
+          ? Number(st.birthtimeMs)
+          : Number(st.mtimeMs);
+        
         return {
           id: dirent.name.slice(0, -3),
           source,
           rootId: root.id,
           path: fullPath,
           sizeBytes: Number(st.size),
-          mtimeMs: Number(st.mtimeMs)
+          mtimeMs: effectiveTimeMs
         } satisfies ConversationFile;
       } finally {
         release();
@@ -394,6 +417,19 @@ export async function probeRootHealth(root: RootConfig): Promise<RootHealth> {
         fileCount,
         scanMs: Date.now() - start,
         error: `Cannot read some subdirectories: ${partialErrors.join("; ")}`
+      };
+    }
+  } else if (root.source === "cursor") {
+    try {
+      fileCount = (await listCursorConversationFiles(root)).length;
+    } catch (err) {
+      return {
+        rootId: root.id,
+        path: rootPath,
+        status: "unreadable",
+        fileCount: 0,
+        scanMs: Date.now() - start,
+        error: err instanceof Error ? err.message : String(err)
       };
     }
   } else {

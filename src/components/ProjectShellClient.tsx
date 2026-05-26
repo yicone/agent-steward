@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import type { AnalysisFindingStatus, AnalysisHandoff, AnalysisIssueClass, AnalysisObjectType, AnalysisSeverity } from "@/lib/analysisFindings";
 import type { AssetsHandoff, ContextAssetScope, ContextAssetStatus, ContextAssetSubtype } from "@/lib/contextAssets";
+import { createProjectEvidenceDiagnosticsFindings, type ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 import {
   deriveProjectOverviewSummary,
   type ProjectOverviewAssetSummary,
@@ -326,6 +327,9 @@ export function buildBackupHandoffFromSessions(context: {
   sessionId?: string;
   source?: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
   sessions?: BackupSessionSelection[];
 }): BackupMigrationHandoff {
   if ((context.sessions?.length ?? 0) > 0) {
@@ -342,12 +346,18 @@ export function buildBackupHandoffFromSessions(context: {
   return {
     origin: "sessions",
     subtitle: `Back up session ${context.sessionId} from Sessions.`,
-    continueLabel: "Use the session backup workflow to preserve this session record.",
+    continueLabel:
+      context.recoverability && context.recoverability !== "ls_readable"
+        ? "Review recoverability evidence before attempting preservation for this Windsurf session."
+        : "Use the session backup workflow to preserve this session record.",
     returnLabel: "Return to the originating session for evidence review.",
     workflowType: "session-backup",
     sessionId: context.sessionId,
     source: context.source,
     rootId: context.rootId,
+    ...(context.recoverability ? { recoverability: context.recoverability } : {}),
+    ...(context.hasRecoveryEvidence != null ? { hasRecoveryEvidence: context.hasRecoveryEvidence } : {}),
+    ...(context.recoverabilityNote ? { recoverabilityNote: context.recoverabilityNote } : {}),
   };
 }
 
@@ -420,7 +430,8 @@ function clearSessionViewerUrlState(): void {
 function formatSourceLabel(source: Source): string {
   if (source === "antigravity") return "Antigravity";
   if (source === "windsurf") return "Windsurf";
-  return "Codex";
+  if (source === "codex") return "Codex";
+  return "Cursor";
 }
 
 function formatCompactLabel(value: string): string {
@@ -757,7 +768,37 @@ function PlaceholderSurface(props: {
   );
 }
 
-export default function ProjectShellClient() {
+export type ProjectShellClientProps = {
+  projectEvidence?: ProjectEvidenceProviderResult | null;
+};
+
+export function deriveProjectEvidenceOverviewSummary(projectEvidence: ProjectEvidenceProviderResult | null | undefined): ProjectOverviewSummary | undefined {
+  if (!projectEvidence) return undefined;
+
+  if (projectEvidence.status === "unavailable") {
+    return deriveProjectOverviewSummary({
+      assets: null,
+      findings: null,
+      sessions: [],
+      projectTitle: "Project Overview",
+      scopeLabel: "Repo-local provider unavailable",
+    });
+  }
+
+  return deriveProjectOverviewSummary({
+    assets: projectEvidence.assets,
+    findings: createProjectEvidenceDiagnosticsFindings(projectEvidence),
+    sessions: [],
+    projectTitle: "Project Overview",
+    scopeLabel: projectEvidence.status === "empty"
+      ? "Repo-local evidence provider found no assets"
+      : projectEvidence.status === "partial"
+        ? "Partial repo-local project evidence"
+        : "Repo-local project evidence",
+  });
+}
+
+export default function ProjectShellClient({ projectEvidence }: ProjectShellClientProps) {
   const [activePage, setActivePage] = useState<ProjectShellPage>("overview");
   const [externalSelection, setExternalSelection] = useState<HomeClientExternalSelection | null>(null);
   const [assetsHandoff, setAssetsHandoff] = useState<AssetsHandoff | null>(null);
@@ -946,6 +987,7 @@ export default function ProjectShellClient() {
   }, [handleNavigate, handleOpenAnalysis, handleOpenAssets, handleOpenBackup]);
 
   const activeNav = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0]!;
+  const overviewSummary = deriveProjectEvidenceOverviewSummary(projectEvidence);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1004,6 +1046,7 @@ export default function ProjectShellClient() {
 
           {activePage === "overview" ? (
             <ProjectOverviewSurface
+              summary={overviewSummary}
               onRoute={handleOpenOverviewRoute}
             />
           ) : null}
@@ -1020,6 +1063,7 @@ export default function ProjectShellClient() {
             <AssetsFoundation
               key={buildAssetsFoundationInstanceKey(assetsHandoff)}
               handoff={assetsHandoff}
+              projectEvidence={projectEvidence}
               onOpenSession={handleOpenSessionFromContext}
               onOpenAnalysis={handleOpenAnalysisFromAssets}
               onOpenBackup={handleOpenBackupFromAssets}
@@ -1030,6 +1074,7 @@ export default function ProjectShellClient() {
             <AnalysisFoundation
               key={buildAnalysisFoundationInstanceKey(analysisHandoff)}
               handoff={analysisHandoff}
+              projectEvidence={projectEvidence}
               onOpenAssets={handleOpenAssets}
               onOpenBackup={handleOpenBackupFromAnalysis}
               onOpenOverview={() => handleNavigate("overview")}

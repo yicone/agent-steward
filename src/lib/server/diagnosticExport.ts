@@ -6,6 +6,7 @@ import { findLatestAntigravityDiscovery, resolveAntigravityRpcTarget } from "@/l
 import { getAntigravityTrajectoryMetaMapFromVscdb } from "@/lib/server/antigravityGlobalState";
 import { getWindsurfDiagnosticBundle } from "@/lib/server/windsurf";
 import { getCodexRawContent } from "@/lib/server/codex";
+import { getCursorRawContent } from "@/lib/server/cursor";
 
 const SERVICE = "exa.language_server_pb.LanguageServerService";
 
@@ -26,6 +27,7 @@ export type DiagnosticExport = {
   };
   windsurf?: Awaited<ReturnType<typeof getWindsurfDiagnosticBundle>>;
   codex?: Awaited<ReturnType<typeof getCodexRawContent>>;
+  cursor?: Awaited<ReturnType<typeof getCursorRawContent>>;
 };
 
 export async function buildDiagnosticExport(params: {
@@ -120,6 +122,17 @@ export async function buildDiagnosticExport(params: {
       source,
       cascadeId,
       codex
+    };
+  }
+
+  if (source === "cursor") {
+    const cursor = await getCursorRawContent(cascadeId, config);
+    return {
+      schemaVersion: 1,
+      generatedAt,
+      source,
+      cascadeId,
+      cursor
     };
   }
 

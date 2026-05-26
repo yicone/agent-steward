@@ -115,7 +115,7 @@ export function parseUrlState(search: string): Partial<UrlViewerState> {
 
   // source
   const src = p.get("source");
-  if (src === "antigravity" || src === "windsurf" || src === "codex") state.source = src;
+  if (src === "antigravity" || src === "windsurf" || src === "codex" || src === "cursor") state.source = src;
 
   // id
   const id = p.get("id");

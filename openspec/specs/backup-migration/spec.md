@@ -36,6 +36,19 @@ The system SHALL support single session backup through the Backup / Migration wo
 - **WHEN** the session backup workflow reaches the configuration step
 - **THEN** source backup is presented as an opt-in advanced option, not the default
 
+### Requirement: Backup / Migration SHALL validate unreadable Windsurf legacy sessions explicitly
+The system SHALL treat Windsurf sessions that are locally discovered but unreadable from the live language server as explicit validation subjects instead of silently treating them as normal session-backup candidates.
+
+#### Scenario: Unreadable Windsurf legacy session blocks canonical backup generation
+- **WHEN** a routed or selected Windsurf session is classified as unavailable because the running Windsurf LS returns `trajectory not found`
+- **THEN** the workflow validation marks canonical session backup as blocked for that session
+- **AND** the validation explains that local `.pb` discovery alone is not enough to produce a readable canonical session record
+
+#### Scenario: Partial evidence remains inspectable without implying restore
+- **WHEN** a routed or selected Windsurf session is classified as partially recoverable because bounded sidecar evidence exists
+- **THEN** the workflow may surface that evidence in validation or result context
+- **AND** it does not claim that the workflow can restore the session into Windsurf or recreate a canonical transcript automatically
+
 ### Requirement: Import backup workflow SHALL validate before accepting
 The system SHALL support importing session-backup packages through a validation-first workflow.
 
@@ -89,6 +102,11 @@ The system SHALL consume routed handoff context from `Project Overview`, `Sessio
 - **THEN** `Backup / Migration` opens the relevant workflow when the handoff resolves one
 - **AND** otherwise degrades to the workflow selector idle state instead of opening a broken workflow
 - **AND** the page still shows the asset context and origin cue from `Assets`
+
+#### Scenario: Sessions handoff preserves recoverability context for unreadable Windsurf session
+- **WHEN** `Sessions` routes a Windsurf session whose recoverability state is partial or unavailable into `Backup / Migration`
+- **THEN** the workflow preserves compact context such as recoverability class, bounded evidence summary, and the fact that canonical readable content is unavailable
+- **AND** the workflow does not invent transcript availability, vendor-runtime restoration, or implicit backup success from that handoff alone
 
 ### Requirement: Validation and warnings SHALL be explicit about preservation risk
 The system SHALL include explicit warnings at validation gates for preservation risk, destructive potential, and trust boundaries.

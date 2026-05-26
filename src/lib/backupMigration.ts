@@ -24,7 +24,7 @@ export const BACKUP_WORKFLOW_STATES = [
 ] as const;
 export type BackupWorkflowState = (typeof BACKUP_WORKFLOW_STATES)[number];
 
-export const MIGRATION_PREVIEW_SOURCE_PRODUCTS = ["antigravity", "windsurf", "codex", "imported", "generated"] as const;
+export const MIGRATION_PREVIEW_SOURCE_PRODUCTS = ["antigravity", "windsurf", "codex", "cursor", "imported", "generated"] as const;
 export type MigrationPreviewSourceProduct = (typeof MIGRATION_PREVIEW_SOURCE_PRODUCTS)[number];
 
 export const MIGRATION_PREVIEW_SOURCE_KINDS = ["session-evidence", "context-asset", "analysis-context", "project-overview"] as const;
@@ -235,6 +235,9 @@ export type BackupSessionSelection = {
   sessionId: string;
   source?: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
   includeSourceCopy?: boolean;
   unresolvedReason?: string;
 };
@@ -330,6 +333,9 @@ export type BackupMigrationHandoff = {
   sessions?: BackupSessionSelection[];
   source?: Source;
   rootId?: string;
+  recoverability?: "ls_readable" | "partial" | "unavailable";
+  hasRecoveryEvidence?: boolean;
+  recoverabilityNote?: string;
   assetId?: string;
   assetSubtype?: string;
   findingId?: string;
@@ -523,6 +529,7 @@ export function formatMigrationPreviewSourceProductLabel(product: MigrationPrevi
   if (product === "antigravity") return "Antigravity";
   if (product === "windsurf") return "Windsurf";
   if (product === "codex") return "Codex";
+  if (product === "cursor") return "Cursor";
   return product.charAt(0).toUpperCase() + product.slice(1);
 }
 

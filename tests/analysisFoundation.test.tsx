@@ -8,11 +8,13 @@ import {
   resolveAnalysisNavigationHandoff,
 } from "@/components/AnalysisFoundation";
 import { resolveAnalysisSessionRootId, type AnalysisHandoff } from "@/lib/analysisFindings";
+import type { ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 
-function renderAnalysisFoundation(handoff: AnalysisHandoff | null) {
+function renderAnalysisFoundation(handoff: AnalysisHandoff | null, projectEvidence?: ProjectEvidenceProviderResult | null) {
   return renderToStaticMarkup(
     <AnalysisFoundation
       handoff={handoff}
+      projectEvidence={projectEvidence}
       loadingDelayMs={0}
       onOpenAssets={vi.fn()}
       onOpenBackup={vi.fn()}
@@ -20,6 +22,19 @@ function renderAnalysisFoundation(handoff: AnalysisHandoff | null) {
       onOpenSession={vi.fn()}
     />
   );
+}
+
+function createProviderResult(input: Partial<ProjectEvidenceProviderResult>): ProjectEvidenceProviderResult {
+  return {
+    provider: "project-evidence-provider-v1",
+    status: "available",
+    rootLabel: "repository root",
+    evidenceSource: "repo-local",
+    items: [],
+    assets: [],
+    diagnostics: [],
+    ...input,
+  };
 }
 
 describe("AnalysisFoundation", () => {
@@ -141,4 +156,41 @@ describe("AnalysisFoundation", () => {
     ).toBeNull();
   });
 
+  it("renders provider diagnostics as bounded findings", () => {
+    const html = renderAnalysisFoundation(null, createProviderResult({
+      diagnostics: [
+        {
+          id: "project-evidence-diagnostic-unreadable-agents-md",
+          kind: "unreadable",
+          severity: "warning",
+          path: "AGENTS.md",
+          message: "Provider could not read this repo-local allowlisted evidence file.",
+        },
+      ],
+    }));
+
+    expect(html).toContain("provider diagnostics");
+    expect(html).toContain("Provider unreadable evidence: AGENTS.md");
+    expect(html).toContain("bounded provider diagnostics");
+    expect(html).not.toContain("Preserve session evidence before migration cleanup");
+  });
+
+  it("renders provider-backed no-current-findings without seed issues", () => {
+    const html = renderAnalysisFoundation(null, createProviderResult({
+      assets: [],
+      diagnostics: [],
+    }));
+
+    expect(html).toContain("no current provider findings");
+    expect(html).toContain("0");
+    expect(html).toContain("No findings match the current issue and object context.");
+    expect(html).not.toContain("Stale review preference memory");
+  });
+
+  it("labels seed findings as fallback when provider is unavailable", () => {
+    const html = renderAnalysisFoundation(null, createProviderResult({ status: "unavailable" }));
+
+    expect(html).toContain("provider unavailable fallback");
+    expect(html).toContain("Preserve session evidence before migration cleanup");
+  });
 });

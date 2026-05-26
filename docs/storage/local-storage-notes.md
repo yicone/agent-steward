@@ -1,6 +1,6 @@
-# Antigravity / Windsurf / Codex 本地存储结构（持续记录）
+# Antigravity / Windsurf / Codex / Cursor 本地存储结构（持续记录）
 
-本文档用于记录 **Antigravity**, **Windsurf** 与 **Codex** 在 macOS 上的本地存储布局、关键文件、以及我们在实现/调试 `agent-storage-manager` 过程中验证过的“可用事实”。它是一个活文档：每次发现新结构或出现不兼容变更时，都应补充到这里（最好附上“如何复现/如何验证”）。
+本文档用于记录 **Antigravity**, **Windsurf**, **Codex** 与 **Cursor** 在 macOS 上的本地存储布局、关键文件、以及我们在实现/调试 `agent-storage-manager` 过程中验证过的“可用事实”。它是一个活文档：每次发现新结构或出现不兼容变更时，都应补充到这里（最好附上“如何复现/如何验证”）。
 
 > 约定：文中路径均以 macOS 为准；`~` 表示用户主目录。  
 > 重要：这些目录里可能包含会话内容、仓库路径、token 等敏感信息；调试/截图/开源文档时注意脱敏。
@@ -27,6 +27,8 @@
   - 版本指纹：Commit `73ca2d6aa880de1bc504ad960c1ab79c9248d476`；VS Code OSS `1.108.2`；Electron `39.2.7`；Chromium `142.0.7444.235`；Node.js `22.21.1`；V8 `14.2.231.21-electron.0`；构建时间 `2026-03-09T19:00:54.154Z`；OS `Darwin arm64 24.6.0`
   - 对应实现方案：`pid/port` 从 `Windsurf.log` 读取；live CSRF token 从 LS 子进程环境变量 `WINDSURF_CSRF_TOKEN` 读取；`state.vscdb` 中的 `codeium.windsurf-windsurf_auth-` 不是可用 fallback
   - 回归时先验证：`ps eww -o command= -ww -p <pid>` 是否仍能看到 `WINDSURF_CSRF_TOKEN=`；`Heartbeat` 对 `state.vscdb` UUID 是否仍返回 `401 invalid CSRF token`
+  - recoverability 事实：legacy `~/.codeium/cascade/*.pb` 会话可被本地扫描列出，但若 live LS 返回 `trajectory not found`，则只能标记为 `partial` 或 `unavailable`，不能声称 canonical readable content 仍存在
+  - bounded evidence：本机只发现一个 legacy `cascadeId` 在 `~/.codeium/brain/<cascadeId>/` 下有 sidecar（`plan.md` 与 `plan_metadata.pbtxt`），因此 brain 证据应被视为可选的 bounded evidence，而非 transcript source
 - `Antigravity 1.19.5`
   - 版本指纹：Commit `6adfc1a7e4a1a9af62bc45e8f2d7e6a97b7a9756`；VS Code OSS `1.107.0`；Electron `39.2.3`；Chromium `142.0.7444.175`；构建时间 `2026-02-26T07:23:14.771Z`；OS `Darwin arm64 24.6.0`
   - 对应实现方案：LS 发现仍应优先走 `Antigravity.log` attach，并以 `Heartbeat` 成功作为准入；`daemon/ls_*.json` 可作为 legacy discovery；`title/cwd` 通过 `state.vscdb` 的 `*trajectorySummaries` enrichment
@@ -59,6 +61,32 @@
 - 验证命令：`ps` / `curl` / `rg` / `sqlite3`
 - 结论：旧假设哪里失效、代码层做了什么修复
 
+### Windsurf legacy recoverability（2026-05-26 实测）
+
+- `~/.codeium/cascade` 中的 legacy `.pb` 文件可以通过 Settings root 正常发现并显示在 Sessions 列表中。
+- 这些 legacy session 在当前 live Windsurf LS 上可能全部返回 `trajectory not found`，这表示 **本地发现成功 ≠ LS 仍可读**。
+- `agent-storage-manager` 当前 contract：
+  - `ls_readable`：LS 仍可返回 trajectory / steps
+  - `partial`：LS 返回 `trajectory not found`，但存在 bounded sidecar evidence（例如 `~/.codeium/brain/<cascadeId>/plan.md`）
+  - `unavailable`：LS 返回 `trajectory not found`，且没有额外 bounded evidence
+- `partial` / `unavailable` 只用于 diagnostics、Sessions viewer 与 Backup / Migration handoff；**不表示可以离线重建 canonical transcript**。
+
+建议验证命令：
+
+```bash
+# 检查 legacy Windsurf pb roots
+find "$HOME/.codeium/cascade" -maxdepth 1 -name '*.pb' | head
+
+# 检查某个 legacy session 是否存在 bounded brain sidecar
+ls -la "$HOME/.codeium/brain/<cascadeId>"
+
+# 在已知 pid/port/token 下验证 trajectory 是否仍可读
+curl -sS -X POST "http://127.0.0.1:<port>/exa.language_server_pb.LanguageServerService/GetCascadeTrajectory" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: <live-token>" \
+  -d '{"cascadeId":"<cascadeId>"}'
+```
+
 ---
 
 ## 总体策略（为什么不直接解码 `.pb`）
@@ -71,6 +99,116 @@
 - 对 **Antigravity**，额外利用其 **VS Code global state（`state.vscdb`）** 来稳定提取会话列表所需的 `title/cwd` 元信息（这是我们实际验证过的可靠来源）
 
 ---
+
+## Cursor
+
+### 1) 当前一期实现策略（已验证）
+
+**结论（已验证）：** Cursor 的当前接入不走 localhost / LS attach，而是走 **本地 SQLite / app-storage 状态读取**。
+
+当前一期实现依赖的关键路径：
+
+- `~/.cursor/`
+  - `cli-config.json`
+  - `ide_state.json`
+  - `mcp.json`
+- `~/Library/Application Support/Cursor/User/`
+  - `globalStorage/state.vscdb`
+  - `workspaceStorage/*/state.vscdb`
+  - `workspaceStorage/*/workspace.json`
+
+### 2) 当前已验证的可用事实
+
+- `globalStorage/state.vscdb`
+  - 表：`ItemTable`, `cursorDiskKV`
+  - `cursorDiskKV` 中可见大量与 Cursor Agent / Composer 相关的 key：
+    - `composerData:<uuid>`
+    - `cursor/glass.tabs.v2/.../state.json`
+    - `messageRequestContext:<composerId>:<bubbleId>`
+    - `checkpointId:<composerId>:<bubbleId>`
+    - `composer.*`, `chat.*`, `agent.*`, `cursorAuth/*`
+- `workspaceStorage/*/workspace.json`
+  - 可将 workspace hash 反解到真实仓库路径（`folder: file:///...`）
+- `workspaceStorage/*/state.vscdb`
+  - 可见 `composer.composerData`、`workbench.panel.composerChatViewPane*`、`src.vs.platform.reactivestorage.browser.reactiveStorageServiceImpl.persistentStorage.workspaceUser` 等 key
+
+### 3) 当前产品采用的 bounded contract
+
+`agent-storage-manager` 当前对 Cursor 的支持边界是：
+
+- **支持**
+  - 枚举本地 `composerData:*` 会话
+  - 提取稳定的 `title / status / createdAt / updatedAt / summary / todos / context`
+  - 在可能时，从 `workspaceStorage/*/workspace.json` 或上下文文件选择推断 workspace/cwd
+  - 识别 repo-local Cursor 资产：`.cursor/mcp.json`、`.cursorrules`、`.cursor/rules/*.mdc`
+- **暂不承诺**
+  - 每个历史会话都能恢复完整 bubble-by-bubble transcript
+  - 类似 Windsurf / Antigravity 的 runtime attach 诊断
+
+### 4) 版本兼容性与降级策略
+
+Cursor 存储结构属于**未公开的内部格式**，可随版本升级静默变更，无 semver 保证。以下记录已知风险点和应对原则。
+
+#### 已知变更风险
+
+| 风险点 | 当前依赖 | 升级后可能的变化 |
+| ------ | -------- | --------------- |
+| `cursorDiskKV` 表消失或改名 | `composerData:*`、`bubbleId:*` 键 | Cursor 内部重构后可能迁移到新表或新文件 |
+| `composerData` JSON schema 字段变更 | `latestConversationSummary.summary.summary`、`fullConversationHeadersOnly`、`name`、`createdAt` 等 | 字段随产品功能迭代重命名或移除 |
+| `bubbleId:*` 键不再写入全局 DB | bubble-by-bubble transcript 读取 | Cursor 可能将 bubble 数据迁移到 workspace-local DB 或独立文件 |
+| `workspaceStorage` hash 算法变更 | workspace-to-composer 路径反解 | hash 算法变化会导致现有映射完全失效 |
+| 存储路径变更 | macOS 路径 `~/Library/Application Support/Cursor/` | 虽然 VS Code 系标准路径极少变，但 rebranding 时有先例 |
+
+#### 实现侧的降级原则（已在代码中体现）
+
+- 所有字段访问均为 `?.` 可选链或 `?? fallback`，不假设字段必然存在。
+- `readCursorBubbles()` 在 `fullConversationHeadersOnly` 缺失或为空时，自动回退到 `extractSummaryText()`（单条摘要事件）而非抛出异常。
+- `extractSummaryText()` 在遇到无法解析的 XML 格式时，直接返回裸文本，不中断渲染流程。
+- `getCursorConversation()` 整体用 try/catch 包裹，任何 SQLite 读取失败只记录 warning，不影响会话列表加载。
+
+#### 升级时的检测方法
+
+当 Cursor 升级后如果会话列表出现异常（会话数量骤降、内容全部显示为空摘要），可用以下命令快速定位：
+
+```bash
+# 确认 cursorDiskKV 表是否仍存在
+sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+  ".tables"
+
+# 确认 composerData 键是否仍存在
+sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+  "select key from cursorDiskKV where key like 'composerData:%' limit 5;"
+
+# 确认 bubbleId 键是否仍写入
+sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+  "select key from cursorDiskKV where key like 'bubbleId:%' limit 5;"
+
+# 检查某个 composerData 值的顶层 JSON 字段
+sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+  "select value from cursorDiskKV where key like 'composerData:%' limit 1;" \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); print(list(d.keys()))"
+```
+
+#### 发现断裂后的升级路径
+
+1. 用上述验证命令定位具体断裂点（表/键/字段哪一层变了）。
+2. 在 `src/lib/server/cursor.ts` 中对应的读取函数加 adapter 分支，保持旧版 fallback 可用。
+3. 更新本文档此节，注明 Cursor 版本号和已验证的新结构。
+4. 若断裂影响 `bounded contract` 中的已承诺能力，同步更新第 3 节并在 `CHANGELOG.md` 记录。
+
+### 5) 本地验证命令
+
+```bash
+# 查看 Cursor 全局状态 DB 是否存在
+ls -l "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+
+# 查看 composerData 是否存在
+sqlite3 "$HOME/Library/Application Support/Cursor/User/globalStorage/state.vscdb" \
+  "select key, length(value) from cursorDiskKV where key like 'composerData:%' order by length(value) desc limit 20;"
+
+# 查看 workspaceStorage 与真实 workspace 的映射
+find "$HOME/Library/Application Support/Cursor/User/workspaceStorage" -name workspace.json -maxdepth 2 -print
+```
 
 ## Antigravity
 

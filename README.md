@@ -5,8 +5,8 @@ SSoT/DRY note:
 
 # Agent Storage Manager (v1)
 
-A local Web UI for browsing conversation history generated/persisted by Antigravity, Windsurf, and Codex CLI.
-It fetches Antigravity and Windsurf content via their local Language Server RPC, and reads Codex sessions directly from `.jsonl` files (no running process required).
+A local Web UI for browsing conversation history generated/persisted by Antigravity, Windsurf, Codex CLI, and Cursor.
+It fetches Antigravity and Windsurf content via their local Language Server RPC, reads Codex sessions directly from `.jsonl` files (no running process required), and reads bounded Cursor composer state from local SQLite/app-storage files.
 
 ## Data Sources & Configuration
 
@@ -15,6 +15,7 @@ It fetches Antigravity and Windsurf content via their local Language Server RPC,
   - Antigravity: `~/.gemini/antigravity/conversations`
   - Windsurf: `~/.codeium/windsurf/cascade`
   - Codex: `~/.codex/sessions`
+  - Cursor: `~/Library/Application Support/Cursor/User`
 
 You can add/disable/delete roots in the Web UI Settings page (supports external/backup drives).
 
@@ -60,23 +61,27 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
 
 - Project shell:
   - top-level surfaces for `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration`
-  - `Project Overview` provides a project-scoped agent context governance foundation with compact context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions; current asset/finding counts are clearly marked as foundation sample data until live project inventory is connected
+  - `Project Overview` provides a project-scoped agent context governance foundation with compact context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions; when repo-local provider evidence is available, asset/finding counts are derived from explicit local evidence instead of foundation sample data
   - `Sessions` contains the existing viewer, source diagnostics, URL deep links, search selection, and direct session backup behavior
   - `Assets` provides a bounded reusable context assets foundation for rules, memory, skills, commands, and unknown asset fragments
   - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
   - `Backup / Migration` provides bounded workflow-first backup and migration-preview surfaces without turning into a generic tools drawer or migration apply UI
 - Assets foundation:
+  - repo-local project evidence provider for explicit agent-facing files: `AGENTS.md`, Copilot instructions/prompts/skills, Codex skills/agents/hooks, cross-agent `.agents` / `.agent` skills, Windsurf skills/rules/workflows/hooks, and Cursor repo-local files such as `.cursor/mcp.json`, `.cursorrules`, and `.cursor/rules/*.mdc`
   - local-first reusable context asset model with subtype, scope, source, status, provenance, optional body summary, in-effect/usage metadata, and derived governance health
+  - provider-backed inventory uses project-relative provenance paths and does not read user-global runtime stores, external paths, cloud sources, session transcript stores, or paths outside the repository root
   - subtype/scope/source/status filtering with asset summary, governance issue class counts, inventory, selected detail, provenance, and in-effect/usage regions
   - route-only governance inspection for Sessions, Analysis, Backup / Migration, or Project Overview without inline edit, repair, sync, deploy, restore, or workflow execution controls
   - routed handoff into `Assets` from Sessions, Project Overview, and Analysis with compact issue context only, without carrying full transcript, overview summary state, findings tables, or trajectory state
 - Analysis foundation:
   - local-first analysis finding model with issue class, severity, status, affected object, evidence references, route targets, and preservation warnings
+  - provider diagnostics for unreadable, ambiguous, duplicate, or unsupported repo-local evidence become bounded findings; a clean provider result shows an explicit no-current-findings state instead of seed issues
   - context health summary, findings inventory, selected finding detail, evidence context, and route-only recommended actions
   - routed handoff into `Analysis` from Assets, Project Overview, and Sessions without claiming complete automated project analysis or inline remediation
 - Scan and list session files (default directories + custom roots from Settings)
   - Antigravity / Windsurf: `.pb` session files (flat directory)
   - Codex CLI: `.jsonl` session files (nested `YYYY/MM/DD/` directory structure)
+  - Cursor: bounded composer sessions from `User/globalStorage/state.vscdb` and related `workspaceStorage/*` state
 - Search and filtering:
   - full-text event search within the current conversation
   - enhanced conversation filtering in the session list / viewer flow
@@ -132,6 +137,8 @@ For detailed view semantics and cross-source alignment notes, see `docs/viewer/t
 - Codex CLI: no running process required. Install the [Codex CLI](https://github.com/openai/codex) and run at least one session — session files will be created automatically at `~/.codex/sessions/`.
   - Sessions are `.jsonl` files nested under `YYYY/MM/DD/` date subdirectories.
   - No token or attach configuration needed; sessions are read directly from disk.
+- Cursor: no runtime attach is required for the current implementation. Open Cursor and use Composer/Agents at least once so local state is written under `~/Library/Application Support/Cursor/User/`.
+  - Current support is intentionally bounded: the app lists Cursor composer sessions and renders reliable local metadata/summary/todo/context state, but does not promise a full bubble-by-bubble transcript for every historical session.
 
 ## Project Status
 
