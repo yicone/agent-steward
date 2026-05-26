@@ -8,3 +8,5 @@ dist
 .local
 
 tmp/
+.playwright-cli/
+auth.json
