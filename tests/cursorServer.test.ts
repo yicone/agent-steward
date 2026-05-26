@@ -130,7 +130,7 @@ describe("cursor server adapter", () => {
 
     expect(conversation.markdown).toContain("# Cursor support implementation");
     expect(conversation.markdown).toContain("Conversation summary");
-    expect(conversation.markdown).toContain("Retrieval note");
+    expect(conversation.markdown).toContain("Source:** Cursor");
     expect(conversation.events.some((event: { stepType?: string }) => event.stepType === "cursor.summary")).toBe(true);
     expect(conversation.summary.totalSteps).toBeGreaterThan(0);
     expect(conversation.workspacePath).toBe("/Users/test/example-repo");
