@@ -44,6 +44,6 @@ function createRepoFileSystem(rootDir: string): ProjectEvidenceFileSystem {
 export function getProjectEvidenceProviderResult(rootDir = process.cwd()): ProjectEvidenceProviderResult {
   return discoverProjectEvidence({
     fileSystem: createRepoFileSystem(rootDir),
-    rootLabel: "repository root",
+    rootLabel: path.basename(rootDir) || "repository root",
   });
 }

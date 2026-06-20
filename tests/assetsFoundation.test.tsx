@@ -24,6 +24,7 @@ function createProviderResult(input: Partial<ProjectEvidenceProviderResult>): Pr
   return {
     provider: "project-evidence-provider-v1",
     status: "available",
+    projectName: "agent-storage-manager",
     rootLabel: "repository root",
     evidenceSource: "repo-local",
     items: [],

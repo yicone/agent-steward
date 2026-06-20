@@ -34,6 +34,7 @@ export type ProjectEvidenceDiagnostic = {
 export type ProjectEvidenceProviderResult = {
   provider: "project-evidence-provider-v1";
   status: ProjectEvidenceProviderStatus;
+  projectName: string;
   rootLabel: string;
   evidenceSource: ProjectEvidenceSource;
   items: ProjectEvidenceItem[];
@@ -322,6 +323,7 @@ export function discoverProjectEvidence(input: {
     return {
       provider: "project-evidence-provider-v1",
       status: "unavailable",
+      projectName: input.rootLabel ?? "Current Project",
       rootLabel: input.rootLabel ?? "repository root",
       evidenceSource: "repo-local",
       items: [],
@@ -393,6 +395,7 @@ export function discoverProjectEvidence(input: {
   return {
     provider: "project-evidence-provider-v1",
     status,
+    projectName: input.rootLabel ?? "Current Project",
     rootLabel: input.rootLabel ?? "repository root",
     evidenceSource: "repo-local",
     items,
