@@ -97,9 +97,11 @@ function buildSessionBackupValidation(input: {
     return [
       {
         id: "v-windsurf-unavailable",
-        label: "Canonical Windsurf content unavailable",
+        label: "Canonical Cascade content unavailable",
         severity: "block",
-        detail: input.recoverabilityNote ?? "The running Windsurf LS no longer has this trajectory, so canonical session backup cannot be generated from readable content.",
+        detail:
+          input.recoverabilityNote ??
+          "The running Windsurf LS no longer has this trajectory, so canonical session backup cannot be generated from readable content.",
       },
       {
         id: "v-windsurf-local-evidence",
@@ -121,7 +123,7 @@ function buildSessionBackupValidation(input: {
             severity: "warning" as const,
             detail:
               input.recoverabilityNote ??
-              "Bounded recovery evidence exists for this Windsurf session, but it does not imply vendor-runtime restoration or transcript reconstruction.",
+              "Bounded recovery evidence exists for this Windsurf Cascade session, but it does not imply vendor-runtime restoration or transcript reconstruction.",
           },
         ]
       : [];
@@ -1727,8 +1729,8 @@ export function BackupMigrationFoundation({
                   <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-900 dark:text-amber-200">
                     <div className="font-medium">
                       {selectedRecoverability === "unavailable"
-                        ? "Canonical Windsurf content is unavailable"
-                        : "This Windsurf session carries bounded recovery evidence"}
+                        ? "Canonical Cascade content is unavailable"
+                        : "This Cascade session carries bounded recovery evidence"}
                     </div>
                     <div className="mt-1 text-xs leading-5 opacity-90">
                       {selectedRecoverabilityNote ??

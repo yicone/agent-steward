@@ -72,6 +72,12 @@ describe("discoverProjectEvidence", () => {
       ".windsurf/workflows/opsx-apply.md": "# Windsurf workflow",
       ".windsurf/hooks.json": "{}",
       ".windsurf/hooks/guard.py": "print('guard')",
+      ".devin/skills/ops/SKILL.md": "# Devin skill",
+      ".devin/rules/engineering.md": "# Devin rule",
+      ".devin/workflows/opsx-apply.md": "# Devin workflow",
+      ".devin/plans/compat.md": "# Devin plan",
+      ".devin/hooks.json": "{}",
+      ".devin/hooks/guard.py": "print('guard')",
       ".cursor/mcp.json": "{\"mcpServers\":{}}",
       ".cursorrules": "Always prefer local-first behavior",
       ".cursor/rules/repo.mdc": "---\ndescription: Repo rule\n---\nUse project conventions",
@@ -86,6 +92,9 @@ describe("discoverProjectEvidence", () => {
     expect(paths).toContain(".codex/hooks.json");
     expect(paths).toContain(".windsurf/workflows/opsx-apply.md");
     expect(paths).toContain(".windsurf/hooks/guard.py");
+    expect(paths).toContain(".devin/workflows/opsx-apply.md");
+    expect(paths).toContain(".devin/plans/compat.md");
+    expect(paths).toContain(".devin/hooks/guard.py");
     expect(paths).toContain(".cursor/mcp.json");
     expect(paths).toContain(".cursorrules");
     expect(paths).toContain(".cursor/rules/repo.mdc");

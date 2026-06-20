@@ -13,6 +13,11 @@ This file records shipped, merged changes for AgentSteward.
 
 ### Added
 
+- `2026-06-21` — Devin compatibility MVP
+  - Project evidence discovery now recognizes `.devin/` directories (skills, rules, workflows, plans, hooks) alongside legacy `.windsurf/` directories
+  - New `ContextAssetSource` value `"devin"` for `.devin/` assets; `"windsurf"` remains for `.windsurf/` assets
+  - Diagnostics and user-facing wording corrected: product references use `Windsurf` or `Devin` separately (no compound labels); runtime/session references use `Cascade` (not "legacy Cascade")
+  - Session reading still targets the Windsurf (Cascade) LS; no new Devin local session storage parsing
 - `2026-06-21` — Project shell identity hardening
   - Shell now displays the active project display name, boundary cue, evidence state, and context asset count from a bounded project identity model
   - Added a real, bounded project switch using a native `<Select>` dropdown backed by shell-known local project roots

@@ -71,6 +71,14 @@
   - `unavailable`：LS 返回 `trajectory not found`，且没有额外 bounded evidence
 - `partial` / `unavailable` 只用于 diagnostics、Sessions viewer 与 Backup / Migration handoff；**不表示可以离线重建 canonical transcript**。
 
+### Devin compatibility MVP（2026-06-21）
+
+- **Devin** 是 Windsurf 的品牌更名；产品同时支持 Cascade、Devin Local、Devin Cloud 三个 agent runtime。
+- Agent Steward 的 session reading 仍只针对 Windsurf (Cascade) LS；**未解析新的 Devin 本地会话存储**。
+- 项目资产发现已扩展：`.devin/` 目录（skills、rules、workflows、plans、hooks）与 `.windsurf/` 并行识别。
+- `.devin/` assets 使用 `source: "devin"`（显示 `Devin`）；`.windsurf/` assets 使用 `source: "windsurf"`（显示 `Windsurf`）。
+- 诊断文案中：产品层用 `Windsurf`（指 IDE/LS 进程），runtime 层用 `Cascade`（指 session/trajectory）；不使用复合标签。
+
 建议验证命令：
 
 ```bash

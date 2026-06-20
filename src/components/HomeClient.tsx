@@ -1557,15 +1557,19 @@ export default function HomeClient({
     if (selectedItem.recoverability === "unavailable") {
       return {
         tone: "danger" as const,
-        title: "Legacy Windsurf session is not readable from the running LS.",
-        message: selectedItem.recoverabilityNote ?? "The local session file was discovered, but the running Windsurf LS no longer has this trajectory.",
+        title: "Cascade session is not readable from the running Windsurf LS.",
+        message:
+          selectedItem.recoverabilityNote ??
+          "The local session file was discovered, but the running Windsurf LS no longer has this trajectory.",
       };
     }
     if (selectedItem.recoverability === "partial") {
       return {
         tone: "warning" as const,
-        title: "Legacy Windsurf session has bounded recovery evidence.",
-        message: selectedItem.recoverabilityNote ?? "Some recoverability evidence may exist even though the full session is not guaranteed to be readable from the running Windsurf LS.",
+        title: "Cascade session has bounded recovery evidence.",
+        message:
+          selectedItem.recoverabilityNote ??
+          "Some recoverability evidence may exist even though the full session is not guaranteed to be readable from the running Windsurf LS.",
       };
     }
     return null;
