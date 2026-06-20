@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "pre_write_code": [
+      {
+        "command": "python3 .windsurf/hooks/guard-main-specs.py",
+        "show_output": true
+      }
+    ]
+  }
+}
