@@ -4,8 +4,29 @@ Define the accepted behavior for the bounded `Backup / Migration` foundation
 surface. The surface frames preservation, import, and validation work as
 explicit local-first workflows with selection, validation, confirmation,
 execution, result, and recent-operation semantics.
-
 ## Requirements
+### Requirement: Backup / Migration remains workflow-bounded
+The system SHALL keep `Backup / Migration` bounded to explicit preservation,
+portability, import, validation, and bundle-oriented workflow families rather
+than letting broader preservation requests turn it into a generic tools drawer.
+
+#### Scenario: Provider-level preservation requires an explicit bounded workflow decision
+- **WHEN** the product considers adding provider-level preservation or sync of
+  context broader than current project-scoped bundles or session backups
+- **THEN** that scope is treated as a separate explicit workflow-family decision
+  rather than as an automatic extension of existing session backup semantics
+- **AND** the product does not assume that a broader provider-level backup is
+  already covered by `session backup`, `bulk session backup`, or current
+  `project bundle`
+
+#### Scenario: Broader preservation requests do not imply generic utility behavior
+- **WHEN** a preservation request includes provider-owned files, manually saved
+  provider directories, or context outside the current project-scoped package
+  contract
+- **THEN** `Backup / Migration` preserves its workflow-bounded semantics until a
+  future accepted change defines a coherent workflow family for that boundary
+- **AND** it does not become a generic filesystem backup, runtime snapshot, or
+  catch-all maintenance surface by implication
 
 ### Requirement: Backup / Migration SHALL provide a workflow-first foundation surface
 The system SHALL replace the Backup / Migration placeholder with a bounded workflow-first foundation surface that frames all operations as explicit workflows with selection, validation, and result semantics.
@@ -602,3 +623,4 @@ The system SHALL keep primary result semantics and `Recent Operations` semantics
 - **WHEN** a bounded workflow legitimately ends in `result` without confirmation or execution because its accepted contract is validation-only or preview-only
 - **THEN** it may still create a recent-operation entry
 - **AND** that entry uses workflow-appropriate terminal semantics rather than pretending an execution step occurred
+
