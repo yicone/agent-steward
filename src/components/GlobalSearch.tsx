@@ -52,11 +52,12 @@ function SnippetHtml({ html }: { html: string }) {
 // ---------------------------------------------------------------------------
 
 export type GlobalSearchProps = {
+  projectRootPath?: string;
   /** Called when the user selects a session from results. */
   onSelect(sessionId: string, source: Source, rootId?: string): void;
 };
 
-export function GlobalSearch({ onSelect }: GlobalSearchProps) {
+export function GlobalSearch({ projectRootPath, onSelect }: GlobalSearchProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -121,7 +122,9 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
     }
     setLoading(true);
     setError(null);
-    fetch(`/api/search?q=${encodeURIComponent(q)}&limit=20`)
+    const params = new URLSearchParams({ q, limit: "20" });
+    if (projectRootPath) params.set("projectRootPath", projectRootPath);
+    fetch(`/api/search?${params.toString()}`)
       .then((r) => r.json() as Promise<ApiResponse>)
       .then((data) => {
         setResults(data.results ?? []);
@@ -130,7 +133,7 @@ export function GlobalSearch({ onSelect }: GlobalSearchProps) {
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [projectRootPath]);
 
   const handleQueryChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

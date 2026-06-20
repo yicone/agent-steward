@@ -80,6 +80,7 @@ export type HomeClientSessionHandoff = {
 export type HomeClientProps = {
   chrome?: "full" | "embedded";
   externalSelection?: HomeClientExternalSelection | null;
+  projectRootPath?: string;
   onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
   onOpenAnalysisForSession?(handoff: HomeClientSessionHandoff): void;
   onOpenBackupForSession?(handoff: HomeClientSessionHandoff): void;
@@ -1444,6 +1445,7 @@ function fromSelectionKey(key: string | null): { rootId?: string; id: string } |
 export default function HomeClient({
   chrome = "full",
   externalSelection = null,
+  projectRootPath,
   onOpenAssetsForSession,
   onOpenAnalysisForSession,
   onOpenBackupForSession,
@@ -2110,7 +2112,7 @@ export default function HomeClient({
   // Ref to track the current loadList operation for cancellation
   const loadListAbortRef = useRef<AbortController | null>(null);
 
-  async function loadList(nextSource: Source) {
+  const loadList = useCallback(async (nextSource: Source) => {
     // Cancel any in-flight loadList operation
     if (loadListAbortRef.current) {
       loadListAbortRef.current.abort();
@@ -2122,7 +2124,9 @@ export default function HomeClient({
     setError(null);
     setItems([]);
     try {
-      const res = await fetch(`/api/conversations?source=${nextSource}&limit=200&offset=0`, {
+      const params = new URLSearchParams({ source: nextSource, limit: "200", offset: "0" });
+      if (projectRootPath) params.set("projectRootPath", projectRootPath);
+      const res = await fetch(`/api/conversations?${params.toString()}`, {
         signal: abortController.signal
       });
       // Check if this operation was cancelled by a newer one
@@ -2142,7 +2146,7 @@ export default function HomeClient({
         loadListAbortRef.current = null;
       }
     }
-  }
+  }, [projectRootPath]);
 
   async function loadMoreWindsurfChat() {
     if (!selectedId || source !== "windsurf" || content?.kind !== "chat") return;
@@ -2251,7 +2255,7 @@ export default function HomeClient({
     setWindsurfView("chat");
     setCursorView("transcript");
     setCollapsedExecutionGroups({});
-  }, [source]);
+  }, [source, loadList]);
 
   // When items reloads (e.g. after a source-switch triggered by GlobalSearch),
   // re-derive selectedKey from selectedId so the conversation list highlights

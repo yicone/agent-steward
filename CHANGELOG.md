@@ -11,6 +11,17 @@ This file records shipped, merged changes for AgentSteward.
 
 ## Unreleased
 
+### Added
+
+- `2026-06-21` — Project shell identity hardening
+  - Shell now displays the active project display name, boundary cue, evidence state, and context asset count from a bounded project identity model
+  - Added a real, bounded project switch using a native `<Select>` dropdown backed by shell-known local project roots
+  - Project list source is `process.cwd()` plus optional `AGENT_STEWARD_PROJECT_ROOTS` environment variable; no separate registry or workspace manager is introduced
+  - On project switch, the shell lands on `Project Overview` and conservatively clears stale routed context (external selection, assets/analysis/backup handoffs, session viewer URL state)
+  - `Sessions` and `GlobalSearch` are now scoped to the active project root via `projectRootPath`; server-side filtering uses session/search `cwd` against the project root
+  - Added `ProjectEvidenceProviderResult.projectName` and canonical `projectKey` for stable project identity equality
+  - Added `src/lib/projectShellProjects.ts`, `src/lib/server/projectShellContext.ts`, `src/lib/server/projectRootFilter.ts`, and test coverage for project normalization, context, and root filtering
+
 ### Changed
 
 - `2026-05-27` — Project renamed from `agent-storage-manager` to `agent-steward`

@@ -12,9 +12,11 @@ import { GlobalSearch } from "@/components/GlobalSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import type { AnalysisFindingStatus, AnalysisHandoff, AnalysisIssueClass, AnalysisObjectType, AnalysisSeverity } from "@/lib/analysisFindings";
 import type { AssetsHandoff, ContextAssetScope, ContextAssetStatus, ContextAssetSubtype } from "@/lib/contextAssets";
 import { createProjectEvidenceDiagnosticsFindings, type ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
+import type { ShellProject } from "@/lib/projectShellProjects";
 import {
   deriveProjectOverviewSummary,
   type ProjectOverviewAssetSummary,
@@ -768,9 +770,42 @@ function PlaceholderSurface(props: {
   );
 }
 
-export type ProjectShellClientProps = {
-  projectEvidence?: ProjectEvidenceProviderResult | null;
+export type ProjectIdentity = {
+  displayName: string;
+  boundaryCue: string;
+  evidenceState: "loading" | "resolved" | "unavailable" | "empty";
+  assetCount: number;
 };
+
+export type ProjectShellClientProps = {
+  projects: ShellProject[];
+  initialActiveProjectKey: string;
+  projectEvidenceByProjectKey: Record<string, ProjectEvidenceProviderResult>;
+};
+
+export function deriveProjectIdentity(projectEvidence: ProjectEvidenceProviderResult | null | undefined): ProjectIdentity {
+  if (!projectEvidence) {
+    return {
+      displayName: "Loading...",
+      boundaryCue: "Resolving project context",
+      evidenceState: "loading",
+      assetCount: 0,
+    };
+  }
+
+  const evidenceState = projectEvidence.status === "unavailable"
+    ? "unavailable"
+    : projectEvidence.status === "empty"
+      ? "empty"
+      : "resolved";
+
+  return {
+    displayName: projectEvidence.projectName,
+    boundaryCue: projectEvidence.rootLabel,
+    evidenceState,
+    assetCount: projectEvidence.assets.length,
+  };
+}
 
 export function deriveProjectEvidenceOverviewSummary(projectEvidence: ProjectEvidenceProviderResult | null | undefined): ProjectOverviewSummary | undefined {
   if (!projectEvidence) return undefined;
@@ -798,12 +833,20 @@ export function deriveProjectEvidenceOverviewSummary(projectEvidence: ProjectEvi
   });
 }
 
-export default function ProjectShellClient({ projectEvidence }: ProjectShellClientProps) {
+export default function ProjectShellClient({
+  projects,
+  initialActiveProjectKey,
+  projectEvidenceByProjectKey,
+}: ProjectShellClientProps) {
   const [activePage, setActivePage] = useState<ProjectShellPage>("overview");
+  const [activeProjectKey, setActiveProjectKey] = useState(initialActiveProjectKey);
   const [externalSelection, setExternalSelection] = useState<HomeClientExternalSelection | null>(null);
   const [assetsHandoff, setAssetsHandoff] = useState<AssetsHandoff | null>(null);
   const [analysisHandoff, setAnalysisHandoff] = useState<AnalysisHandoff | null>(null);
   const [backupHandoff, setBackupHandoff] = useState<BackupMigrationHandoff | null>(null);
+
+  const activeProject = projects.find((project) => project.projectKey === activeProjectKey) ?? projects[0] ?? null;
+  const projectEvidence = activeProject ? projectEvidenceByProjectKey[activeProject.projectKey] ?? null : null;
 
   const leaveSessionsSurface = useCallback(() => {
     clearSessionViewerUrlState();
@@ -836,6 +879,17 @@ export default function ProjectShellClient({ projectEvidence }: ProjectShellClie
     setBackupHandoff(null);
     setActivePage(page);
   }, [leaveSessionsSurface]);
+
+  const handleProjectSwitch = useCallback((nextProjectKey: string) => {
+    if (nextProjectKey === activeProjectKey) return;
+    leaveSessionsSurface();
+    setExternalSelection(null);
+    setAssetsHandoff(null);
+    setAnalysisHandoff(null);
+    setBackupHandoff(null);
+    setActiveProjectKey(nextProjectKey);
+    setActivePage("overview");
+  }, [activeProjectKey, leaveSessionsSurface]);
 
   const handleOpenAssets = useCallback((handoff: AssetsHandoff) => {
     leaveSessionsSurface();
@@ -988,6 +1042,7 @@ export default function ProjectShellClient({ projectEvidence }: ProjectShellClie
 
   const activeNav = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0]!;
   const overviewSummary = deriveProjectEvidenceOverviewSummary(projectEvidence);
+  const projectIdentity = deriveProjectIdentity(projectEvidence);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -1005,10 +1060,56 @@ export default function ProjectShellClient({ projectEvidence }: ProjectShellClie
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
-              <GlobalSearch onSelect={handleSearchSelect} />
+              <GlobalSearch projectRootPath={activeProject?.rootPath} onSelect={handleSearchSelect} />
               <Button asChild variant="outline" size="sm">
                 <Link href="/settings">Settings</Link>
               </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/60 bg-background/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15">
+                <svg className="h-5 w-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{projectIdentity.displayName}</span>
+                  <Badge
+                    variant={
+                      projectIdentity.evidenceState === "resolved"
+                        ? "ok"
+                        : projectIdentity.evidenceState === "loading"
+                          ? "default"
+                          : "warn"
+                    }
+                  >
+                    {projectIdentity.evidenceState}
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted">{projectIdentity.boundaryCue}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">
+                {projectIdentity.assetCount} context asset{projectIdentity.assetCount !== 1 ? "s" : ""}
+              </span>
+              <Select
+                aria-label="Switch active project"
+                className="min-w-56"
+                value={activeProject?.projectKey ?? ""}
+                onChange={(event) => handleProjectSwitch(event.target.value)}
+                disabled={projects.length <= 1}
+                title={projects.length <= 1 ? "Add AGENT_STEWARD_PROJECT_ROOTS to provide more local projects" : "Switch active project"}
+              >
+                {projects.map((project) => (
+                  <option key={project.projectKey} value={project.projectKey}>
+                    {project.projectName}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 
@@ -1054,6 +1155,7 @@ export default function ProjectShellClient({ projectEvidence }: ProjectShellClie
             <HomeClient
               chrome="embedded"
               externalSelection={externalSelection}
+              projectRootPath={activeProject?.rootPath}
               onOpenAssetsForSession={handleOpenAssetsFromSession}
               onOpenAnalysisForSession={handleOpenAnalysisFromSession}
               onOpenBackupForSession={(handoff) => handleOpenBackup(buildBackupHandoffFromSessions(handoff))}

@@ -15,6 +15,7 @@ import {
   buildBackupHandoffFromOverview,
   buildBackupHandoffFromSessions,
   deriveProjectEvidenceOverviewSummary,
+  deriveProjectIdentity,
   buildExternalSessionSelection,
   resolveInitialProjectShellPage,
   stripSessionViewerSearchParams,
@@ -41,6 +42,7 @@ describe("deriveProjectEvidenceOverviewSummary", () => {
     const providerResult: ProjectEvidenceProviderResult = {
       provider: "project-evidence-provider-v1",
       status: "available",
+      projectName: "agent-storage-manager",
       rootLabel: "repository root",
       evidenceSource: "repo-local",
       items: [],
@@ -76,6 +78,7 @@ describe("deriveProjectEvidenceOverviewSummary", () => {
     const summary = deriveProjectEvidenceOverviewSummary({
       provider: "project-evidence-provider-v1",
       status: "unavailable",
+      projectName: "agent-storage-manager",
       rootLabel: "repository root",
       evidenceSource: "repo-local",
       items: [],
@@ -85,6 +88,26 @@ describe("deriveProjectEvidenceOverviewSummary", () => {
 
     expect(summary?.contextSnapshot).toContainEqual(expect.objectContaining({ id: "assets", value: "Unknown" }));
     expect(summary?.identity.evidenceKind).toBe("none");
+  });
+});
+
+describe("deriveProjectIdentity", () => {
+  it("uses the active project display name and root boundary", () => {
+    expect(deriveProjectIdentity({
+      provider: "project-evidence-provider-v1",
+      status: "available",
+      projectName: "agent-storage-manager",
+      rootLabel: "/Users/tr/Workspace/agent-storage-manager",
+      evidenceSource: "repo-local",
+      items: [],
+      assets: [],
+      diagnostics: [],
+    })).toEqual({
+      displayName: "agent-storage-manager",
+      boundaryCue: "/Users/tr/Workspace/agent-storage-manager",
+      evidenceState: "resolved",
+      assetCount: 0,
+    });
   });
 });
 

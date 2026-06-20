@@ -36,6 +36,16 @@ Optional: override the config file path via env var (useful for local workspace 
 export AGENT_STEWARD_CONFIG_PATH=./.local/config.json
 ```
 
+### Testing multi-project shell switching
+
+To exercise the bounded project switcher with multiple local projects:
+
+```bash
+AGENT_STEWARD_PROJECT_ROOTS="/Users/tr/Workspace/project-a:/Users/tr/Workspace/project-b" pnpm dev
+```
+
+The shell header will display the active project name and boundary, and the project switcher will list the current working directory plus the configured roots. `Sessions` and `GlobalSearch` are scoped to the active project root.
+
 ### Testing multi-root features
 
 To exercise health indicators, duplicate detection, and multi-root listing without real sessions:

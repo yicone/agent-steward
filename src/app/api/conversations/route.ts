@@ -9,6 +9,7 @@ import { readConfig } from "@/lib/server/config";
 import { detectDuplicates, listConversationFiles } from "@/lib/server/conversations";
 import { inferWindsurfRecoverability } from "@/lib/parse/windsurfRecoverability";
 import { getTrajectoryMetaMapCached } from "@/lib/server/metaCache";
+import { belongsToProjectRoot } from "@/lib/server/projectRootFilter";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ function isSource(value: string | null): value is Source {
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const sourceParam = url.searchParams.get("source");
+  const projectRootPath = url.searchParams.get("projectRootPath");
   if (!isSource(sourceParam)) {
     return NextResponse.json({ error: "Missing/invalid source. Use ?source=antigravity|windsurf|codex|cursor" }, { status: 400 });
   }
@@ -131,8 +133,10 @@ export async function GET(req: Request) {
     };
   }));
 
-  // Re-sort by the effective mtimeMs to ensure proper ordering
-  withMeta.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const projectScopedItems = withMeta.filter((item) => belongsToProjectRoot(item.cwd, projectRootPath));
 
-  return NextResponse.json({ items: withMeta, limit, offset });
+  // Re-sort by the effective mtimeMs to ensure proper ordering
+  projectScopedItems.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  return NextResponse.json({ items: projectScopedItems, limit, offset });
 }
