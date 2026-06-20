@@ -148,27 +148,29 @@ function isProcessAlive(pid: number): boolean {
 }
 
 async function listLogsDirsByMtime(): Promise<string[]> {
-  const logsRoot = platformPaths.windsurfLogsRoot();
-  let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
-  try {
-    dirents = await fs.readdir(logsRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const dirs = dirents
-    .filter((d) => d.isDirectory())
-    .map((d) => path.join(logsRoot, d.name));
-
+  const logsRoots = [platformPaths.windsurfLogsRoot(), platformPaths.devinLogsRoot()];
   const withMtime: Array<{ p: string; mtimeMs: number }> = [];
-  for (const p of dirs) {
+
+  for (const logsRoot of logsRoots) {
+    let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
     try {
-      const st = await fs.stat(p);
-      withMtime.push({ p, mtimeMs: st.mtimeMs });
+      dirents = await fs.readdir(logsRoot, { withFileTypes: true });
     } catch {
-      // ignore
+      continue;
+    }
+
+    for (const d of dirents) {
+      if (!d.isDirectory()) continue;
+      const p = path.join(logsRoot, d.name);
+      try {
+        const st = await fs.stat(p);
+        withMtime.push({ p, mtimeMs: st.mtimeMs });
+      } catch {
+        // ignore
+      }
     }
   }
+
   withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return withMtime.map((x) => x.p);
 }
@@ -192,12 +194,16 @@ async function findLatestWindsurfLogFile(): Promise<string | null> {
     for (const d of windowDirents) {
       if (!d.isDirectory()) continue;
       if (!d.name.startsWith("window")) continue;
-      const p = path.join(logsDir, d.name, "exthost", "codeium.windsurf", "Windsurf.log");
-      try {
-        const st = await fs.stat(p);
-        if (st.isFile()) candidates.push({ p, mtimeMs: st.mtimeMs });
-      } catch {
-        // ignore
+      // Search for both Windsurf.log (legacy) and Devin.log (rebranded product).
+      // Both have identical format and contain the same LS pid/port start info.
+      for (const logFileName of ["Windsurf.log", "Devin.log"] as const) {
+        const p = path.join(logsDir, d.name, "exthost", "codeium.windsurf", logFileName);
+        try {
+          const st = await fs.stat(p);
+          if (st.isFile()) candidates.push({ p, mtimeMs: st.mtimeMs });
+        } catch {
+          // ignore
+        }
       }
     }
   }

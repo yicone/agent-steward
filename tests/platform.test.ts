@@ -16,6 +16,9 @@ describe("createPlatformPaths", () => {
       expect(p.windsurfLogsRoot()).toBe(
         path.join(home, "Library", "Application Support", "Windsurf", "logs")
       );
+      expect(p.devinLogsRoot()).toBe(
+        path.join(home, "Library", "Application Support", "Devin", "logs")
+      );
       expect(p.antigravityVscdbPath()).toBe(
         path.join(home, "Library", "Application Support", "Antigravity", "User", "globalStorage", "state.vscdb")
       );
@@ -32,6 +35,9 @@ describe("createPlatformPaths", () => {
       expect(p.windsurfLogsRoot()).toBe(
         path.join("/mock/AppData/Roaming", "Windsurf", "logs")
       );
+      expect(p.devinLogsRoot()).toBe(
+        path.join("/mock/AppData/Roaming", "Devin", "logs")
+      );
       expect(p.antigravityVscdbPath()).toBe(
         path.join("/mock/AppData/Roaming", "Antigravity", "User", "globalStorage", "state.vscdb")
       );
@@ -44,6 +50,7 @@ describe("createPlatformPaths", () => {
 
       expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
       expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
+      expect(p.devinLogsRoot()).toBe(path.join(expected, "Devin", "logs"));
     });
 
     it("treats empty APPDATA as unset", () => {
@@ -73,6 +80,9 @@ describe("createPlatformPaths", () => {
       expect(p.windsurfLogsRoot()).toBe(
         path.join("/mock/.config", "Windsurf", "logs")
       );
+      expect(p.devinLogsRoot()).toBe(
+        path.join("/mock/.config", "Devin", "logs")
+      );
       expect(p.antigravityVscdbPath()).toBe(
         path.join("/mock/.config", "Antigravity", "User", "globalStorage", "state.vscdb")
       );
@@ -85,6 +95,7 @@ describe("createPlatformPaths", () => {
 
       expect(p.antigravityLogsRoot()).toBe(path.join(expected, "Antigravity", "logs"));
       expect(p.windsurfLogsRoot()).toBe(path.join(expected, "Windsurf", "logs"));
+      expect(p.devinLogsRoot()).toBe(path.join(expected, "Devin", "logs"));
     });
 
     it("treats empty XDG_CONFIG_HOME as unset", () => {
@@ -118,6 +129,7 @@ describe("createPlatformPaths", () => {
         const p = createPlatformPaths(platform);
         expect(p.antigravityLogsRoot().length).toBeGreaterThan(0);
         expect(p.windsurfLogsRoot().length).toBeGreaterThan(0);
+        expect(p.devinLogsRoot().length).toBeGreaterThan(0);
         expect(p.antigravityVscdbPath().length).toBeGreaterThan(0);
       }
     });

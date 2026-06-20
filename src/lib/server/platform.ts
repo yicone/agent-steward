@@ -23,6 +23,8 @@ export interface PlatformPaths {
   antigravityLogsRoot(): string;
   /** Root directory containing Windsurf extension host log session folders. */
   windsurfLogsRoot(): string;
+  /** Root directory containing Devin extension host log session folders. */
+  devinLogsRoot(): string;
   /** Default path for Antigravity VS Code global state database. */
   antigravityVscdbPath(): string;
   /**
@@ -49,6 +51,8 @@ function darwinPaths(): PlatformPaths {
       path.join(home, "Library", "Application Support", "Antigravity", "logs"),
     windsurfLogsRoot: () =>
       path.join(home, "Library", "Application Support", "Windsurf", "logs"),
+    devinLogsRoot: () =>
+      path.join(home, "Library", "Application Support", "Devin", "logs"),
     antigravityVscdbPath: () =>
       path.join(home, "Library", "Application Support", "Antigravity", "User", "globalStorage", "state.vscdb"),
     sqlite3Binary: () => "/usr/bin/sqlite3",
@@ -69,6 +73,8 @@ function win32Paths(env?: PlatformPathsEnv): PlatformPaths {
       path.join(appData, "Antigravity", "logs"),
     windsurfLogsRoot: () =>
       path.join(appData, "Windsurf", "logs"),
+    devinLogsRoot: () =>
+      path.join(appData, "Devin", "logs"),
     antigravityVscdbPath: () =>
       path.join(appData, "Antigravity", "User", "globalStorage", "state.vscdb"),
     // TODO: Validate — sqlite3 is not typically available on Windows by default.
@@ -91,6 +97,8 @@ function linuxPaths(env?: PlatformPathsEnv): PlatformPaths {
       path.join(configHome, "Antigravity", "logs"),
     windsurfLogsRoot: () =>
       path.join(configHome, "Windsurf", "logs"),
+    devinLogsRoot: () =>
+      path.join(configHome, "Devin", "logs"),
     antigravityVscdbPath: () =>
       path.join(configHome, "Antigravity", "User", "globalStorage", "state.vscdb"),
     sqlite3Binary: () => "/usr/bin/sqlite3",
