@@ -30,5 +30,5 @@
 
 - [x] 4.1 Update README to describe repo-local project evidence provider behavior and remaining boundaries.
 - [x] 4.2 Update relevant QA prompt(s) under `docs/viewer/` to verify provider-backed evidence, zero-state behavior, and seed fallback labeling.
-- [ ] 4.3 Add or update a QA report only after browser/runtime verification is performed for the implemented UI wiring.
+- [x] 4.3 Add or update a QA report only after browser/runtime verification is performed for the implemented UI wiring.
 - [x] 4.4 Run `pnpm test`, `pnpm lint`, `pnpm build`, and `OPENSPEC_TELEMETRY=0 openspec validate project-evidence-provider-v1 --strict`.
