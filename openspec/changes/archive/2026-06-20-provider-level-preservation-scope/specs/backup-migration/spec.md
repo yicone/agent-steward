@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Backup / Migration remains workflow-bounded
 The system SHALL keep `Backup / Migration` bounded to explicit preservation,

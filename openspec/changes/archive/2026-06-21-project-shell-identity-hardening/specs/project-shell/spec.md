@@ -37,6 +37,8 @@ action as part of the project-first shell.
 - **AND** it does not preserve stale page-local object focus when that focus no
   longer belongs to the new project
 
+## ADDED Requirements
+
 ### Requirement: Routed context safety on project change
 The system SHALL degrade or clear shell-owned routed context explicitly when the
 active project changes.
