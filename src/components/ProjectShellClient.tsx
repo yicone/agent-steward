@@ -350,7 +350,7 @@ export function buildBackupHandoffFromSessions(context: {
     subtitle: `Back up session ${context.sessionId} from Sessions.`,
     continueLabel:
       context.recoverability && context.recoverability !== "ls_readable"
-        ? "Review recoverability evidence before attempting preservation for this Windsurf session."
+        ? "Review recoverability evidence before attempting preservation for this Cascade session."
         : "Use the session backup workflow to preserve this session record.",
     returnLabel: "Return to the originating session for evidence review.",
     workflowType: "session-backup",

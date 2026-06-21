@@ -64,6 +64,7 @@ const FIXED_EVIDENCE = [
   { path: ".github/copilot-instructions.md", kind: "rule", source: "unknown" },
   { path: ".codex/hooks.json", kind: "command", source: "codex" },
   { path: ".windsurf/hooks.json", kind: "command", source: "windsurf" },
+  { path: ".devin/hooks.json", kind: "command", source: "devin" },
   { path: ".cursor/mcp.json", kind: "command", source: "cursor" },
   { path: ".cursorrules", kind: "rule", source: "cursor" },
 ] satisfies Array<{ path: string; kind: ProjectEvidenceKind; source: ContextAssetSource }>;
@@ -81,6 +82,11 @@ const DIRECTORY_EVIDENCE = [
   { base: ".windsurf/rules", recursive: false, kind: "rule", source: "windsurf", extension: ".md" },
   { base: ".windsurf/workflows", recursive: false, kind: "command", source: "windsurf" },
   { base: ".windsurf/hooks", recursive: false, kind: "command", source: "windsurf" },
+  { base: ".devin/skills", recursive: false, kind: "skill", source: "devin", fileName: "SKILL.md" },
+  { base: ".devin/rules", recursive: false, kind: "rule", source: "devin", extension: ".md" },
+  { base: ".devin/workflows", recursive: false, kind: "command", source: "devin" },
+  { base: ".devin/plans", recursive: false, kind: "command", source: "devin", extension: ".md" },
+  { base: ".devin/hooks", recursive: false, kind: "command", source: "devin" },
   { base: ".cursor/rules", recursive: false, kind: "rule", source: "cursor", extension: ".mdc" },
 ] satisfies EvidencePattern[];
 
@@ -188,6 +194,7 @@ function sourceLabel(source: ContextAssetSource): string {
   if (source === "codex") return "Codex";
   if (source === "cursor") return "Cursor";
   if (source === "windsurf") return "Windsurf";
+  if (source === "devin") return "Devin";
   if (source === "antigravity") return "Antigravity";
   return "repo-local";
 }

@@ -71,10 +71,16 @@ describe("getWindsurfRecommendedAction", () => {
   });
 
   it("maps tokenRequired=false to session restart guidance", () => {
-    expect(getWindsurfRecommendedAction({ attached: false, tokenRequired: false })).toContain("start/restart");
+    const action = getWindsurfRecommendedAction({ attached: false, tokenRequired: false });
+    expect(action).toContain("start/restart");
+    expect(action).toContain("Windsurf");
+    expect(action).toContain("Cascade");
   });
 
   it("maps tokenRequired=undefined to invalid/expired-token guidance", () => {
-    expect(getWindsurfRecommendedAction({ attached: false, tokenRequired: undefined })).toContain("invalid or expired");
+    const action = getWindsurfRecommendedAction({ attached: false, tokenRequired: undefined });
+    expect(action).toContain("invalid or expired");
+    expect(action).toContain("Windsurf");
+    expect(action).toContain("Cascade");
   });
 });

@@ -148,32 +148,34 @@ function isProcessAlive(pid: number): boolean {
 }
 
 async function listLogsDirsByMtime(): Promise<string[]> {
-  const logsRoot = platformPaths.windsurfLogsRoot();
-  let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
-  try {
-    dirents = await fs.readdir(logsRoot, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-
-  const dirs = dirents
-    .filter((d) => d.isDirectory())
-    .map((d) => path.join(logsRoot, d.name));
-
+  const logsRoots = [platformPaths.windsurfLogsRoot(), platformPaths.devinLogsRoot()];
   const withMtime: Array<{ p: string; mtimeMs: number }> = [];
-  for (const p of dirs) {
+
+  for (const logsRoot of logsRoots) {
+    let dirents: Array<{ name: string; isDirectory(): boolean }> = [];
     try {
-      const st = await fs.stat(p);
-      withMtime.push({ p, mtimeMs: st.mtimeMs });
+      dirents = await fs.readdir(logsRoot, { withFileTypes: true });
     } catch {
-      // ignore
+      continue;
+    }
+
+    for (const d of dirents) {
+      if (!d.isDirectory()) continue;
+      const p = path.join(logsRoot, d.name);
+      try {
+        const st = await fs.stat(p);
+        withMtime.push({ p, mtimeMs: st.mtimeMs });
+      } catch {
+        // ignore
+      }
     }
   }
+
   withMtime.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return withMtime.map((x) => x.p);
 }
 
-async function findLatestWindsurfLogFile(): Promise<string | null> {
+export async function findLatestCascadeLogFile(): Promise<string | null> {
   const logDirs = await listLogsDirsByMtime();
   // Some Windsurf log session folders may exist without containing the extension host logs
   // (e.g. created during startup). Scan all available session folders; in practice the
@@ -192,12 +194,16 @@ async function findLatestWindsurfLogFile(): Promise<string | null> {
     for (const d of windowDirents) {
       if (!d.isDirectory()) continue;
       if (!d.name.startsWith("window")) continue;
-      const p = path.join(logsDir, d.name, "exthost", "codeium.windsurf", "Windsurf.log");
-      try {
-        const st = await fs.stat(p);
-        if (st.isFile()) candidates.push({ p, mtimeMs: st.mtimeMs });
-      } catch {
-        // ignore
+      // Search for both Windsurf.log (legacy) and Devin.log (rebranded product).
+      // Both have identical format and contain the same LS pid/port start info.
+      for (const logFileName of ["Windsurf.log", "Devin.log"] as const) {
+        const p = path.join(logsDir, d.name, "exthost", "codeium.windsurf", logFileName);
+        try {
+          const st = await fs.stat(p);
+          if (st.isFile()) candidates.push({ p, mtimeMs: st.mtimeMs });
+        } catch {
+          // ignore
+        }
       }
     }
   }
@@ -236,12 +242,12 @@ async function readProcessCommandLine(pid: number): Promise<string | null> {
 }
 
 async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfConnection> {
-  const logPath = await findLatestWindsurfLogFile();
+  const logPath = await findLatestCascadeLogFile();
   if (!logPath) throw new Error("Windsurf log not found. Open Windsurf and start a Cascade session.");
 
   const logText = await fs.readFile(logPath, "utf-8").catch(() => "");
   const startInfo = extractLatestWindsurfStartInfoFromLog(logText);
-  if (!startInfo) throw new Error("Failed to parse Windsurf language server pid/port from log.");
+  if (!startInfo) throw new Error("Failed to parse language server pid/port from the IDE log.");
   if (!isProcessAlive(startInfo.pid)) {
     throw new Error("Windsurf language server is not running. Keep Windsurf open and start a Cascade session.");
   }
@@ -282,7 +288,7 @@ async function resolveWindsurfConnection(config: AppConfig): Promise<WindsurfCon
 }
 
 export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatus["windsurf"]> {
-  const logPath = await findLatestWindsurfLogFile();
+  const logPath = await findLatestCascadeLogFile();
   if (!logPath) {
     const recommendedAction = "Open Windsurf and start a Cascade session.";
     return {
@@ -298,15 +304,15 @@ export async function getWindsurfStatus(config: AppConfig): Promise<SourcesStatu
   const logText = await fs.readFile(logPath, "utf-8").catch(() => "");
   const startInfo = extractLatestWindsurfStartInfoFromLog(logText);
   if (!startInfo) {
-    const recommendedAction = "Start a Cascade session in Windsurf so pid/port are logged.";
+    const recommendedAction = "Start a Cascade session so pid/port are logged.";
     return {
       attached: false,
       attachMethod: "log",
       logPath,
       csrfTokenSource: "none",
       recommendedAction,
-      lastError: "Failed to parse pid/port from Windsurf.log.",
-      error: `Failed to parse pid/port from Windsurf.log. ${recommendedAction}`
+      lastError: "Failed to parse pid/port from the IDE log.",
+      error: `Failed to parse pid/port from the IDE log. ${recommendedAction}`
     };
   }
 

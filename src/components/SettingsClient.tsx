@@ -201,10 +201,10 @@ export default function SettingsClient() {
       ) : null}
 
       <Card className="mb-4 p-3">
-        <div className="mb-2 text-sm font-semibold">Windsurf token override (fallback)</div>
+        <div className="mb-2 text-sm font-semibold">Windsurf token override (Cascade fallback)</div>
         <div className="mb-3 text-xs text-muted">
-          Attach mode prefers reading <span className="font-mono">--csrf_token</span> from the Windsurf LS process.
-          If that fails on your system, you can paste the token here.
+          Attach mode prefers reading <span className="font-mono">--csrf_token</span> from the running Cascade LS process.
+          If that fails on your system, you can paste the Windsurf token here.
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Input

@@ -77,7 +77,7 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
   - `Backup / Migration` provides bounded workflow-first backup and migration-preview surfaces without turning into a generic tools drawer or migration apply UI
 - Assets foundation:
-  - repo-local project evidence provider for explicit agent-facing files: `AGENTS.md`, Copilot instructions/prompts/skills, Codex skills/agents/hooks, cross-agent `.agents` / `.agent` skills, Windsurf skills/rules/workflows/hooks, and Cursor repo-local files such as `.cursor/mcp.json`, `.cursorrules`, and `.cursor/rules/*.mdc`
+  - repo-local project evidence provider for explicit agent-facing files: `AGENTS.md`, Copilot instructions/prompts/skills, Codex skills/agents/hooks, cross-agent `.agents` / `.agent` skills, Windsurf skills/rules/workflows/hooks (`.windsurf/`), Devin skills/rules/workflows/plans/hooks (`.devin/`), and Cursor repo-local files such as `.cursor/mcp.json`, `.cursorrules`, and `.cursor/rules/*.mdc`
   - local-first reusable context asset model with subtype, scope, source, status, provenance, optional body summary, in-effect/usage metadata, and derived governance health
   - provider-backed inventory uses project-relative provenance paths and does not read user-global runtime stores, external paths, cloud sources, session transcript stores, or paths outside the repository root
   - subtype/scope/source/status filtering with asset summary, governance issue class counts, inventory, selected detail, provenance, and in-effect/usage regions
@@ -141,6 +141,7 @@ For detailed view semantics and cross-source alignment notes, see `docs/viewer/t
   - Legacy fallback: `~/.gemini/antigravity/daemon/ls_*.json` (may be stale on newer builds).
 - Antigravity: for conversation list `title/cwd`, this app reads `~/Library/Application Support/Antigravity/User/globalStorage/state.vscdb` (VS Code global state) locally.
 - Windsurf: Windsurf must be running (and have started a Cascade session at least once). This app parses the language-server port from Windsurf logs and tries to read `--csrf_token` from process args.
+  - **Devin** is the rebranded product name for Windsurf. Project-local assets in `.devin/` directories are discovered alongside legacy `.windsurf/` directories; session reading still targets the Windsurf (Cascade) LS and has not been validated against Devin Local or Devin Cloud runtimes.
   - On current Windsurf builds, the live token may be present in the LS process environment as `WINDSURF_CSRF_TOKEN`, so this app prefers `ps eww` output when available.
   - Manual fallback: set `csrfTokenOverride` in Settings, but only if you obtained the live LS token from the running Windsurf process/session.
   - Do not use `codeium.windsurf-windsurf_auth-` from `~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb`; that UUID is not the LS CSRF token on current Windsurf builds.
