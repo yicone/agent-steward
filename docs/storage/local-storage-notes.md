@@ -100,7 +100,11 @@
 - **LS 日志**：`~/Library/Application Support/Devin/logs/<timestamp>/window*/exthost/codeium.windsurf/Devin.log`
   - 格式与 `Windsurf.log` 完全一致：包含 `Starting language server process with pid <N>` 和 `Language server listening on random port at <PORT>`。
   - **Agent Steward 现有 attach 逻辑可直接适配**：只需将日志搜索路径从 `Windsurf.log` 扩展到 `Devin.log`。
-- **Session 文件**：仍在 `~/.codeium/windsurf/cascade/*.pb`（50 个 `.pb` 文件实测存在）。
+- **Session 文件**：仍在 `~/.codeium/windsurf/cascade/*.pb`（与 Windsurf 共享同一目录）。
+- **关键发现**：`.pb` 文件本身在 Windsurf 和 Devin Desktop 之间共享，但 session 的 `title/cwd/lastActivity` 等元数据各自写入各自 IDE 的 `state.vscdb`：
+  - Windsurf 元数据：`~/Library/Application Support/Windsurf/User/globalStorage/state.vscdb`
+  - Devin Desktop 元数据：`~/Library/Application Support/Devin/User/globalStorage/state.vscdb`
+  - 因此：在 Devin IDE 中创建的 Cascade session，其 `.pb` 文件会立即出现在共享目录，但 Windsurf UI 因读取自己的 `state.vscdb` 而可能暂时不显示该 session；反之亦然。
 - **globalStorage**：`~/Library/Application Support/Devin/User/globalStorage/state.vscdb`（与 Windsurf 结构一致）。
 
 #### Devin Desktop — Devin Local runtime（ACP 协议）
@@ -175,13 +179,14 @@ CREATE TABLE tool_call_state (
 ```
 
 - `chat_message` 是 JSON 字符串，包含 `role`（`system`/`user`/`assistant`/`tool`）、`content`、`message_id`、可选 `tool_call_id` 等字段。
-- `backend_type` 实测只有 `Windsurf`/`windsurf` — 说明 Devin CLI 的 session 目前全部通过 Cascade runtime 产生，Devin Local 和 Devin Cloud 的 session 可能尚未被记录或使用不同的存储路径。
+- `backend_type` 实测只有 `Windsurf`/`windsurf`（大小写差异）— 说明当前 `sessions.db` 中记录的 session 全部通过 Cascade runtime 产生。
+- **Devin Local runtime 的 session 尚未出现在 `sessions.db` 中**：用户选择 Agent Runtime = Devin Local 创建的 session，在 Agent Steward 的 Windsurf root 和 Devin CLI `sessions.db` 中均未出现，说明其存储路径尚未定位（可能使用不同的 SQLite 文件或尚未落盘）。
 - Summaries 目录 `~/.local/share/devin/cli/summaries/` 包含 `history_<sessionId>.md` 文件，是会话的 markdown 摘要。
 
 #### Devin CLI 其他路径
 
 | 路径 | 用途 |
-|------|------|
+| --- | --- |
 | `~/.config/devin/config.json` | Devin CLI 配置 |
 | `~/.config/devin/credentials.toml` | Devin CLI 凭据 |
 | `~/.local/share/devin/cli/sessions.db` | Session 数据库 |
@@ -197,7 +202,7 @@ CREATE TABLE tool_call_state (
 
 #### 对 Agent Steward 的影响
 
-1. **Cascade session reading**：现有 Windsurf attach 逻辑可直接适配 Devin Desktop — LS 进程相同，CSRF token 环境变量名相同，session `.pb` 文件路径相同。唯一需要扩展的是日志搜索路径（`Windsurf.log` → 也搜索 `Devin.log`）。
+1. **Cascade session reading**：现有 Windsurf attach 逻辑可直接适配 Devin Desktop — LS 进程相同，CSRF token 环境变量名相同，session `.pb` 文件路径相同。唯一需要扩展的是日志搜索路径（`Windsurf.log` → 也搜索 `Devin.log`）。注意：若要让 Agent Steward 显示在 Devin IDE 中创建的 Cascade session 的标题，需要同时读取 `Devin/User/globalStorage/state.vscdb` 中的元数据。
 2. **Devin CLI sessions.db**：是一个独立的、可直接读取的 SQLite 数据库，不需要 live LS 进程。schema 已记录，可作为后续 Devin Local session reading 的基础。
 3. **Devin Cloud**：session 不落本地，当前无法解析。
 
