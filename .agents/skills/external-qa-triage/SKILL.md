@@ -21,13 +21,15 @@ source of truth for the applicable test, build, specification, and browser comma
    - `non-blocker`: worth tracking but not required before merge.
    - `needs-confirmation`: unclear, environment-specific, or product-scope dependent.
 3. If runtime verification or browser retest is needed, follow the repository's authorization
-   rules. Delegate only when delegation is explicitly authorized; otherwise keep the retest
-   in the control thread.
-4. Fix confirmed blockers in the PR branch when they are in scope.
+   rules. Delegate only when delegation is explicitly authorized; otherwise run the retest in
+   the current thread or session.
+4. Fix confirmed blockers in the change branch when they are in scope and the required VCS
+   tooling is available; otherwise report the blocker and the missing execution prerequisite.
 5. Preserve the original QA result. If fixed, add a dated re-test or resolution note rather than deleting the failure.
 6. Run the repository's targeted tests, build, specification, and browser checks when applicable.
    Do not invent commands or assume a particular package manager.
-7. Commit QA fixes separately from unrelated process docs or follow-up features.
+7. If fixes are made, commit them separately from unrelated process docs or follow-up features
+   when the repository uses version control; otherwise report the uncommitted validation state.
 8. Do not commit browser-runner artifacts, temporary reports, credentials, or recordings unless
    the task explicitly requires them.
 
