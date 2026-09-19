@@ -20,7 +20,7 @@ import type { Source } from "@/lib/types";
 
 export type ProjectOverviewPageState = "loading" | "no-project-context" | "normal" | "issue";
 export type ProjectOverviewSnapshotStatus = "ok" | "issue" | "empty" | "unknown";
-export type ProjectOverviewRouteTarget = "sessions" | "assets" | "analysis" | "backup";
+export type ProjectOverviewRouteTarget = "continue" | "sessions" | "assets" | "analysis" | "backup";
 export type ProjectOverviewModuleKind =
   | "context-snapshot"
   | "in-effect-assets"
@@ -47,6 +47,7 @@ export type ProjectOverviewRoute = {
   findingStatus?: AnalysisFindingStatus;
   findingId?: string;
   workflowType?: BackupWorkflowType;
+  workItemId?: string;
 };
 
 export type ProjectOverviewProjectIdentity = {

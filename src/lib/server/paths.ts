@@ -24,3 +24,20 @@ export function getProjectBundlesRoot(): string {
   if (override && override.trim().length) return expandHome(override.trim());
   return path.join(getAgentStorageManagerDir(), "project-bundles");
 }
+
+/** Managed local roots for continuity Work Items and immutable Work Packages. */
+export function getWorkItemsRoot(): string {
+  const override = process.env.AGENT_STEWARD_WORK_ITEM_ROOT;
+  if (override && override.trim().length) return expandHome(override.trim());
+  return path.join(getAgentStorageManagerDir(), "work-items");
+}
+
+export function getWorkPackagesRoot(): string {
+  const override = process.env.AGENT_STEWARD_WORK_PACKAGE_ROOT;
+  if (override && override.trim().length) return expandHome(override.trim());
+  return path.join(getAgentStorageManagerDir(), "work-packages");
+}
+
+// Aliases kept explicit for callers that use the singular domain terminology.
+export const getWorkItemRoot = getWorkItemsRoot;
+export const getWorkPackageRoot = getWorkPackagesRoot;

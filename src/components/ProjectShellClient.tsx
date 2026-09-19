@@ -6,6 +6,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import AnalysisFoundation from "@/components/AnalysisFoundation";
 import AssetsFoundation from "@/components/AssetsFoundation";
 import BackupMigrationFoundation from "@/components/BackupMigrationFoundation";
+import ContinueSurface from "@/components/ContinueSurface";
+import WorkItemSurface from "@/components/WorkItemSurface";
 import { buildBackupHandoffInstanceKey, type BackupMigrationHandoff, type BackupWorkflowType, type BackupSessionSelection } from "@/lib/backupMigration";
 import HomeClient, { type HomeClientAssetHandoff, type HomeClientExternalSelection, type HomeClientSessionHandoff } from "@/components/HomeClient";
 import { GlobalSearch } from "@/components/GlobalSearch";
@@ -30,8 +32,9 @@ import {
 import { cancelPendingUrlSync } from "@/lib/urlState";
 import { cn } from "@/lib/utils";
 import type { Source } from "@/lib/types";
+import type { WorkItem } from "@/lib/workContinuity";
 
-export type ProjectShellPage = "overview" | "sessions" | "assets" | "analysis" | "backup";
+export type ProjectShellPage = "continue" | "overview" | "sessions" | "assets" | "analysis" | "backup" | "work";
 
 type ProjectShellNavItem = {
   id: ProjectShellPage;
@@ -47,6 +50,7 @@ type PlaceholderCue = {
 type SessionAssetsHandoffInput = Pick<HomeClientAssetHandoff, "sessionId" | "subtype">;
 
 const NAV_ITEMS: ProjectShellNavItem[] = [
+  { id: "continue", label: "Continue Work", eyebrow: "continuity" },
   { id: "overview", label: "Project Overview", eyebrow: "govern" },
   { id: "sessions", label: "Sessions", eyebrow: "evidence" },
   { id: "assets", label: "Assets", eyebrow: "context" },
@@ -56,7 +60,9 @@ const NAV_ITEMS: ProjectShellNavItem[] = [
 
 export function resolveInitialProjectShellPage(search: string): ProjectShellPage {
   const params = new URLSearchParams(search);
-  return params.has("id") || params.has("source") ? "sessions" : "overview";
+  if (params.has("workItemId")) return "work";
+  if (params.has("continue")) return "continue";
+  return params.has("id") || params.has("source") ? "sessions" : "continue";
 }
 
 export function buildExternalSessionSelection(input: {
@@ -566,8 +572,80 @@ function ProjectOverviewQuickActionButton(props: {
   );
 }
 
+function ProjectOverviewWorkItems(props: {
+  projectRootPath?: string;
+  onRoute(route: ProjectOverviewRoute): void;
+}) {
+  const [items, setItems] = useState<WorkItem[]>([]);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/work-items", { cache: "no-store" })
+      .then(async (response) => {
+        const body = await response.json() as { workItems?: WorkItem[] };
+        if (!response.ok) throw new Error("Work Items unavailable");
+        if (!cancelled) {
+          setItems(body.workItems ?? []);
+          setState("ready");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setState("error");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const visible = props.projectRootPath
+    ? items.filter((item) => item.project.rootPath === props.projectRootPath)
+    : items;
+  const actionable = visible.filter((item) => ["active", "ready-to-handoff", "blocked", "captured", "organized"].includes(item.status));
+
+  return (
+    <Card className="p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-[0.2em] text-muted">Work Items</div>
+          <h3 className="mt-2 font-semibold">Continue recent, blocked, or ready work</h3>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            Work Items preserve the next step across agent sessions. Review the boundary before opening a handoff package.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => props.onRoute({ target: "continue", label: "Continue Work", module: "quick-actions" })}
+        >
+          Open Continue Work
+        </Button>
+      </div>
+      {state === "loading" ? <p className="mt-4 text-sm text-muted">Loading local Work Items…</p> : null}
+      {state === "error" ? <p className="mt-4 text-sm text-amber-200">Work Items could not be loaded. Continue Work remains available.</p> : null}
+      {state === "ready" && actionable.length === 0 ? <p className="mt-4 text-sm text-muted">No recent Work Items are associated with this project.</p> : null}
+      {actionable.length > 0 ? (
+        <div className="mt-4 grid gap-2">
+          {actionable.slice(0, 3).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/35 px-3 py-2 text-left transition-colors hover:border-accent/50"
+              onClick={() => props.onRoute({ target: "continue", label: "Open Work Item", module: "quick-actions", workItemId: item.id })}
+            >
+              <span className="min-w-0 truncate text-sm">{item.goal.value}</span>
+              <Badge variant={item.status === "blocked" ? "bad" : item.status === "ready-to-handoff" || item.status === "active" ? "ok" : "warn"}>
+                {item.status === "ready-to-handoff" ? "ready" : item.status}
+              </Badge>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 export function ProjectOverviewSurface(props: {
   summary?: ProjectOverviewSummary;
+  projectRootPath?: string;
   onRoute(route: ProjectOverviewRoute): void;
 }) {
   const summary = props.summary ?? deriveProjectOverviewSummary();
@@ -620,6 +698,8 @@ export function ProjectOverviewSurface(props: {
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-4">
         {headerCard}
+
+        <ProjectOverviewWorkItems projectRootPath={props.projectRootPath} onRoute={props.onRoute} />
 
         <Card className="p-4">
           <div className="text-xs uppercase tracking-[0.2em] text-muted">Context Snapshot</div>
@@ -721,8 +801,9 @@ export function ProjectOverviewSurface(props: {
           ))}
         </div>
         <p className="mt-4 text-xs leading-5 text-muted">
-          Scope boundary: no runtime orchestration, cross-agent sync, migration apply, vendor-runtime restore, cloud sync,
-          privacy redaction, full transcript rendering, full asset inventory, findings table, or workflow execution body.
+          Scope boundary: handoff packages are reviewed local artifacts; there is no automatic runtime injection, code
+          modification, cloud sync, migration apply, vendor-runtime restore, full transcript rendering, full asset inventory,
+          findings table, or workflow execution body.
         </p>
       </Card>
     </div>
@@ -781,6 +862,7 @@ export type ProjectShellClientProps = {
   projects: ShellProject[];
   initialActiveProjectKey: string;
   projectEvidenceByProjectKey: Record<string, ProjectEvidenceProviderResult>;
+  initialPage?: ProjectShellPage;
 };
 
 export function deriveProjectIdentity(projectEvidence: ProjectEvidenceProviderResult | null | undefined): ProjectIdentity {
@@ -837,13 +919,15 @@ export default function ProjectShellClient({
   projects,
   initialActiveProjectKey,
   projectEvidenceByProjectKey,
+  initialPage = "continue",
 }: ProjectShellClientProps) {
-  const [activePage, setActivePage] = useState<ProjectShellPage>("overview");
+  const [activePage, setActivePage] = useState<ProjectShellPage>(initialPage);
   const [activeProjectKey, setActiveProjectKey] = useState(initialActiveProjectKey);
   const [externalSelection, setExternalSelection] = useState<HomeClientExternalSelection | null>(null);
   const [assetsHandoff, setAssetsHandoff] = useState<AssetsHandoff | null>(null);
   const [analysisHandoff, setAnalysisHandoff] = useState<AnalysisHandoff | null>(null);
   const [backupHandoff, setBackupHandoff] = useState<BackupMigrationHandoff | null>(null);
+  const [activeWorkItemId, setActiveWorkItemId] = useState<string | null>(null);
 
   const activeProject = projects.find((project) => project.projectKey === activeProjectKey) ?? projects[0] ?? null;
   const projectEvidence = activeProject ? projectEvidenceByProjectKey[activeProject.projectKey] ?? null : null;
@@ -854,7 +938,12 @@ export default function ProjectShellClient({
   }, []);
 
   useEffect(() => {
-    setActivePage(resolveInitialProjectShellPage(window.location.search));
+    if (window.location.search) {
+      const params = new URLSearchParams(window.location.search);
+      setActivePage(resolveInitialProjectShellPage(window.location.search));
+      const workItemId = params.get("workItemId");
+      if (workItemId) setActiveWorkItemId(workItemId);
+    }
   }, []);
 
   const handleSearchSelect = useCallback((sessionId: string, source: Source, rootId?: string) => {
@@ -874,11 +963,46 @@ export default function ProjectShellClient({
 
   const handleNavigate = useCallback((page: ProjectShellPage) => {
     if (page !== "sessions") leaveSessionsSurface();
+    if (page !== "work") setActiveWorkItemId(null);
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
     setBackupHandoff(null);
     setActivePage(page);
   }, [leaveSessionsSurface]);
+
+  const handleOpenWorkItem = useCallback((workItemId: string) => {
+    leaveSessionsSurface();
+    setAssetsHandoff(null);
+    setAnalysisHandoff(null);
+    setBackupHandoff(null);
+    setActiveWorkItemId(workItemId);
+    setActivePage("work");
+  }, [leaveSessionsSurface]);
+
+  const handleOpenContinue = useCallback(() => {
+    leaveSessionsSurface();
+    setActiveWorkItemId(null);
+    setAssetsHandoff(null);
+    setAnalysisHandoff(null);
+    setBackupHandoff(null);
+    setActivePage("continue");
+  }, [leaveSessionsSurface]);
+
+  const handleCreateWorkItemFromSession = useCallback(async (handoff: Pick<HomeClientSessionHandoff, "sessionId" | "source" | "rootId">) => {
+    const response = await fetch("/api/work-items", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectRootPath: activeProject?.rootPath,
+        source: handoff.source,
+        sessionId: handoff.sessionId,
+        ...(handoff.rootId ? { rootId: handoff.rootId } : {}),
+      }),
+    });
+    if (!response.ok) return;
+    const payload = await response.json() as { workItem?: { id?: string } };
+    if (payload.workItem?.id) handleOpenWorkItem(payload.workItem.id);
+  }, [activeProject?.rootPath, handleOpenWorkItem]);
 
   const handleProjectSwitch = useCallback((nextProjectKey: string) => {
     if (nextProjectKey === activeProjectKey) return;
@@ -887,8 +1011,9 @@ export default function ProjectShellClient({
     setAssetsHandoff(null);
     setAnalysisHandoff(null);
     setBackupHandoff(null);
+    setActiveWorkItemId(null);
     setActiveProjectKey(nextProjectKey);
-    setActivePage("overview");
+    setActivePage("continue");
   }, [activeProjectKey, leaveSessionsSurface]);
 
   const handleOpenAssets = useCallback((handoff: AssetsHandoff) => {
@@ -982,6 +1107,15 @@ export default function ProjectShellClient({
   }, [leaveSessionsSurface]);
 
   const handleOpenOverviewRoute = useCallback((route: ProjectOverviewRoute) => {
+    if (route.target === "continue") {
+      if (route.workItemId) {
+        handleOpenWorkItem(route.workItemId);
+      } else {
+        handleOpenContinue();
+      }
+      return;
+    }
+
     if (route.target === "sessions") {
       setAssetsHandoff(null);
       setAnalysisHandoff(null);
@@ -1038,7 +1172,7 @@ export default function ProjectShellClient({
     }
 
     handleNavigate("backup");
-  }, [handleNavigate, handleOpenAnalysis, handleOpenAssets, handleOpenBackup]);
+  }, [handleNavigate, handleOpenAnalysis, handleOpenAssets, handleOpenBackup, handleOpenContinue, handleOpenWorkItem]);
 
   const activeNav = NAV_ITEMS.find((item) => item.id === activePage) ?? NAV_ITEMS[0]!;
   const overviewSummary = deriveProjectEvidenceOverviewSummary(projectEvidence);
@@ -1056,7 +1190,7 @@ export default function ProjectShellClient({
                 <Badge variant="default">project shell</Badge>
               </div>
               <p className="mt-1 text-sm text-muted">
-                Project view for agent sessions, context assets, analysis, and backup workflows.
+                Local-first continuity for recovering, organizing, and handing off agent work.
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -1148,7 +1282,22 @@ export default function ProjectShellClient({
           {activePage === "overview" ? (
             <ProjectOverviewSurface
               summary={overviewSummary}
+              projectRootPath={activeProject?.rootPath}
               onRoute={handleOpenOverviewRoute}
+            />
+          ) : null}
+          {activePage === "continue" ? (
+            <ContinueSurface
+              projectRootPath={activeProject?.rootPath}
+              onOpenWorkItem={handleOpenWorkItem}
+            />
+          ) : null}
+          {activePage === "work" ? (
+            <WorkItemSurface
+              workItemId={activeWorkItemId}
+              projectRootPath={activeProject?.rootPath}
+              onBack={handleOpenContinue}
+              onOpenSessions={() => handleNavigate("sessions")}
             />
           ) : null}
           {activePage === "sessions" ? (
@@ -1159,6 +1308,7 @@ export default function ProjectShellClient({
               onOpenAssetsForSession={handleOpenAssetsFromSession}
               onOpenAnalysisForSession={handleOpenAnalysisFromSession}
               onOpenBackupForSession={(handoff) => handleOpenBackup(buildBackupHandoffFromSessions(handoff))}
+              onCreateWorkItemForSession={handleCreateWorkItemFromSession}
             />
           ) : null}
           {activePage === "assets" ? (

@@ -13,6 +13,15 @@ This file records shipped, merged changes for AgentSteward.
 
 ### Added
 
+- `2026-09-19` — Agent Work Continuity MVP
+  - Added `Continue Work` as the primary project-shell surface for local Work Items that persist goals, bounded session evidence, repository state, and next steps across agent sessions
+  - Added provider-neutral `work-item/v1` and `work-package/v1` contracts, canonical hashing, confidence/attribution metadata, and local atomic JSON storage
+  - Added handoff preflight and package projections (Markdown, JSON, and Codex) with path/secret redaction and bounded content handling
+  - Added bounded multi-Session attachment with per-session evidence snapshots and duplicate attachment guards
+  - Added manual Handoff Confirmed / failed outcome recording and provider-labelled projections for Codex, Cursor, Windsurf, and Antigravity; provider session injection remains unsupported
+  - Added a five-task local validation script covering bug-fix, feature, investigation, documentation, and blocked work
+  - Preserved existing Sessions, Assets, Analysis, and Backup / Migration routes; direct provider injection and cloud sync remain outside the MVP boundary
+
 - `2026-06-21` — Devin compatibility MVP
   - Project evidence discovery now recognizes `.devin/` directories (skills, rules, workflows, plans, hooks) alongside legacy `.windsurf/` directories
   - New `ContextAssetSource` value `"devin"` for `.devin/` assets; `"windsurf"` remains for `.windsurf/` assets

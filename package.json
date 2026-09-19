@@ -18,6 +18,7 @@
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
+    "validate:continuity": "node scripts/validate-work-continuity.mjs",
     "version:patch": "npm version patch -m \"chore(release): %s\"",
     "version:minor": "npm version minor -m \"chore(release): %s\"",
     "version:major": "npm version major -m \"chore(release): %s\"",

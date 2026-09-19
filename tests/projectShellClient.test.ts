@@ -25,7 +25,7 @@ import { resolveRoutedWorkflowState } from "@/lib/backupMigration";
 
 describe("resolveInitialProjectShellPage", () => {
   it("opens project overview for a root URL", () => {
-    expect(resolveInitialProjectShellPage("")).toBe("overview");
+    expect(resolveInitialProjectShellPage("")).toBe("continue");
   });
 
   it("opens sessions when a session deep link is present", () => {
