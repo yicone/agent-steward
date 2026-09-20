@@ -78,6 +78,18 @@ describe("work item store", () => {
     await expect(readSessionEvidenceSnapshots("work-1")).rejects.toThrow("Invalid attached session evidence");
   });
 
+  it("includes the affected filename for unsupported attached schemas and skips matching directories", async () => {
+    await createWorkItem(makeItem(), { sessionRecord: makeRecord() });
+    const itemDir = path.join(process.env.AGENT_STEWARD_WORK_ITEM_ROOT!, "work-1");
+    const unsupported = "session-evidence-codex-unsupported.json";
+    await fs.writeFile(path.join(itemDir, unsupported), JSON.stringify({ schemaVersion: "session-record/v2" }));
+    await expect(readSessionEvidenceSnapshots("work-1")).rejects.toThrow(unsupported);
+
+    await fs.rm(path.join(itemDir, unsupported));
+    await fs.mkdir(path.join(itemDir, "session-evidence-codex-directory.json"));
+    await expect(readSessionEvidenceSnapshots("work-1")).resolves.toHaveLength(1);
+  });
+
   it("appends a session update to the bounded snapshot history", async () => {
     await createWorkItem(makeItem(), { sessionRecord: makeRecord() });
     const second = { ...makeRecord(), session: { ...makeRecord().session, id: "session-2" } };

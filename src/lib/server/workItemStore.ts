@@ -179,9 +179,18 @@ function sessionEvidenceFileName(source: string, sessionId: string): string {
 }
 
 async function readSessionEvidenceFile(target: string, label: string): Promise<SessionEvidenceSnapshot> {
-  const parsed = parseJsonObject(await fs.readFile(target, "utf8"), label);
+  let content: string;
+  try {
+    content = await fs.readFile(target, "utf8");
+  } catch (error) {
+    const cause = error as NodeJS.ErrnoException;
+    const wrapped = new Error(`Unable to read ${label}: ${cause.message}`);
+    (wrapped as NodeJS.ErrnoException).code = cause.code;
+    throw wrapped;
+  }
+  const parsed = parseJsonObject(content, label);
   if (parsed.schemaVersion !== "session-record/v1") {
-    throw new Error(`Unsupported session evidence schema version: ${String(parsed.schemaVersion)}`);
+    throw new Error(`Unsupported session evidence schema version in ${label}: ${String(parsed.schemaVersion)}`);
   }
   return parsed as unknown as SessionEvidenceSnapshot;
 }
@@ -234,15 +243,16 @@ export async function readSessionEvidenceSnapshot(workItemId: string): Promise<S
 export async function readSessionEvidenceSnapshots(workItemId: string): Promise<SessionEvidenceSnapshot[]> {
   validateWorkItemId(workItemId);
   const primary = await readSessionEvidenceSnapshot(workItemId);
-  let names: string[];
+  let entries: import("node:fs").Dirent[];
   try {
-    names = await fs.readdir(getWorkItemDirPath(workItemId));
+    entries = await fs.readdir(getWorkItemDirPath(workItemId), { withFileTypes: true });
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return primary ? [primary] : [];
     throw error;
   }
-  const attachedNames = names
-    .filter((name) => name.startsWith("session-evidence-") && name.endsWith(".json"))
+  const attachedNames = entries
+    .filter((entry) => entry.isFile() && entry.name.startsWith("session-evidence-") && entry.name.endsWith(".json"))
+    .map((entry) => entry.name)
     .sort();
   const attached = await Promise.all(attachedNames.map((name) => readSessionEvidenceFile(
     path.join(getWorkItemDirPath(workItemId), name),
