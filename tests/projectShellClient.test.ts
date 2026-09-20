@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resolveRestoredSelection } from "@/components/HomeClient";
+import { buildDiagnosticExportHref, resolveRestoredSelection } from "@/components/HomeClient";
 import {
   buildAnalysisFoundationInstanceKey,
   buildAnalysisHandoffFromAssets,
@@ -45,6 +45,18 @@ describe("createWorkItemFromSessionRequest", () => {
       projectRootPath: "/workspace/project",
       handoff: { source: "windsurf", sessionId: "session-1" },
     })).rejects.toThrow("Session runtime unavailable");
+  });
+});
+
+describe("buildDiagnosticExportHref", () => {
+  it("keeps raw exports compatible when redaction is not selected", () => {
+    expect(buildDiagnosticExportHref({ source: "codex", sessionId: "session-1", rootId: "root-a" }))
+      .toBe("/api/conversations/codex/session-1/diagnostic?rootId=root-a");
+  });
+
+  it("adds explicit redaction without changing the session identity", () => {
+    expect(buildDiagnosticExportHref({ source: "codex", sessionId: "session-1", rootId: "root-a", redact: true }))
+      .toBe("/api/conversations/codex/session-1/diagnostic?rootId=root-a&redact=1");
   });
 });
 

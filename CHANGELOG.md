@@ -19,6 +19,10 @@ This file records shipped, merged changes for AgentSteward.
 
 ### Added
 
+- `2026-09-21` — Privacy redaction options
+  - Added opt-in best-effort redaction for diagnostic JSON exports and Inspector copy actions, covering common tokens, API-key-shaped values, CSRF assignments, and absolute home paths
+  - Added visible sensitivity warnings and a raw-value Inspector gate without mutating the on-screen transcript
+
 - `2026-09-19` — Agent Work Continuity MVP
   - Added `Continue Work` as the primary project-shell surface for local Work Items that persist goals, bounded session evidence, repository state, and next steps across agent sessions
   - Added provider-neutral `work-item/v1` and `work-package/v1` contracts, canonical hashing, confidence/attribution metadata, and local atomic JSON storage

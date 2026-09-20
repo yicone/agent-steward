@@ -62,4 +62,37 @@ describe("GET /api/conversations/[source]/[id]/diagnostic (codex)", () => {
       }
     });
   });
+
+  it("redacts the response only when explicitly requested", async () => {
+    const config = {
+      schemaVersion: 1,
+      roots: [],
+      windsurf: {},
+      ui: { defaultSource: "codex", sortOrder: "mtime_desc" }
+    };
+    readConfigMock.mockResolvedValue({ config });
+    buildDiagnosticExportMock.mockResolvedValue({
+      schemaVersion: 1,
+      generatedAt: "2026-03-18T00:00:00.000Z",
+      source: "codex",
+      cascadeId: "session-1",
+      codex: {
+        filePath: "/Users/alice/.codex/sessions/session-1.jsonl",
+        rawLines: ["Authorization: Bearer abc.def-1234567890"],
+        truncated: false,
+        returnedLines: 1,
+        totalLines: 1
+      }
+    });
+
+    const response = await GET(
+      new Request("http://localhost/api/conversations/codex/session-1/diagnostic?redact=1"),
+      { params: { source: "codex", id: "session-1" } }
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.codex.filePath).toBe("[REDACTED_HOME]/.codex/sessions/session-1.jsonl");
+    expect(payload.codex.rawLines).toEqual(["Authorization: Bearer [REDACTED_TOKEN]"]);
+  });
 });

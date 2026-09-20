@@ -75,6 +75,7 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - Work Item detail supports goal organization, bounded progress/evidence review, lifecycle updates, and handoff preflight/package creation
   - `Project Overview` provides a project-scoped agent context governance foundation with compact context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions; when repo-local provider evidence is available, asset/finding counts are derived from explicit local evidence instead of foundation sample data
   - `Sessions` contains the existing viewer, source diagnostics, URL deep links, search selection, and direct session backup behavior
+  - Diagnostic JSON exports warn about sensitive content and offer opt-in best-effort redaction; Inspector raw values are warning-gated and copy actions can redact common patterns
   - `Assets` provides a bounded reusable context assets foundation for rules, memory, skills, commands, and unknown asset fragments
   - `Analysis` provides a bounded interpretation-and-routing foundation for local context findings
   - `Backup / Migration` provides bounded workflow-first backup and migration-preview surfaces without turning into a generic tools drawer or migration apply UI
