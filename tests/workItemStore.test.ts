@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { SessionRecord } from "../src/lib/sessionRecord";
-import { appendHandoffOutcome, attachSessionRecord, createWorkItem, listWorkItems, readSessionEvidenceSnapshot, readWorkItem, updateWorkItem } from "../src/lib/server/workItemStore";
+import { appendHandoffOutcome, attachSessionRecord, createWorkItem, listWorkItems, readSessionEvidenceSnapshot, readSessionEvidenceSnapshots, readWorkItem, updateWorkItem } from "../src/lib/server/workItemStore";
 import type { WorkItem } from "../src/lib/workContinuity";
 
 let tmpDir: string;
@@ -67,7 +67,15 @@ describe("work item store", () => {
     expect(updated.sessions).toHaveLength(2);
     expect(updated.sessionEvidenceSnapshots).toHaveLength(2);
     expect(updated.evidence?.map((item) => item.kind)).toEqual(["session", "session"]);
+    expect((await readSessionEvidenceSnapshots("work-1")).map((snapshot) => snapshot.sessionId)).toEqual(["session-1", "session-2"]);
     await expect(attachSessionRecord("work-1", { id: "duplicate", source: "codex", sessionId: "session-2", attachedAt: "2026-09-19T02:00:00Z", confidence: "observed" }, second)).rejects.toThrow("already attached");
+  });
+
+  it("rejects malformed per-attachment evidence", async () => {
+    await createWorkItem(makeItem(), { sessionRecord: makeRecord() });
+    const itemDir = path.join(process.env.AGENT_STEWARD_WORK_ITEM_ROOT!, "work-1");
+    await fs.writeFile(path.join(itemDir, "session-evidence-codex-broken.json"), "not json");
+    await expect(readSessionEvidenceSnapshots("work-1")).rejects.toThrow("Invalid attached session evidence");
   });
 
   it("appends a session update to the bounded snapshot history", async () => {

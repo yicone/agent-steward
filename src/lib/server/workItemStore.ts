@@ -178,6 +178,14 @@ function sessionEvidenceFileName(source: string, sessionId: string): string {
   return `session-evidence-${token || "session"}.json`;
 }
 
+async function readSessionEvidenceFile(target: string, label: string): Promise<SessionEvidenceSnapshot> {
+  const parsed = parseJsonObject(await fs.readFile(target, "utf8"), label);
+  if (parsed.schemaVersion !== "session-record/v1") {
+    throw new Error(`Unsupported session evidence schema version: ${String(parsed.schemaVersion)}`);
+  }
+  return parsed as unknown as SessionEvidenceSnapshot;
+}
+
 /** Attach one additional bounded session without replacing the Work Item's existing evidence. */
 export async function attachSessionRecord(
   workItemId: string,
@@ -215,13 +223,32 @@ export async function attachSessionRecord(
 export async function readSessionEvidenceSnapshot(workItemId: string): Promise<SessionEvidenceSnapshot | null> {
   validateWorkItemId(workItemId);
   try {
-    const parsed = parseJsonObject(await fs.readFile(getWorkItemEvidencePath(workItemId), "utf8"), "session evidence");
-    if (parsed.schemaVersion !== "session-record/v1") throw new Error(`Unsupported session evidence schema version: ${String(parsed.schemaVersion)}`);
-    return parsed as unknown as SessionEvidenceSnapshot;
+    return await readSessionEvidenceFile(getWorkItemEvidencePath(workItemId), "session evidence");
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return null;
     throw error;
   }
+}
+
+/** Read the compatibility snapshot plus every bounded per-attachment snapshot. */
+export async function readSessionEvidenceSnapshots(workItemId: string): Promise<SessionEvidenceSnapshot[]> {
+  validateWorkItemId(workItemId);
+  const primary = await readSessionEvidenceSnapshot(workItemId);
+  let names: string[];
+  try {
+    names = await fs.readdir(getWorkItemDirPath(workItemId));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return primary ? [primary] : [];
+    throw error;
+  }
+  const attachedNames = names
+    .filter((name) => name.startsWith("session-evidence-") && name.endsWith(".json"))
+    .sort();
+  const attached = await Promise.all(attachedNames.map((name) => readSessionEvidenceFile(
+    path.join(getWorkItemDirPath(workItemId), name),
+    `attached session evidence ${name}`,
+  )));
+  return primary ? [primary, ...attached] : attached;
 }
 
 export async function createWorkItem(workItem: WorkItem, options?: { sessionRecord?: SessionRecord; maxEvidenceBytes?: number }): Promise<WorkItem> {

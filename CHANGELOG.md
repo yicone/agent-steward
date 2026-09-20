@@ -11,6 +11,12 @@ This file records shipped, merged changes for AgentSteward.
 
 ## Unreleased
 
+### Fixed
+
+- `2026-09-20` — Attached Session evidence recovery
+  - Added an explicit read path for bounded per-attachment Session evidence files while preserving the primary `session-evidence.json` compatibility snapshot
+  - Malformed per-attachment evidence now fails with a concrete source filename instead of remaining silent dead storage
+
 ### Added
 
 - `2026-09-19` — Agent Work Continuity MVP
