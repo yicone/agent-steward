@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import type { Source } from "@/lib/types";
+import { redactDiagnosticValue } from "@/lib/diagnosticRedaction";
 import { readConfig } from "@/lib/server/config";
 import { buildDiagnosticExport } from "@/lib/server/diagnosticExport";
 import { validateRootId } from "@/lib/server/codex";
@@ -30,6 +31,7 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
   const allSteps = url.searchParams.get("allSteps");
   const maxStepsParam = url.searchParams.get("maxSteps");
   const maxSteps = maxStepsParam ? Number(maxStepsParam) : undefined;
+  const redact = url.searchParams.get("redact") === "1" || url.searchParams.get("redact") === "true";
 
   try {
     const { config } = await readConfig();
@@ -44,10 +46,11 @@ export async function GET(req: Request, ctx: { params: { source: string; id: str
       }
     });
 
+    const exportPayload = redact ? redactDiagnosticValue(payload) : payload;
     const ts = payload.generatedAt.replaceAll(/[:.]/g, "-");
     const filename = safeFilename(`diagnostic_${source}_${id}_${ts}.json`);
 
-    return new NextResponse(JSON.stringify(payload, null, 2), {
+    return new NextResponse(JSON.stringify(exportPayload, null, 2), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
