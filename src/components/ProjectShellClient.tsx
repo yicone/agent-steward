@@ -596,8 +596,9 @@ function ProjectOverviewWorkItems(props: {
     return () => { cancelled = true; };
   }, []);
 
+  const normalizeComparablePath = (input: string) => input.replaceAll("\\", "/").replace(/\/+$/, "");
   const visible = props.projectRootPath
-    ? items.filter((item) => item.project.rootPath === props.projectRootPath)
+    ? items.filter((item) => normalizeComparablePath(item.project.rootPath) === normalizeComparablePath(props.projectRootPath!))
     : items;
   const actionable = visible.filter((item) => ["active", "ready-to-handoff", "blocked", "captured", "organized"].includes(item.status));
 
