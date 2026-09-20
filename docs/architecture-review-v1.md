@@ -234,6 +234,8 @@ Implementation:
 
 Important: exports may contain sensitive data (paths, prompts, outputs, tokens) and should warn users accordingly.
 
+The viewer keeps the transcript unchanged. Diagnostic JSON remains raw by default for compatibility, while the export control offers explicit best-effort redaction for common token, API-key, CSRF, and absolute-home-path patterns. Inspector raw fields are hidden until the user acknowledges a warning; Inspector copy actions can apply the same redaction layer without persisting copied content.
+
 ---
 
 ## 8) “What Has Evolved” (Shipped Milestones)
