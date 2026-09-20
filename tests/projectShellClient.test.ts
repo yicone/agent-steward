@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { resolveRestoredSelection } from "@/components/HomeClient";
 import {
@@ -17,11 +17,36 @@ import {
   deriveProjectEvidenceOverviewSummary,
   deriveProjectIdentity,
   buildExternalSessionSelection,
+  createWorkItemFromSessionRequest,
   resolveInitialProjectShellPage,
   stripSessionViewerSearchParams,
 } from "@/components/ProjectShellClient";
 import type { ProjectEvidenceProviderResult } from "@/lib/projectEvidenceProvider";
 import { resolveRoutedWorkflowState } from "@/lib/backupMigration";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("createWorkItemFromSessionRequest", () => {
+  it("returns the created Work Item id", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ workItem: { id: "work-1" } }), { status: 201 })));
+
+    await expect(createWorkItemFromSessionRequest({
+      projectRootPath: "/workspace/project",
+      handoff: { source: "codex", sessionId: "session-1", rootId: "root-a" },
+    })).resolves.toBe("work-1");
+  });
+
+  it("surfaces the API error instead of silently returning", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "Session runtime unavailable" }), { status: 502 })));
+
+    await expect(createWorkItemFromSessionRequest({
+      projectRootPath: "/workspace/project",
+      handoff: { source: "windsurf", sessionId: "session-1" },
+    })).rejects.toThrow("Session runtime unavailable");
+  });
+});
 
 describe("resolveInitialProjectShellPage", () => {
   it("opens project overview for a root URL", () => {

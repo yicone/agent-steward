@@ -15,6 +15,14 @@ export type WorkItemSurfaceProps = { workItemId: string | null; projectRootPath?
 
 const labels: Record<WorkItem["status"], string> = { captured: "Captured", organized: "Organized", active: "Active", blocked: "Blocked", "ready-to-handoff": "Ready to hand off", completed: "Completed", archived: "Archived" };
 
+export function deriveWorkItemActionAvailability(status: WorkItem["status"]) {
+  return {
+    canActivate: status !== "active" && canTransitionWorkItemStatus(status, "active"),
+    canBlock: canTransitionWorkItemStatus(status, "blocked"),
+    canComplete: canTransitionWorkItemStatus(status, "completed"),
+  };
+}
+
 export default function WorkItemSurface({ workItemId, onBack, onOpenSessions }: WorkItemSurfaceProps) {
   const [item, setItem] = useState<WorkItem | null>(null);
   const [goal, setGoal] = useState("");
@@ -59,8 +67,7 @@ export default function WorkItemSurface({ workItemId, onBack, onOpenSessions }: 
   if (loading) return <Card className="p-6 text-sm text-muted">Loading Work Item…</Card>;
   if (error && !item) return <Card className="p-6"><p className="text-sm text-danger">{error}</p><Button className="mt-4" onClick={() => void load()}>Retry</Button></Card>;
   if (!item) return null;
-  const canBlock = canTransitionWorkItemStatus(item.status, "blocked");
-  const canComplete = canTransitionWorkItemStatus(item.status, "completed");
+  const { canActivate, canBlock, canComplete } = deriveWorkItemActionAvailability(item.status);
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -69,7 +76,7 @@ export default function WorkItemSurface({ workItemId, onBack, onOpenSessions }: 
       </div>
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs uppercase tracking-[0.2em] text-muted">Work Item</div><h2 className="mt-2 text-xl font-semibold">{item.goal.value}</h2><p className="mt-1 text-xs text-muted">{item.project.name ?? item.project.rootPath}</p></div><Badge variant={item.status === "blocked" ? "bad" : item.status === "active" ? "ok" : "default"}>{labels[item.status]}</Badge></div>
-        <div className="mt-5 grid gap-3"><label className="text-sm text-muted">Goal<Input value={goal} onChange={(event) => setGoal(event.target.value)} className="mt-1" /></label><div className="flex flex-wrap gap-2"><Button size="sm" disabled={!goal.trim() || (goal.trim() === item.goal.value && item.status !== "captured")} onClick={() => void patch({ goal: goal.trim(), organize: true })}>Save and organize</Button>{canBlock ? <Button size="sm" variant="outline" onClick={() => void patch({ status: "blocked" })}>Mark blocked</Button> : null}{item.status === "blocked" ? <Button size="sm" variant="outline" onClick={() => void patch({ status: "active" })}>Resume</Button> : null}{canComplete ? <Button size="sm" variant="outline" onClick={() => void patch({ status: "completed" })}>Complete</Button> : null}</div></div>
+        <div className="mt-5 grid gap-3"><label className="text-sm text-muted">Goal<Input value={goal} onChange={(event) => setGoal(event.target.value)} className="mt-1" /></label><div className="flex flex-wrap gap-2"><Button size="sm" disabled={!goal.trim() || (goal.trim() === item.goal.value && item.status !== "captured")} onClick={() => void patch({ goal: goal.trim(), organize: true })}>Save and organize</Button>{canActivate ? <Button size="sm" variant="outline" onClick={() => void patch({ status: "active" })}>{item.status === "blocked" ? "Resume" : "Start work"}</Button> : null}{canBlock ? <Button size="sm" variant="outline" onClick={() => void patch({ status: "blocked" })}>Mark blocked</Button> : null}{canComplete ? <Button size="sm" variant="outline" onClick={() => void patch({ status: "completed" })}>Complete</Button> : null}</div></div>
       </Card>
       {item.progress?.length ? <Card className="p-4"><div className="text-xs uppercase tracking-[0.2em] text-muted">Progress</div><div className="mt-3 grid gap-2">{item.progress.map((entry, index) => <div key={`${entry.value}-${index}`} className="rounded-xl border border-border/60 p-3 text-sm"><Badge variant="default">{entry.kind ?? "context"}</Badge><p className="mt-2 text-muted">{entry.value}</p></div>)}</div></Card> : null}
       {item.context?.length ? <Card className="p-4"><div className="text-xs uppercase tracking-[0.2em] text-muted">Context boundary</div><div className="mt-3 grid gap-2">{item.context.map((entry) => <div key={entry.id} className="rounded-xl border border-border/60 p-3 text-sm"><div className="flex flex-wrap gap-2"><Badge variant="default">{entry.source}</Badge><Badge variant="default">{entry.confidence}</Badge><Badge variant="default">{entry.attribution}</Badge></div><p className="mt-2 text-muted">{entry.name ?? entry.id} · {entry.scope}</p></div>)}</div></Card> : null}

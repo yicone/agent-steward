@@ -23,7 +23,7 @@ import {
 import { createProjectionEnvelope, sha256Canonical } from "@/lib/server/workContinuityHash";
 import { readWorkItem, appendHandoffOutcome } from "@/lib/server/workItemStore";
 import { getWorkPackagesRoot } from "@/lib/server/paths";
-import { buildProviderProjection, isProjectionProvider, type ProjectionProvider, PROVIDER_PROJECTION_CAPABILITIES } from "@/lib/server/providerProjections";
+import { buildProviderProjection, type ProjectionProvider, PROVIDER_PROJECTION_CAPABILITIES } from "@/lib/server/providerProjections";
 
 const execFile = promisify(execFileCallback);
 const DEFAULT_MAX_CONTENT_BYTES = 24_000;
@@ -32,7 +32,7 @@ const PACKAGE_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 type PackageStatus = "ready" | "ready_with_warnings" | "blocked";
 
 export type HandoffOptions = {
-  targetProvider: string;
+  targetProvider: ProjectionProvider;
   includeEvidence?: boolean;
   includeRawContent?: boolean;
   redactPaths?: boolean;
@@ -245,7 +245,7 @@ export async function createWorkPackage(workItemId: string, options: HandoffOpti
   const preflight = await preflightWorkPackage(workItem, options);
   if (preflight.status === "blocked") throw new Error("Work Package preflight is blocked");
   const maxContentBytes = options.maxContentBytes ?? DEFAULT_MAX_CONTENT_BYTES;
-  const provider: ProjectionProvider = isProjectionProvider(options.targetProvider) ? options.targetProvider : "codex";
+  const provider = options.targetProvider;
   const packageWorkItem = options.includeEvidence ? workItem : (() => {
     const { sessionEvidence: _sessionEvidence, ...withoutSessionEvidence } = workItem;
     return withoutSessionEvidence as WorkItem;

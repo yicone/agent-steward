@@ -11,6 +11,10 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: { workItemId: string } };
 
+function isSource(value: unknown): value is Source {
+  return value === "antigravity" || value === "windsurf" || value === "codex" || value === "cursor";
+}
+
 export async function GET(_req: Request, { params }: Params) {
   try { validateWorkItemId(params.workItemId); return NextResponse.json({ workItem: await readWorkItem(params.workItemId) }); }
   catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Work Item not found", code: "WORK_ITEM_NOT_FOUND", title: "Work Item unavailable" }, { status: 404 }); }
@@ -22,18 +26,19 @@ export async function PATCH(req: Request, { params }: Params) {
   try {
     const current = await readWorkItem(params.workItemId);
     if (body.attachSession) {
-      if (!body.attachSession.sessionId || !body.attachSession.source) {
+      if (typeof body.attachSession.sessionId !== "string" || !body.attachSession.sessionId.trim() || !isSource(body.attachSession.source)) {
         return NextResponse.json({ error: "attachSession requires source and sessionId", code: "INVALID_SESSION", title: "Invalid Session attachment" }, { status: 400 });
       }
       if (body.goal || body.status || body.organize || body.nextStep || body.openQuestions || body.decisions) {
         return NextResponse.json({ error: "Attach a Session separately from other Work Item updates", code: "INVALID_REQUEST", title: "Invalid Work Item update" }, { status: 400 });
       }
       const { config } = await readConfig();
-      const loaded = await loadSessionRecord({ config, source: body.attachSession.source, sessionId: body.attachSession.sessionId, rootId: body.attachSession.rootId });
+      const sessionId = body.attachSession.sessionId.trim();
+      const loaded = await loadSessionRecord({ config, source: body.attachSession.source, sessionId, rootId: body.attachSession.rootId });
       const workItem = await attachSessionRecord(params.workItemId, {
-        id: `session-${body.attachSession.source}-${body.attachSession.sessionId}`,
+        id: `session-${body.attachSession.source}-${sessionId}`,
         source: body.attachSession.source,
-        sessionId: body.attachSession.sessionId,
+        sessionId,
         rootId: body.attachSession.rootId,
         locator: loaded.record.sourceRef.locator,
         title: loaded.record.session.title,

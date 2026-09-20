@@ -32,6 +32,13 @@ for (const [kind, goal] of tasks) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ goal: item.goal.value, organize: true, expectedVersion: item.version }),
   });
+  const prepared = kind === "blocked"
+    ? await api(`/api/work-items/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "blocked", expectedVersion: organized.workItem.version }),
+      })
+    : organized;
   const preflight = await api(`/api/work-items/${encodeURIComponent(item.id)}/handoff`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -50,7 +57,7 @@ for (const [kind, goal] of tasks) {
   const finalItem = (await api(`/api/work-items/${encodeURIComponent(item.id)}`)).workItem;
   const confirmed = finalItem.handoffs?.some((handoff) => handoff.outcome === "confirmed" && handoff.packageId === packageResult.packageId) ?? false;
   if (!confirmed) throw new Error(`Outcome was not preserved for ${kind}`);
-  results.push({ kind, workItemId: organized.workItem.id, preflight: preflight.preflight.status, packageId: packageResult.packageId, canonicalHash: packageResult.canonicalHash, confirmed });
+  results.push({ kind, workItemId: prepared.workItem.id, workItemStatus: prepared.workItem.status, preflight: preflight.preflight.status, packageId: packageResult.packageId, canonicalHash: packageResult.canonicalHash, confirmed });
 }
 
 const summary = {

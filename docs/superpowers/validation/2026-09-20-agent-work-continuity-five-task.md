@@ -1,8 +1,10 @@
 # Agent Work Continuity five-task validation
 
-**Date:** 2026-09-20  
-**Runtime:** isolated production build at `http://127.0.0.1:3110`  
-**Project root:** temporary validation root  
+**Date:** 2026-09-20
+
+**Runtime:** isolated production build at `http://127.0.0.1:3110`
+
+**Project root:** temporary validation root
 **Data roots:** temporary Work Item and Work Package directories; the retained ego-lite demo data was not used
 
 The validation script `pnpm validate:continuity` created and organized five manual Work Items, ran handoff preflight, created a local package, and recorded a separate manual `confirmed` outcome for each package.

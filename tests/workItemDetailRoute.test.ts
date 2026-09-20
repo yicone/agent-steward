@@ -56,4 +56,16 @@ describe("work item detail route", () => {
     expect(response.status).toBe(200);
     expect(attachSessionRecordMock).toHaveBeenCalledWith("work-1", expect.objectContaining({ sessionId: "session-2", source: "codex" }), expect.anything());
   });
+
+  it("rejects an unsupported Session source before loading provider data", async () => {
+    readWorkItemMock.mockResolvedValue({ id: "work-1", project: { rootPath: process.cwd() }, sessions: [] });
+    const response = await PATCH(new Request("http://localhost/api/work-items/work-1", {
+      method: "PATCH",
+      body: JSON.stringify({ attachSession: { source: "unknown-provider", sessionId: "session-2" } }),
+    }), { params: { workItemId: "work-1" } });
+
+    expect(response.status).toBe(400);
+    expect(loadSessionRecordMock).not.toHaveBeenCalled();
+    expect(attachSessionRecordMock).not.toHaveBeenCalled();
+  });
 });

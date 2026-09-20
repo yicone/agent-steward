@@ -865,6 +865,26 @@ export type ProjectShellClientProps = {
   initialPage?: ProjectShellPage;
 };
 
+export async function createWorkItemFromSessionRequest(input: {
+  projectRootPath?: string;
+  handoff: Pick<HomeClientSessionHandoff, "sessionId" | "source" | "rootId">;
+}): Promise<string> {
+  const response = await fetch("/api/work-items", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      projectRootPath: input.projectRootPath,
+      source: input.handoff.source,
+      sessionId: input.handoff.sessionId,
+      ...(input.handoff.rootId ? { rootId: input.handoff.rootId } : {}),
+    }),
+  });
+  const payload = await response.json() as { workItem?: { id?: string }; error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "Unable to create Work Item from Session");
+  if (!payload.workItem?.id) throw new Error("Work Item creation returned no identifier");
+  return payload.workItem.id;
+}
+
 export function deriveProjectIdentity(projectEvidence: ProjectEvidenceProviderResult | null | undefined): ProjectIdentity {
   if (!projectEvidence) {
     return {
@@ -928,6 +948,7 @@ export default function ProjectShellClient({
   const [analysisHandoff, setAnalysisHandoff] = useState<AnalysisHandoff | null>(null);
   const [backupHandoff, setBackupHandoff] = useState<BackupMigrationHandoff | null>(null);
   const [activeWorkItemId, setActiveWorkItemId] = useState<string | null>(null);
+  const [continuityError, setContinuityError] = useState<string | null>(null);
 
   const activeProject = projects.find((project) => project.projectKey === activeProjectKey) ?? projects[0] ?? null;
   const projectEvidence = activeProject ? projectEvidenceByProjectKey[activeProject.projectKey] ?? null : null;
@@ -989,19 +1010,12 @@ export default function ProjectShellClient({
   }, [leaveSessionsSurface]);
 
   const handleCreateWorkItemFromSession = useCallback(async (handoff: Pick<HomeClientSessionHandoff, "sessionId" | "source" | "rootId">) => {
-    const response = await fetch("/api/work-items", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        projectRootPath: activeProject?.rootPath,
-        source: handoff.source,
-        sessionId: handoff.sessionId,
-        ...(handoff.rootId ? { rootId: handoff.rootId } : {}),
-      }),
-    });
-    if (!response.ok) return;
-    const payload = await response.json() as { workItem?: { id?: string } };
-    if (payload.workItem?.id) handleOpenWorkItem(payload.workItem.id);
+    setContinuityError(null);
+    try {
+      handleOpenWorkItem(await createWorkItemFromSessionRequest({ projectRootPath: activeProject?.rootPath, handoff }));
+    } catch (cause) {
+      setContinuityError(cause instanceof Error ? cause.message : "Unable to create Work Item from Session");
+    }
   }, [activeProject?.rootPath, handleOpenWorkItem]);
 
   const handleProjectSwitch = useCallback((nextProjectKey: string) => {
@@ -1269,6 +1283,14 @@ export default function ProjectShellClient({
         </header>
 
         <main className="min-w-0">
+          {continuityError ? (
+            <Card className="mb-3 border-amber-400/40 p-4" role="alert">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><div className="font-medium">Work Item creation failed</div><p className="mt-1 text-sm text-amber-200">{continuityError}</p></div>
+                <Button size="sm" variant="ghost" onClick={() => setContinuityError(null)}>Dismiss</Button>
+              </div>
+            </Card>
+          ) : null}
           {activePage !== "sessions" ? (
             <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-card/50 px-4 py-3">
               <div>

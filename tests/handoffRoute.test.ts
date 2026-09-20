@@ -55,4 +55,54 @@ describe("handoff route", () => {
       paths: { markdown: "/tmp/handoff.md", json: "/tmp/package.json", codex: "/tmp/codex.md" },
     });
   });
+
+  it("rejects unsupported target providers", async () => {
+    readWorkItemMock.mockResolvedValue({ id: "work-1", project: { rootPath: process.cwd() } });
+    const response = await POST(new Request("http://localhost/api/work-items/work-1/handoff", {
+      method: "POST",
+      body: JSON.stringify({ mode: "preflight", targetProvider: "unknown-provider" }),
+    }), { params: { workItemId: "work-1" } });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("Unsupported target provider");
+    expect(preflightMock).not.toHaveBeenCalled();
+  });
+
+  it("records an outcome only when it matches a package created for the Work Item", async () => {
+    readWorkItemMock.mockResolvedValue({
+      id: "work-1",
+      project: { rootPath: process.cwd() },
+      handoffs: [{
+        id: "handoff-package-1",
+        packageId: "package-1",
+        packageHash: "sha256:abc",
+        target: { provider: "codex" },
+        createdAt: "2026-09-20T00:00:00.000Z",
+        outcome: "created",
+      }],
+    });
+    recordOutcomeMock.mockResolvedValue(undefined);
+    const response = await POST(new Request("http://localhost/api/work-items/work-1/handoff", {
+      method: "POST",
+      body: JSON.stringify({ mode: "record-outcome", outcome: { id: "confirmed-1", packageId: "package-1", packageHash: "sha256:abc", target: { provider: "codex" }, createdAt: "2026-09-20T01:00:00.000Z", outcome: "confirmed" } }),
+    }), { params: { workItemId: "work-1" } });
+
+    expect(response.status).toBe(200);
+    expect(recordOutcomeMock).toHaveBeenCalledWith("work-1", expect.objectContaining({ workItemId: "work-1", packageId: "package-1", packageHash: "sha256:abc", outcome: "confirmed" }));
+  });
+
+  it("rejects outcomes for unknown or mismatched packages", async () => {
+    readWorkItemMock.mockResolvedValue({
+      id: "work-1",
+      project: { rootPath: process.cwd() },
+      handoffs: [{ id: "handoff-package-1", packageId: "package-1", packageHash: "sha256:abc", createdAt: "2026-09-20T00:00:00.000Z", outcome: "created" }],
+    });
+    const response = await POST(new Request("http://localhost/api/work-items/work-1/handoff", {
+      method: "POST",
+      body: JSON.stringify({ mode: "record-outcome", outcome: { id: "confirmed-2", packageId: "package-2", packageHash: "sha256:forged", createdAt: "2026-09-20T01:00:00.000Z", outcome: "confirmed" } }),
+    }), { params: { workItemId: "work-1" } });
+
+    expect(response.status).toBe(400);
+    expect(recordOutcomeMock).not.toHaveBeenCalled();
+  });
 });
