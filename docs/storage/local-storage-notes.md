@@ -662,6 +662,23 @@ node scripts/seed-multi-root.mjs --clean
 
 ## 变更记录（建议维护）
 
+### Agent Work Continuity managed evidence (2026-09-20)
+
+AgentSteward stores bounded Work Item evidence under the configured `AGENT_STEWARD_WORK_ITEM_ROOT` (default: the app-managed Work Item root). Each Work Item directory can contain:
+
+- `session-evidence.json`: the compatibility snapshot for the primary Session.
+- `session-evidence-<source>-<sessionId>.json`: one bounded snapshot for each additionally attached Session.
+- `work-item.json`: the canonical Work Item, including the capped in-record snapshot history.
+
+The store reads the primary snapshot through `readSessionEvidenceSnapshot()` and discovers all primary plus attached snapshots through `readSessionEvidenceSnapshots()`. Attached files are sorted by filename for deterministic recovery. Invalid JSON or an unsupported snapshot schema fails with the affected filename in the diagnostic; it is not silently skipped.
+
+Validation commands:
+
+```bash
+pnpm test -- --run tests/workItemStore.test.ts
+pnpm exec tsc --noEmit --incremental false
+```
+
 - 2026-02-27：确认 Antigravity 的 `title/cwd` 可从 `state.vscdb` 的 `*trajectorySummaries` 获取，并在项目中实现为列表 enrichment 的主要来源之一。
 - 2026-02-27：补充“验证环境”，将已验证结论与具体版本/构建信息关联，便于后续排查兼容性变更。
 - 2026-03-03：确认 Antigravity 在部分版本中会使用 random ports 且可能不更新 `~/.gemini/antigravity/daemon/ls_*.json`；因此将 Antigravity 的 LS 发现逻辑升级为“优先从 `Antigravity.log` attach，并以 Heartbeat 成功作为选择依据”。

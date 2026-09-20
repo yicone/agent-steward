@@ -178,6 +178,23 @@ function sessionEvidenceFileName(source: string, sessionId: string): string {
   return `session-evidence-${token || "session"}.json`;
 }
 
+async function readSessionEvidenceFile(target: string, label: string): Promise<SessionEvidenceSnapshot> {
+  let content: string;
+  try {
+    content = await fs.readFile(target, "utf8");
+  } catch (error) {
+    const cause = error as NodeJS.ErrnoException;
+    const wrapped = new Error(`Unable to read ${label}: ${cause.message}`);
+    (wrapped as NodeJS.ErrnoException).code = cause.code;
+    throw wrapped;
+  }
+  const parsed = parseJsonObject(content, label);
+  if (parsed.schemaVersion !== "session-record/v1") {
+    throw new Error(`Unsupported session evidence schema version in ${label}: ${String(parsed.schemaVersion)}`);
+  }
+  return parsed as unknown as SessionEvidenceSnapshot;
+}
+
 /** Attach one additional bounded session without replacing the Work Item's existing evidence. */
 export async function attachSessionRecord(
   workItemId: string,
@@ -215,13 +232,33 @@ export async function attachSessionRecord(
 export async function readSessionEvidenceSnapshot(workItemId: string): Promise<SessionEvidenceSnapshot | null> {
   validateWorkItemId(workItemId);
   try {
-    const parsed = parseJsonObject(await fs.readFile(getWorkItemEvidencePath(workItemId), "utf8"), "session evidence");
-    if (parsed.schemaVersion !== "session-record/v1") throw new Error(`Unsupported session evidence schema version: ${String(parsed.schemaVersion)}`);
-    return parsed as unknown as SessionEvidenceSnapshot;
+    return await readSessionEvidenceFile(getWorkItemEvidencePath(workItemId), "session evidence");
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return null;
     throw error;
   }
+}
+
+/** Read the compatibility snapshot plus every bounded per-attachment snapshot. */
+export async function readSessionEvidenceSnapshots(workItemId: string): Promise<SessionEvidenceSnapshot[]> {
+  validateWorkItemId(workItemId);
+  const primary = await readSessionEvidenceSnapshot(workItemId);
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(getWorkItemDirPath(workItemId), { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return primary ? [primary] : [];
+    throw error;
+  }
+  const attachedNames = entries
+    .filter((entry) => entry.isFile() && entry.name.startsWith("session-evidence-") && entry.name.endsWith(".json"))
+    .map((entry) => entry.name)
+    .sort();
+  const attached = await Promise.all(attachedNames.map((name) => readSessionEvidenceFile(
+    path.join(getWorkItemDirPath(workItemId), name),
+    `attached session evidence ${name}`,
+  )));
+  return primary ? [primary, ...attached] : attached;
 }
 
 export async function createWorkItem(workItem: WorkItem, options?: { sessionRecord?: SessionRecord; maxEvidenceBytes?: number }): Promise<WorkItem> {
