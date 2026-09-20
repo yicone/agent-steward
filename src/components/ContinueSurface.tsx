@@ -26,6 +26,10 @@ function statusVariant(status: WorkItem["status"]): "default" | "ok" | "warn" | 
   return "default";
 }
 
+function normalizeComparablePath(input: string): string {
+  return input.replaceAll("\\", "/").replace(/\/+$/, "");
+}
+
 function WorkItemCard({ item, onOpen }: { item: WorkItem; onOpen(id: string): void }) {
   const latestProgress = item.progress?.find((entry) => entry.kind === "current") ?? item.progress?.[0];
   const project = item.project.name ?? item.project.rootPath;
@@ -97,7 +101,9 @@ export default function ContinueSurface(props: ContinueSurfaceProps) {
     }
   };
 
-  const visible = useMemo(() => props.projectRootPath ? items.filter((item) => item.project.rootPath === props.projectRootPath) : items, [items, props.projectRootPath]);
+  const visible = useMemo(() => props.projectRootPath
+    ? items.filter((item) => normalizeComparablePath(item.project.rootPath) === normalizeComparablePath(props.projectRootPath!))
+    : items, [items, props.projectRootPath]);
   const groups = [
     { title: "Resume now", items: visible.filter((item) => ["active", "organized", "ready-to-handoff"].includes(item.status)) },
     { title: "Needs attention", items: visible.filter((item) => item.status === "blocked") },

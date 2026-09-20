@@ -106,6 +106,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ workItem: saved }, { status: 201 });
   } catch (error) {
     console.error("[work-items] create failed", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to create Work Item", code: "WORK_ITEM_CREATE_FAILED", title: "Work Item creation failed" }, { status: 502 });
+    const message = error instanceof Error ? error.message : "Unable to create Work Item";
+    const conflict = /already exists|conflict/i.test(message);
+    const clientError = conflict || /invalid|requires|must be|not allowed/i.test(message);
+    return NextResponse.json({ error: message, code: conflict ? "WORK_ITEM_CONFLICT" : clientError ? "INVALID_REQUEST" : "WORK_ITEM_CREATE_FAILED", title: "Work Item creation failed" }, { status: conflict ? 409 : clientError ? 400 : 502 });
   }
 }

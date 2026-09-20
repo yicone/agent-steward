@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { SessionRecord } from "../src/lib/sessionRecord";
-import { attachSessionRecord, createWorkItem, listWorkItems, readSessionEvidenceSnapshot, readWorkItem, updateWorkItem } from "../src/lib/server/workItemStore";
+import { appendHandoffOutcome, attachSessionRecord, createWorkItem, listWorkItems, readSessionEvidenceSnapshot, readWorkItem, updateWorkItem } from "../src/lib/server/workItemStore";
 import type { WorkItem } from "../src/lib/workContinuity";
 
 let tmpDir: string;
@@ -68,5 +68,19 @@ describe("work item store", () => {
     expect(updated.sessionEvidenceSnapshots).toHaveLength(2);
     expect(updated.evidence?.map((item) => item.kind)).toEqual(["session", "session"]);
     await expect(attachSessionRecord("work-1", { id: "duplicate", source: "codex", sessionId: "session-2", attachedAt: "2026-09-19T02:00:00Z", confidence: "observed" }, second)).rejects.toThrow("already attached");
+  });
+
+  it("appends a session update to the bounded snapshot history", async () => {
+    await createWorkItem(makeItem(), { sessionRecord: makeRecord() });
+    const second = { ...makeRecord(), session: { ...makeRecord().session, id: "session-2" } };
+    const updated = await updateWorkItem("work-1", {}, { sessionRecord: second });
+    expect(updated.sessionEvidence?.sessionId).toBe("session-2");
+    expect(updated.sessionEvidenceSnapshots?.map((snapshot) => snapshot.sessionId)).toEqual(["session-1", "session-2"]);
+  });
+
+  it("validates a handoff before appending its journal entry", async () => {
+    await createWorkItem(makeItem());
+    await expect(appendHandoffOutcome("work-1", { id: "bad", outcome: "not-valid" as never, createdAt: "invalid" })).rejects.toThrow("Invalid handoff outcome");
+    await expect(fs.readFile(path.join(process.env.AGENT_STEWARD_WORK_ITEM_ROOT!, "work-1", "handoffs.jsonl"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

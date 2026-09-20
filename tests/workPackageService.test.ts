@@ -75,6 +75,16 @@ describe("work package service", () => {
     expect(created.package.evidence?.[0]?.embedded).toBe(false);
   });
 
+  it("omits embedded evidence snapshots from a summary-only package", async () => {
+    const item = makeWorkItem({ id: "summary-only-snapshots", sessionEvidenceSnapshots: [{
+      schemaVersion: "session-record/v1", sessionId: "session-1", source: "codex", capturedAt: "2026-09-19T01:00:00.000Z", events: [{ id: "event-1", text: "private transcript" }],
+    }] });
+    await createWorkItem(item);
+    const created = await createWorkPackage(item.id, { targetProvider: "codex" });
+    expect(created.package.workItem.sessionEvidence).toBeUndefined();
+    expect(created.package.workItem.sessionEvidenceSnapshots).toBeUndefined();
+  });
+
   it("redacts secrets and local URLs before writing package content", async () => {
     const item = makeWorkItem({
       id: "package-redaction",

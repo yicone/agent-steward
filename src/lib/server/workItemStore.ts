@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   WORK_ITEM_SCHEMA_VERSION,
   assertValidWorkItemTransition,
+  isHandoffOutcome,
   validateWorkItem,
   validateWorkItemId,
   type HandoffHistoryEntry,
@@ -272,7 +273,12 @@ export async function updateWorkItem(workItemId: string, patch: Partial<WorkItem
   if (patch.status && patch.status !== current.status) assertValidWorkItemTransition(current.status, patch.status);
   validateWorkItem(next);
   if (options.sessionRecord) {
-    next.sessionEvidence = await writeSessionEvidenceSnapshot(workItemId, options.sessionRecord, options.maxEvidenceBytes);
+    const snapshot = await writeSessionEvidenceSnapshot(workItemId, options.sessionRecord, options.maxEvidenceBytes);
+    next.sessionEvidence = snapshot;
+    next.sessionEvidenceSnapshots = [
+      ...(current.sessionEvidenceSnapshots ?? (current.sessionEvidence ? [current.sessionEvidence] : [])),
+      snapshot,
+    ].slice(-8);
   }
   await writeAtomic(getWorkItemPath(workItemId), JSON.stringify(next, null, 2));
   return next;
@@ -298,13 +304,22 @@ function isSafeDirectoryName(value: string): boolean {
 
 export async function appendHandoffOutcome(workItemId: string, outcome: HandoffHistoryEntry): Promise<void> {
   validateWorkItemId(workItemId);
-  if (!outcome.id || !outcome.outcome) throw new Error("Handoff outcome requires id and outcome");
+  if (!outcome.id || !isHandoffOutcome(outcome.outcome) || typeof outcome.createdAt !== "string" || Number.isNaN(Date.parse(outcome.createdAt))) {
+    throw new Error("Invalid handoff outcome");
+  }
+  const current = await readWorkItem(workItemId);
+  const handoffs = [...(current.handoffs ?? []), { ...outcome, workItemId }];
+  const next: WorkItem = {
+    ...current,
+    handoffs,
+    version: (current.version ?? 1) + 1,
+    updatedAt: new Date().toISOString(),
+  };
+  validateWorkItem(next);
   await ensureWorkItemDir(workItemId);
   const target = resolvePathWithin(getWorkItemDirPath(workItemId), HANDOFFS_FILE);
   await fs.appendFile(target, `${JSON.stringify(outcome)}\n`, { mode: 0o600 });
-  const current = await readWorkItem(workItemId);
-  const handoffs = [...(current.handoffs ?? []), { ...outcome, workItemId }];
-  await writeAtomic(getWorkItemPath(workItemId), JSON.stringify({ ...current, handoffs, version: (current.version ?? 1) + 1, updatedAt: new Date().toISOString() }, null, 2));
+  await writeAtomic(getWorkItemPath(workItemId), JSON.stringify(next, null, 2));
 }
 
 export async function readHandoffOutcomes(workItemId: string): Promise<HandoffHistoryEntry[]> {

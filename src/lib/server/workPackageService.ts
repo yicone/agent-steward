@@ -247,7 +247,7 @@ export async function createWorkPackage(workItemId: string, options: HandoffOpti
   const maxContentBytes = options.maxContentBytes ?? DEFAULT_MAX_CONTENT_BYTES;
   const provider = options.targetProvider;
   const packageWorkItem = options.includeEvidence ? workItem : (() => {
-    const { sessionEvidence: _sessionEvidence, ...withoutSessionEvidence } = workItem;
+    const { sessionEvidence: _sessionEvidence, sessionEvidenceSnapshots: _sessionEvidenceSnapshots, ...withoutSessionEvidence } = workItem;
     return withoutSessionEvidence as WorkItem;
   })();
   const rawPackage: WorkPackage = {
