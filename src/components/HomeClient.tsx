@@ -84,6 +84,7 @@ export type HomeClientProps = {
   onOpenAssetsForSession?(handoff: HomeClientAssetHandoff): void;
   onOpenAnalysisForSession?(handoff: HomeClientSessionHandoff): void;
   onOpenBackupForSession?(handoff: HomeClientSessionHandoff): void;
+  onCreateWorkItemForSession?(handoff: Pick<HomeClientSessionHandoff, "sessionId" | "source" | "rootId">): void;
 };
 
 export function resolveInitialSource(input: {
@@ -1449,6 +1450,7 @@ export default function HomeClient({
   onOpenAssetsForSession,
   onOpenAnalysisForSession,
   onOpenBackupForSession,
+  onCreateWorkItemForSession,
 }: HomeClientProps = {}) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [status, setStatus] = useState<SourcesStatus | null>(null);
@@ -2783,6 +2785,22 @@ export default function HomeClient({
                     title="Route to Backup / Migration with bounded session backup context"
                   >
                     Open in Backup / Migration
+                  </Button>
+                ) : null}
+                {onCreateWorkItemForSession ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      onCreateWorkItemForSession({
+                        sessionId: selectedId,
+                        source,
+                        ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+                      })
+                    }
+                    title="Capture this session as a resumable work item"
+                  >
+                    Create Work Item
                   </Button>
                 ) : null}
                 <Button

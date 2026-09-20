@@ -5,7 +5,7 @@ SSoT/DRY note:
 
 # AgentSteward (v1)
 
-A local Web UI for browsing conversation history generated/persisted by Antigravity, Windsurf, Codex CLI, and Cursor.
+A local Web UI for continuing agent work across Antigravity, Windsurf, Codex CLI, and Cursor. Work Items preserve the project goal, bounded evidence, repository state, and next step so a later session can verify what is known before handoff.
 It fetches Antigravity and Windsurf content via their local Language Server RPC, reads Codex sessions directly from `.jsonl` files (no running process required), and reads bounded Cursor composer state from local SQLite/app-storage files.
 
 ## Data Sources & Configuration
@@ -70,7 +70,9 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
 ## Features (v1)
 
 - Project shell:
+  - `Continue Work` is the primary surface for grouped Work Items and resumable project context
   - top-level surfaces for `Project Overview`, `Sessions`, `Assets`, `Analysis`, and `Backup / Migration`
+  - Work Item detail supports goal organization, bounded progress/evidence review, lifecycle updates, and handoff preflight/package creation
   - `Project Overview` provides a project-scoped agent context governance foundation with compact context snapshot, in-effect assets, recent sessions, attention items, and route-first quick actions; when repo-local provider evidence is available, asset/finding counts are derived from explicit local evidence instead of foundation sample data
   - `Sessions` contains the existing viewer, source diagnostics, URL deep links, search selection, and direct session backup behavior
   - `Assets` provides a bounded reusable context assets foundation for rules, memory, skills, commands, and unknown asset fragments
@@ -88,6 +90,24 @@ See `docs/storage/local-storage-notes.md` § "Multi-root testing" for details.
   - provider diagnostics for unreadable, ambiguous, duplicate, or unsupported repo-local evidence become bounded findings; a clean provider result shows an explicit no-current-findings state instead of seed issues
   - context health summary, findings inventory, selected finding detail, evidence context, and route-only recommended actions
   - routed handoff into `Analysis` from Assets, Project Overview, and Sessions without claiming complete automated project analysis or inline remediation
+- Agent Work Continuity:
+  - provider-neutral `work-item/v1` and `work-package/v1` contracts with canonical hashing and explicit confidence/attribution metadata
+  - local JSON Work Item store with bounded `session-record/v1` evidence snapshots, optimistic version checks, and explicit multi-Session attachment
+  - handoff packages provide Markdown, JSON, and provider-labelled Codex, Cursor, Windsurf, and Antigravity projections after local preflight; every projection is manual and carries the canonical hash
+  - Package Created and Handoff Confirmed are separate outcomes; packages without Session evidence remain warning-only and cannot claim verified continuation
+  - raw provider injection and cloud synchronization remain outside the product boundary
+
+### Continuity validation
+
+The five-task local validation protocol can run against an isolated local server:
+
+```bash
+AGENT_STEWARD_VALIDATE_URL=http://127.0.0.1:3110 \\
+AGENT_STEWARD_VALIDATE_PROJECT_ROOT="$PWD" \\
+pnpm validate:continuity
+```
+
+It exercises bug-fix, feature, investigation, documentation, and blocked-task paths and records package creation plus manual handoff confirmation. Use temporary `AGENT_STEWARD_WORK_ITEM_ROOT` and `AGENT_STEWARD_WORK_PACKAGE_ROOT` values for validation so demo data is not changed.
 - Scan and list session files (default directories + custom roots from Settings)
   - Antigravity / Windsurf: `.pb` session files (flat directory)
   - Codex CLI: `.jsonl` session files (nested `YYYY/MM/DD/` directory structure)

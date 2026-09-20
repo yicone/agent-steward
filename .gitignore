@@ -10,3 +10,4 @@ dist
 tmp/
 .playwright-cli/
 auth.json
+.worktrees/

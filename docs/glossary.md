@@ -66,7 +66,7 @@ UI meaning:
 
 ### Project Overview
 
-The default landing page for a project.
+The project-scoped governance surface reached from Continue Work or the project shell.
 
 It summarizes what context exists, what is active, what is stale or conflicted, and what needs attention.
 
@@ -77,6 +77,30 @@ Prefer this term over generic labels like `dashboard` or `home`.
 A product principle meaning the tool works primarily against local data and local runtime interfaces, without requiring cloud sync for core functionality.
 
 Use this as a product principle, not as a page or feature label.
+
+### Work Item
+
+The durable, provider-neutral record of a piece of work that may continue across agent sessions.
+
+A Work Item contains a project boundary, goal, lifecycle status, bounded progress, evidence references, context attribution, and optional repository state. It is stored locally as `work-item/v1` and remains `captured` until the user confirms its goal and project boundary.
+
+### Work Package
+
+An immutable, verifiable handoff artifact generated from a Work Item after local preflight.
+
+A Work Package uses the `work-package/v1` schema, canonical JSON, a SHA-256 identity, bounded redaction, and provider projections such as Markdown, JSON, and Codex CLI instructions. It describes the handoff; it does not inject content into another agent runtime.
+
+### Handoff
+
+The explicit transfer of a Work Item's verified or warning-bounded package to a later agent session or provider.
+
+Handoff creation records package identity and target metadata. Confirmation, failure, cancellation, expiry, and supersession are append-only outcomes; ending a source session does not imply completion.
+
+### Confidence State
+
+The evidence strength attached to a Work Item field or context entry.
+
+The canonical values are `verified`, `observed`, `inferred`, `stale`, `missing`, and `unknown`. `unknown` means the product cannot observe the relevant source; it must remain visible instead of being treated as absent or confirmed.
 
 ### Context Cockpit
 
