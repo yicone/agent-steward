@@ -1104,7 +1104,8 @@ function InspectorPanel(props: {
   const downloadJson = useCallback(
     (filename: string, data: unknown) => {
       try {
-        const json = JSON.stringify(data, null, 2);
+        const exportData = redactCopies ? redactDiagnosticValue(data) : data;
+        const json = JSON.stringify(exportData, null, 2);
         const blob = new Blob([json], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1116,7 +1117,7 @@ function InspectorPanel(props: {
         // ignore
       }
     },
-    []
+    [redactCopies]
   );
 
   const Field = ({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) => (
@@ -1132,7 +1133,7 @@ function InspectorPanel(props: {
     </pre>
   );
 
-  const canDownload = mode === "event" && event != null;
+  const canDownload = mode === "event" && event != null && showRaw;
 
   return (
     <Card className="min-w-0 p-3">
