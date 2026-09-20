@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { JsonViewer } from "@/components/JsonViewer";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import type { ContextAssetSubtype } from "@/lib/contextAssets";
+import { redactDiagnosticValue } from "@/lib/diagnosticRedaction";
 import { isErrorLikeTrajectoryEvent, matchesConversationSearch, matchesEventSearch, summarizeTrajectoryEvents } from "@/lib/parse/trajectory";
 import { formatSourceDiagnostics } from "@/lib/parse/sourceDiagnostics";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,19 @@ export function resolveRestoredSelection(
 
 export function supportsSessionSourceCopy(source: Source): boolean {
   return source === "codex";
+}
+
+export function buildDiagnosticExportHref(input: {
+  source: Source;
+  sessionId: string;
+  rootId?: string;
+  redact?: boolean;
+}): string {
+  const params = new URLSearchParams();
+  if (input.source === "codex" && input.rootId) params.set("rootId", input.rootId);
+  if (input.redact) params.set("redact", "1");
+  const query = params.toString();
+  return `/api/conversations/${input.source}/${input.sessionId}/diagnostic${query ? `?${query}` : ""}`;
 }
 
 export function buildSessionBackupRequest(input: {
@@ -1046,7 +1060,11 @@ function InspectorPanel(props: {
   groupedErrorEvents: ErrorGroup[];
   activeErrorIndex: number;
   wrapText: boolean;
+  showRaw: boolean;
+  redactCopies: boolean;
   onToggleWrapText(): void;
+  onToggleShowRaw(): void;
+  onToggleRedactCopies(): void;
   onSelectError(event: TrajectoryEvent): void;
   onPrevError(): void;
   onNextError(): void;
@@ -1060,7 +1078,11 @@ function InspectorPanel(props: {
     groupedErrorEvents,
     activeErrorIndex,
     wrapText,
+    showRaw,
+    redactCopies,
     onToggleWrapText,
+    onToggleShowRaw,
+    onToggleRedactCopies,
     onSelectError,
     onPrevError,
     onNextError,
@@ -1070,13 +1092,14 @@ function InspectorPanel(props: {
 
   const copy = useCallback(async (key: string, value: string) => {
     try {
-      await navigator.clipboard.writeText(value);
+      const redacted = redactCopies ? redactDiagnosticValue(value) : value;
+      await navigator.clipboard.writeText(typeof redacted === "string" ? redacted : JSON.stringify(redacted, null, 2));
       setCopiedKey(key);
       window.setTimeout(() => setCopiedKey((prev) => (prev === key ? null : prev)), 1200);
     } catch {
       // ignore
     }
-  }, []);
+  }, [redactCopies]);
 
   const downloadJson = useCallback(
     (filename: string, data: unknown) => {
@@ -1124,11 +1147,27 @@ function InspectorPanel(props: {
           <Button variant="ghost" size="sm" onClick={onToggleWrapText}>
             {wrapText ? "No wrap" : "Wrap"}
           </Button>
+          <label className="flex items-center gap-1 text-xs text-muted" title="Raw session fields may contain paths, tokens, prompts, or tool output.">
+            <Switch checked={showRaw} onCheckedChange={onToggleShowRaw} aria-label="Show raw values" />
+            Show raw
+          </label>
+          {showRaw ? (
+            <label className="flex items-center gap-1 text-xs text-muted" title="Redact common sensitive patterns before copying raw values.">
+              <Switch checked={redactCopies} onCheckedChange={onToggleRedactCopies} aria-label="Redact copied values" />
+              Redact copies
+            </label>
+          ) : null}
           <Button variant="ghost" size="sm" onClick={onClose}>
             Close
           </Button>
         </div>
       </div>
+
+      {mode !== "errors" && !showRaw ? (
+        <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-300">
+          Raw session values may include paths, tokens, prompts, and tool output. Enable “Show raw” only when you need them; displayed transcript content is unchanged.
+        </div>
+      ) : null}
 
       {mode === "errors" ? (
         <div>
@@ -1191,7 +1230,7 @@ function InspectorPanel(props: {
           <div className="space-y-2">
             <Field label="role" value={message.role} mono />
             {"title" in message && message.title ? <Field label="title" value={message.title} mono /> : null}
-            {"payload" in message && message.payload ? (
+            {showRaw && "payload" in message && message.payload ? (
               <div>
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-xs text-muted">payload</div>
@@ -1202,7 +1241,7 @@ function InspectorPanel(props: {
                 <JsonViewer data={message.payload} />
               </div>
             ) : null}
-            {"text" in message && message.text ? (
+            {showRaw && "text" in message && message.text ? (
               <div>
                 {(() => {
                   const text = message.text;
@@ -1233,8 +1272,8 @@ function InspectorPanel(props: {
           {event.executionId ? <Field label="executionId" value={event.executionId} mono /> : null}
           {event.status ? <Field label="status" value={event.status} mono /> : null}
           {typeof event.exitCode === "number" ? <Field label="exitCode" value={String(event.exitCode)} mono /> : null}
-          {event.cwd ? <Field label="cwd" value={event.cwd} mono /> : null}
-          {event.commandLine ? (
+          {showRaw && event.cwd ? <Field label="cwd" value={event.cwd} mono /> : null}
+          {showRaw && event.commandLine ? (
             <div>
               {(() => {
                 const commandLine = event.commandLine;
@@ -1252,7 +1291,7 @@ function InspectorPanel(props: {
               })()}
             </div>
           ) : null}
-          {event.text ? (
+          {showRaw && event.text ? (
             <div>
               {(() => {
                 const text = event.text;
@@ -1270,7 +1309,7 @@ function InspectorPanel(props: {
               })()}
             </div>
           ) : null}
-          {event.toolCalls?.length ? (
+          {showRaw && event.toolCalls?.length ? (
             <div>
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-muted">toolCalls</div>
@@ -1281,7 +1320,7 @@ function InspectorPanel(props: {
               <JsonViewer data={event.toolCalls} />
             </div>
           ) : null}
-          {event.output ? (
+          {showRaw && event.output ? (
             <div>
               {(() => {
                 const output = event.output;
@@ -1467,6 +1506,7 @@ export default function HomeClient({
   const [creatingBackup, setCreatingBackup] = useState(false);
   const [backupIncludeSourceCopy, setBackupIncludeSourceCopy] = useState(false);
   const [backupFeedback, setBackupFeedback] = useState<SessionBackupFeedback | null>(null);
+  const [redactDiagnosticExport, setRedactDiagnosticExport] = useState(false);
   const [antigravityView, setAntigravityView] = useState<"transcript" | "trajectory" | "markdown">("markdown");
   const [windsurfView, setWindsurfView] = useState<"chat" | "transcript" | "trajectory">("chat");
   const [cursorView, setCursorView] = useState<"transcript" | "trajectory">("transcript");
@@ -1488,6 +1528,8 @@ export default function HomeClient({
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [scrollToRowId, setScrollToRowId] = useState<string | null>(null);
   const [inspectorWrapText, setInspectorWrapText] = useState(true);
+  const [showRawInspector, setShowRawInspector] = useState(false);
+  const [redactInspectorCopies, setRedactInspectorCopies] = useState(false);
   const [pendingTrajectoryJumpEventId, setPendingTrajectoryJumpEventId] = useState<string | null>(null);
   const [autoOpenDetailsRowId, setAutoOpenDetailsRowId] = useState<string | null>(null);
   const [autoOpenDetailsToken, setAutoOpenDetailsToken] = useState(0);
@@ -1578,6 +1620,16 @@ export default function HomeClient({
   }, [selectedItem, source]);
 
   const sourceCopySupported = useMemo(() => supportsSessionSourceCopy(source), [source]);
+
+  const diagnosticHref = useMemo(() => {
+    if (!selectedId) return "#";
+    return buildDiagnosticExportHref({
+      source,
+      sessionId: selectedId,
+      ...(selectedItem?.rootId ? { rootId: selectedItem.rootId } : {}),
+      redact: redactDiagnosticExport,
+    });
+  }, [redactDiagnosticExport, selectedId, selectedItem?.rootId, source]);
 
   const filteredItems = useMemo(() => {
     if (!filter.trim()) return items;
@@ -2519,7 +2571,11 @@ export default function HomeClient({
       groupedErrorEvents={groupedErrorEvents}
       activeErrorIndex={activeErrorIndex}
       wrapText={inspectorWrapText}
+      showRaw={showRawInspector}
+      redactCopies={redactInspectorCopies}
       onToggleWrapText={() => setInspectorWrapText((v) => !v)}
+      onToggleShowRaw={() => setShowRawInspector((v) => !v)}
+      onToggleRedactCopies={() => setRedactInspectorCopies((v) => !v)}
       onSelectError={jumpToEvent}
       onPrevError={() => navigateErrorByOffset(-1)}
       onNextError={() => navigateErrorByOffset(1)}
@@ -2717,7 +2773,15 @@ export default function HomeClient({
           ) : null}
 
           {selectedId ? (
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                <span>Diagnostic exports may include paths, tokens, prompts, and tool output. Redaction is best-effort and does not change the on-screen transcript.</span>
+                <label className="flex shrink-0 items-center gap-2 font-medium">
+                  <Switch checked={redactDiagnosticExport} onCheckedChange={setRedactDiagnosticExport} aria-label="Redact diagnostic export" />
+                  Redact export
+                </label>
+              </div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-3">
                 {sourceCopySupported ? (
                   <label
@@ -2813,19 +2877,15 @@ export default function HomeClient({
                   {creatingBackup ? "Backing up…" : "Back Up Session"}
                 </Button>
                 <Button asChild variant="outline" size="sm">
-                  <a
-                    href={
-                      source === "codex" && selectedItem?.rootId
-                        ? `/api/conversations/${source}/${selectedId}/diagnostic?rootId=${encodeURIComponent(selectedItem.rootId)}`
-                        : `/api/conversations/${source}/${selectedId}/diagnostic`
-                    }
-                    title="Download diagnostic export (includes raw LS payloads; may contain sensitive data)"
+                  <a href={diagnosticHref}
+                    title={redactDiagnosticExport ? "Download diagnostic export with best-effort redaction" : "Download diagnostic export; may contain sensitive data"}
                   >
                     Diagnostic JSON
                   </a>
                 </Button>
               </div>
-            </div>
+              </div>
+            </>
           ) : null}
 
           {selectedId && source === "windsurf" && windsurfRecoverabilityMessage ? (
