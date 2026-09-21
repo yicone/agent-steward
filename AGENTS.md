@@ -31,6 +31,13 @@ When this file says "Windsurf", it means the Cascade agent running inside the Wi
 
 Do not duplicate the same fact across these files unless each copy serves a different purpose. Prefer linking over restating.
 
+### OpenSpec is the project planning workflow
+
+- This project uses OpenSpec for proposals, designs, specs, and implementation tasks.
+- New product or behavior changes must be expressed through `openspec/changes/<change-id>/` and validated with the applicable OpenSpec commands before implementation is treated as complete.
+- Accepted behavior baselines belong in `openspec/specs/`.
+- Do not create or use a `superpowers` proposal/spec workflow, `docs/superpowers/` artifacts, or a parallel proposal system for this repository. Existing files outside the OpenSpec tree are historical or external artifacts and are not normative project guidance.
+
 ## Project shape
 
 - App stack: Next.js 14 + React 18 + TypeScript
