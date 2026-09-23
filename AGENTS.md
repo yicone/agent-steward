@@ -25,11 +25,18 @@ When this file says "Windsurf", it means the Cascade agent running inside the Wi
 - `README.md`: current product scope, user-facing setup, and runtime prerequisites
 - `CHANGELOG.md`: shipped / merged work only
 - GitHub Issues: active work tracking (short-term, 0-2 weeks)
-- `openspec/specs/` and `openspec/changes/`: normative requirements and active change artifacts when the current work is being tracked in OpenSpec
+- `openspec/specs/` and `openspec/changes/`: normative requirements and active change artifacts for product and behavior work; GitHub Issues remain the execution layer for short-term tracking
 - `docs/adr/ADR-001-use-language-server-rpc.md`: canonical decision for session retrieval strategy
 - `docs/storage/local-storage-notes.md`: version-scoped Antigravity / Windsurf storage, attach, and token facts
 
 Do not duplicate the same fact across these files unless each copy serves a different purpose. Prefer linking over restating.
+
+### OpenSpec is the project planning workflow
+
+- This project uses OpenSpec for proposals, designs, specs, and implementation tasks.
+- New product or behavior changes must be expressed through `openspec/changes/<change-id>/` and validated with `openspec validate <change-id> --strict` before implementation is treated as complete.
+- Accepted behavior baselines belong in `openspec/specs/`.
+- Do not create or use a `superpowers` proposal/spec workflow, `docs/superpowers/` artifacts, or a parallel proposal system for new work in this repository. Existing `docs/superpowers/` artifacts remain historical design records for already-shipped work until their behavior is backfilled into `openspec/specs/`; they do not define the planning workflow for new changes.
 
 ## Project shape
 
